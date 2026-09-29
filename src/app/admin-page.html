@@ -1,0 +1,59 @@
+<main class="admin-page">
+  <header class="admin-header">
+    <a class="wordmark" routerLink="/library"><span class="brand-mark" aria-hidden="true">a.</span><span>afterhours</span></a>
+    <span class="admin-heading">Administration</span>
+    <button type="button" class="admin-logout" (click)="signOut()">Sign out</button>
+  </header>
+
+  <div class="admin-content">
+    <div class="admin-title-row"><div><span class="eyebrow">LIBRARY SETTINGS</span><h1>Manage your music server</h1></div><a routerLink="/library">Back to listening</a></div>
+    @if (errorMessage()) { <p class="admin-alert" role="alert">{{ errorMessage() }}</p> }
+    @if (statusMessage()) { <p class="admin-status" role="status">{{ statusMessage() }}</p> }
+    @if (isLoading()) { <p>Loading administrator settings…</p> }
+
+    <section class="admin-section">
+      <div class="admin-section-heading"><div><span class="eyebrow">MUSIC SOURCES</span><h2>Folders</h2></div><span>{{ roots().length }} configured</span></div>
+      <form class="admin-form root-form" (ngSubmit)="addRoot()">
+        <label>Display name<input name="rootName" [(ngModel)]="rootName" required maxlength="120" placeholder="Etno collection" /></label>
+        <label>Folder path<input name="rootPath" [(ngModel)]="rootPath" required maxlength="2048" placeholder="E:\Music\Etno\" /></label>
+        <button type="submit">Add folder</button>
+      </form>
+      <div class="admin-list">
+        @for (root of roots(); track root.id) {
+          <div class="admin-list-row">
+            <div class="admin-row-main"><strong>{{ root.name }}</strong><small>{{ root.path }} · {{ root.trackCount }} tracks</small></div>
+            <button type="button" (click)="scanRoot(root)">Scan</button>
+            <button type="button" class="danger-action" (click)="removeRoot(root)">Remove</button>
+          </div>
+        } @empty {
+          @if (!isLoading()) { <p class="admin-empty">No music folders configured.</p> }
+        }
+      </div>
+    </section>
+
+    <section class="admin-section">
+      <div class="admin-section-heading"><div><span class="eyebrow">ACCESS</span><h2>Accounts</h2></div><span>{{ users().length }} total</span></div>
+      <form class="admin-form user-form" (ngSubmit)="createUser()">
+        <label>Email<input name="newEmail" type="email" autocomplete="off" [(ngModel)]="newEmail" required maxlength="320" /></label>
+        <label>Temporary password<input name="temporaryPassword" type="password" autocomplete="new-password" [(ngModel)]="temporaryPassword" required minlength="12" maxlength="256" /></label>
+        <label>Role<select name="newRole" [(ngModel)]="newRole"><option value="Guest">Guest</option><option value="Admin">Admin</option></select></label>
+        <button type="submit">Create account</button>
+      </form>
+      <div class="admin-list account-list">
+        @for (user of users(); track user.id) {
+          <div class="account-row">
+            <div class="admin-row-main"><strong>{{ user.email }}</strong><small>{{ user.role }} · {{ user.isEnabled ? 'Enabled' : 'Disabled' }}</small></div>
+            <label class="role-field">Role<select [value]="user.role" (change)="changeRole(user, $event)">@for (role of roles; track role) { <option [value]="role">{{ role }}</option> }</select></label>
+            <label class="enabled-field"><input type="checkbox" [checked]="user.isEnabled" (change)="setEnabled(user, $event)" /> Enabled</label>
+            <form class="reset-form" (ngSubmit)="resetPassword(user)">
+              <input [name]="'reset-' + user.id" type="password" autocomplete="new-password" minlength="12" maxlength="256" [(ngModel)]="resetPasswords[user.id]" placeholder="New password" required />
+              <button type="submit">Reset</button>
+            </form>
+          </div>
+        } @empty {
+          @if (!isLoading()) { <p class="admin-empty">No user accounts found.</p> }
+        }
+      </div>
+    </section>
+  </div>
+</main>

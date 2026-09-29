@@ -1,0 +1,119 @@
+<div class="workspace">
+  <aside class="sidebar">
+    <a class="wordmark" routerLink="/library" aria-label="Afterhours home">
+      <span class="brand-mark" aria-hidden="true">a.</span>
+      <span>afterhours</span>
+    </a>
+
+    <div class="nav-group">
+      <span class="nav-label">MENU</span>
+      <button class="nav-item" [class.selected]="activeSection() === 'Listen now'" (click)="activeSection.set('Listen now')">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20h-6v-6h-4v6H4v-9.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        Listen now
+      </button>
+      <button class="nav-item" [class.selected]="activeSection() === 'Discover'" (click)="activeSection.set('Discover')">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        Discover
+      </button>
+      <button class="nav-item" [class.selected]="activeSection() === 'Your library'" (click)="activeSection.set('Your library')">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4.5h13a1 1 0 0 1 1 1v14H7a2 2 0 0 1-2-2v-13Zm0 13a2 2 0 0 0 2 2m2-15v12m4-12v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Your library
+      </button>
+    </div>
+
+    <div class="nav-group playlist-group">
+      <div class="nav-label-row"><span class="nav-label">YOUR PLAYLISTS</span><button class="add-button" aria-label="Create playlist" title="Create playlist">+</button></div>
+      <button class="playlist-link" [class.playlist-active]="activeSection() === 'Late night drive'" (click)="activeSection.set('Late night drive')"><span class="playlist-swatch swatch-lime"></span>Late night drive</button>
+      <button class="playlist-link" [class.playlist-active]="activeSection() === 'Sunday slowdown'" (click)="activeSection.set('Sunday slowdown')"><span class="playlist-swatch swatch-peach"></span>Sunday slowdown</button>
+      <button class="playlist-link" [class.playlist-active]="activeSection() === 'Soft focus'" (click)="activeSection.set('Soft focus')"><span class="playlist-swatch swatch-blue"></span>Soft focus</button>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="profile-row" (click)="signOut()" title="Sign out">
+        <span class="avatar">{{ user()?.email?.slice(0, 1)?.toUpperCase() }}</span><span class="profile-name"><strong>{{ user()?.email }}</strong><small>{{ user()?.role }}</small></span><span class="profile-more">↪</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main-panel">
+    <header class="topbar">
+      <div class="breadcrumbs"><span>YOUR SPACE</span><span class="breadcrumb-divider">/</span><strong>{{ activeSection() }}</strong></div>
+      <label class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input type="search" placeholder="Search songs, artists..." aria-label="Search songs and artists" [value]="searchQuery()" (input)="searchQuery.set($any($event.target).value)" />
+        <kbd>⌘ K</kbd>
+      </label>
+      <label class="theme-picker"><span>Theme</span><select [value]="user()?.theme ?? 'Light'" (change)="changeTheme($event)">@for (theme of themeOptions; track theme) { <option [value]="theme">{{ theme }}</option> }</select></label>
+      @if (isAdmin()) { <a class="admin-link" routerLink="/admin">Manage library</a> }
+      <button class="mobile-profile" (click)="signOut()" aria-label="Sign out">{{ user()?.email?.slice(0, 1)?.toUpperCase() }}</button>
+    </header>
+
+    <div class="content-scroll">
+      <section class="greeting-row">
+        <div><span class="eyebrow">YOUR PERSONAL COLLECTION</span><h1>A good day to <em>listen.</em></h1><p>Your music, wherever you are.</p></div>
+        <button class="text-action" (click)="activeSection.set('Your library')">Your library <span aria-hidden="true">↗</span></button>
+      </section>
+
+      <section class="feature-banner">
+        <img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=85" alt="A crowd under warm lights at a live show" />
+        <div class="feature-shade"></div>
+        <div class="feature-content"><span class="feature-tag">YOUR MUSIC, YOUR MOMENT</span><h2>Find your<br />own frequency.</h2><p>Pick a track from your collection and settle in.</p><button class="feature-play" (click)="playFirstTrack()"><span aria-hidden="true">▶</span> Play first track</button></div>
+        <div class="feature-index"><span>01</span><span class="index-line"></span><span>03</span></div>
+      </section>
+
+      <section class="track-section">
+        <div class="section-heading"><div><span class="eyebrow">YOUR COLLECTION</span><h2>{{ searchQuery() ? 'Search results' : 'Tracks' }}</h2></div><button class="see-all" (click)="loadLibrary()">Refresh <span aria-hidden="true">↻</span></button></div>
+        @if (isAdmin() && hasSelection()) {
+          <div class="admin-toolbar">
+            <span>{{ selectedTrackIds().size }} selected</span>
+            <form class="metadata-editor" (ngSubmit)="saveMetadata()">
+              <input aria-label="Title" placeholder="Title" name="title" [(ngModel)]="metadata.title" />
+              <input aria-label="Artist" placeholder="Artist" name="artist" [(ngModel)]="metadata.artist" />
+              <input aria-label="Album" placeholder="Album" name="album" [(ngModel)]="metadata.album" />
+              <input aria-label="Album artist" placeholder="Album artist" name="albumArtist" [(ngModel)]="metadata.albumArtist" />
+              <input aria-label="Track number" placeholder="Track #" name="trackNumber" type="number" min="1" [(ngModel)]="metadata.trackNumber" />
+              <input aria-label="Disc number" placeholder="Disc #" name="discNumber" type="number" min="1" [(ngModel)]="metadata.discNumber" />
+              <input aria-label="Year" placeholder="Year" name="year" type="number" min="1" [(ngModel)]="metadata.year" />
+              <input aria-label="Genre" placeholder="Genre" name="genre" [(ngModel)]="metadata.genre" />
+              <button class="small-action" type="submit">Save tags</button>
+            </form>
+            <input #coverInput class="visually-hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" (change)="updateCover($event)" />
+            <button class="small-action" type="button" (click)="coverInput.click()">Change cover</button>
+            <select aria-label="Destination folder" [value]="destinationFolderId ?? ''" (change)="setDestinationFolder($event)">
+              <option value="">Move to folder…</option>
+              @for (folder of folders; track folder.id) { <option [value]="folder.id">{{ folder.name }}{{ folder.relativePath ? ' / ' + folder.relativePath : '' }}</option> }
+            </select>
+            <button class="small-action" type="button" [disabled]="!destinationFolderId" (click)="moveSelected()">Move</button>
+          </div>
+          @if (operationMessage) { <p class="operation-message" role="status">{{ operationMessage }}</p> }
+        }
+        <div class="track-table">
+          <div class="track-head"><span></span><span>#</span><span>TITLE</span><span>ALBUM</span><span>TIME</span><span></span></div>
+          @if (isLoading()) { <p class="empty-state">Loading your music…</p> }
+          @else if (errorMessage()) { <p class="empty-state" role="alert">{{ errorMessage() }}</p> }
+          @for (track of filteredTracks(); track track.id; let index = $index) {
+            <div class="track-row" [class.now-playing]="currentTrack()?.id === track.id && isPlaying()">
+              <label class="selection-cell">
+                @if (isAdmin()) { <input type="checkbox" [checked]="selectedTrackIds().has(track.id)" [attr.aria-label]="'Select ' + track.title" (change)="toggleSelection(track.id, $event)" /> }
+              </label>
+              <span class="track-number">{{ currentTrack()?.id === track.id && isPlaying() ? '♫' : index + 1 }}</span>
+              <button class="track-title-cell track-select" (click)="chooseTrack(track)"><img [src]="track.coverUrl" [alt]="track.album + ' artwork'" (error)="$any($event.target).style.visibility='hidden'" /><span><strong>{{ track.title }}</strong><small>{{ track.artist }}</small></span></button>
+              <span class="track-album">{{ track.album }}</span><span class="track-duration">{{ formatTime(track.durationSeconds) }}</span>
+              <button class="row-play" aria-label="Play track" (click)="chooseTrack(track)">▶</button>
+            </div>
+          } @empty {
+            @if (!isLoading() && !errorMessage()) { <p class="empty-state">{{ searchQuery() ? 'No tracks match that search.' : 'No tracks yet. An administrator can add a music folder and scan it.' }}</p> }
+          }
+        </div>
+      </section>
+      <footer class="page-footer"><span>YOUR MUSIC, YOUR MOMENT.</span><span>MADE FOR THE IN-BETWEEN</span></footer>
+    </div>
+  </main>
+
+  <footer class="player-bar">
+    <div class="now-playing-info"><img [src]="currentTrack()?.coverUrl ?? ''" [alt]="(currentTrack()?.album ?? 'Track') + ' artwork'" /><span><strong>{{ currentTrack()?.title ?? 'Nothing playing' }}</strong><small>{{ currentTrack()?.artist ?? 'Choose a track from your library' }}</small></span></div>
+    <div class="player-controls"><div class="transport"><button aria-label="Previous track" title="Previous track" (click)="playAdjacentTrack(-1)">|◀</button><button class="play-toggle" (click)="togglePlayback()" [attr.aria-label]="isPlaying() ? 'Pause' : 'Play'" [title]="isPlaying() ? 'Pause' : 'Play'"><span>{{ isPlaying() ? 'Ⅱ' : '▶' }}</span></button><button aria-label="Next track" title="Next track" (click)="playAdjacentTrack(1)">▶|</button></div><div class="progress-row"><span>{{ formatTime(currentTime()) }}</span><input type="range" min="0" [max]="duration() || currentTrack()?.durationSeconds || 0" [value]="currentTime()" (input)="seek($event)" aria-label="Playback position" /><span>{{ formatTime(duration() || currentTrack()?.durationSeconds || 0) }}</span></div></div>
+    <div class="player-extra"><label class="volume-label" aria-label="Volume">◖<input type="range" min="0" max="100" value="72" (input)="setVolume($event)" aria-label="Volume" /></label></div>
+  </footer>
+  <audio #audioPlayer preload="metadata" (timeupdate)="updatePlaybackTime($event)" (loadedmetadata)="updatePlaybackTime($event)" (ended)="playAdjacentTrack(1)" (play)="isPlaying.set(true)" (pause)="isPlaying.set(false)"></audio>
+</div>
