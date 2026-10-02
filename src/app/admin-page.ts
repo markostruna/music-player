@@ -70,12 +70,17 @@ export class AdminPage implements OnInit {
   }
 
   async removeRoot(root: SourceRoot): Promise<void> {
+    const confirmed = globalThis.confirm(
+      `Remove ${root.name} from the library? Its catalogued tracks and folders will be removed, but music files on disk will stay untouched.`,
+    );
+    if (!confirmed) return;
+
     try {
       await this.api.removeRoot(root.id);
-      this.statusMessage.set(`${root.name} was removed.`);
+      this.statusMessage.set(`${root.name} was removed from the library. Music files were left untouched.`);
       await this.reload();
     } catch {
-      this.errorMessage.set('Move or remove the root’s catalogued tracks before deleting it.');
+      this.errorMessage.set('The music source could not be removed. Refresh the page and try again.');
     }
   }
 

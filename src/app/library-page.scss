@@ -473,7 +473,151 @@ kbd {
 .see-all { gap: 13px; }
 .see-all span { font-size: 15px; }
 
+.collection-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.view-switch {
+  display: flex;
+  padding: 3px;
+  border: 1px solid #e2e6de;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.view-switch button {
+  min-width: 58px;
+  min-height: 29px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #68716a;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.view-switch button:hover { background: #f0f2eb; }
+.view-switch button.active { background: var(--forest); color: #fff; }
+
 .track-table { width: 100%; }
+
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 21px 15px;
+}
+
+.collection-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tile-art {
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e5eadc;
+  color: #77876a;
+}
+
+.tile-art.artist-art { border-radius: 50%; }
+
+.tile-art img {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tile-placeholder { font-size: 30px; }
+
+.tile-play {
+  position: absolute;
+  z-index: 2;
+  right: 9px;
+  bottom: 9px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--ink);
+  font-size: 11px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 140ms, transform 140ms;
+}
+
+.collection-tile:hover .tile-play,
+.collection-tile:focus-visible .tile-play { opacity: 1; transform: translateY(0); }
+.collection-tile:focus-visible { outline: 2px solid #6f8b32; outline-offset: 3px; }
+
+.tile-title,
+.tile-detail,
+.tile-meta {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-title { margin-top: 10px; font-size: 11px; font-weight: 700; }
+.tile-detail { margin-top: 4px; color: #747d75; font-size: 10px; }
+.tile-meta { margin-top: 4px; color: #929990; font-size: 9px; }
+
+.library-pagination {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  border-top: 1px solid #e5e8e1;
+  color: #7c847c;
+  font-size: 10px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-controls button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid #dfe4dc;
+  border-radius: 4px;
+  background: #fbfcf8;
+  color: #314422;
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.pagination-controls button:disabled { color: #b5bcb3; cursor: default; }
+.pagination-controls > span { min-width: 70px; text-align: center; }
 
 .track-head,
 .track-row {
@@ -643,6 +787,7 @@ kbd {
   .sidebar { padding-right: 12px; padding-left: 12px; }
   .topbar { gap: 12px; padding: 0 3%; }
   .content-scroll { padding: 28px 3% 18px; }
+  .collection-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 18px 12px; }
   .track-head, .track-row { grid-template-columns: 27px minmax(150px, 1.4fr) minmax(80px, 1fr) 40px 15px; column-gap: 7px; }
   .player-bar { grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.1fr) minmax(100px, 0.7fr); gap: 10px; padding: 0 15px; }
   .transport { gap: 12px; }
@@ -676,6 +821,11 @@ kbd {
   .feature-content h2 { font-size: 29px; }
   .feature-index { right: 13px; bottom: 12px; }
   .track-section { margin-top: 23px; }
+  .section-heading { align-items: flex-start; gap: 12px; }
+  .collection-actions { align-items: flex-end; flex-direction: column-reverse; gap: 5px; }
+  .view-switch button { min-width: 49px; min-height: 27px; padding: 0 7px; font-size: 9px; }
+  .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  .library-pagination { font-size: 9px; }
   .track-head, .track-row { grid-template-columns: 25px minmax(0, 1fr) 40px 13px; column-gap: 6px; }
   .track-head span:nth-child(3), .track-row .track-album { display: none; }
   .track-head span:nth-child(4) { grid-column: 3; }

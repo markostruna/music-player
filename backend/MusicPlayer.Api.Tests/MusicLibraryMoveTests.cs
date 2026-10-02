@@ -131,6 +131,20 @@ public sealed class MusicLibraryMoveTests : IAsyncLifetime
         Assert.False(System.IO.File.Exists(Path.Combine(sourceDirectory, "track.wav")));
     }
 
+    [Fact]
+    public async Task RemoveRootClearsCatalogButLeavesMusicFilesUntouched()
+    {
+        var rootFile = Path.Combine(sourceDirectory, "track.wav");
+
+        Assert.True(await library.RemoveRootAsync(sourceRootId, CancellationToken.None));
+
+        Assert.False(await database.SourceRoots.AnyAsync(root => root.Id == sourceRootId));
+        Assert.False(await database.Folders.AnyAsync(folder => folder.SourceRootId == sourceRootId));
+        Assert.False(await database.Tracks.AnyAsync(track => track.SourceRootId == sourceRootId));
+        Assert.True(System.IO.File.Exists(rootFile));
+        Assert.Equal(audioBytes, await System.IO.File.ReadAllBytesAsync(rootFile));
+    }
+
     private sealed class TestWebHostEnvironment : IWebHostEnvironment
     {
         public string ApplicationName { get; set; } = "MusicPlayer.Api.Tests";

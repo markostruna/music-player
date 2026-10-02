@@ -8,10 +8,21 @@ namespace MusicPlayer.Api.Services;
 
 public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnvironment environment) : IMusicLibraryService
 {
+    private const int MaximumCoverFileSize = 10 * 1024 * 1024;
+
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp3", ".flac", ".wav",
     };
+
+    private static readonly string[] CoverFileNames =
+    [
+        "Folder.jpg", "folder.jpg", "Folder.jpeg", "folder.jpeg", "Folder.png", "folder.png", "Folder.webp", "folder.webp", "Folder.gif", "folder.gif",
+        "cover.jpg", "Cover.jpg", "cover.jpeg", "Cover.jpeg", "cover.png", "Cover.png", "cover.webp", "Cover.webp", "cover.gif", "Cover.gif",
+        "album.jpg", "Album.jpg", "album.jpeg", "Album.jpeg", "album.png", "Album.png", "album.webp", "Album.webp", "album.gif", "Album.gif",
+        "front.jpg", "Front.jpg", "front.jpeg", "Front.jpeg", "front.png", "Front.png", "front.webp", "Front.webp", "front.gif", "Front.gif",
+        "AlbumArt.jpg", "AlbumArtSmall.jpg",
+    ];
 
     public async Task<IReadOnlyList<SourceRootResponse>> GetRootsAsync(CancellationToken cancellationToken) =>
         await database.SourceRoots.AsNoTracking()
@@ -52,20 +63,12 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
 
     public async Task<bool> RemoveRootAsync(int rootId, CancellationToken cancellationToken)
     {
-        var root = await database.SourceRoots.Include(source => source.Tracks).SingleOrDefaultAsync(source => source.Id == rootId, cancellationToken);
-        if (root is null)
-        {
-            return false;
-        }
-
-        if (root.Tracks.Count != 0)
-        {
-            throw new InvalidOperationException("Move or rescan the root's tracks before removing it.");
-        }
-
-        database.SourceRoots.Remove(root);
-        await database.SaveChangesAsync(cancellationToken);
-        return true;
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await database.Tracks.Where(track => track.SourceRootId == rootId).ExecuteDeleteAsync(cancellationToken);
+        await database.Folders.Where(folder => folder.SourceRootId == rootId).ExecuteDeleteAsync(cancellationToken);
+        var removedRoots = await database.SourceRoots.Where(source => source.Id == rootId).ExecuteDeleteAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return removedRoots > 0;
     }
 
     public async Task<IReadOnlyList<MusicFolderResponse>> GetFoldersAsync(CancellationToken cancellationToken) =>
@@ -222,6 +225,12 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
             return null;
         }
 
+        var folderCover = await ResolveFolderCoverAsync(Path.GetDirectoryName(media.FullPath)!, cancellationToken);
+        if (folderCover is not null)
+        {
+            return folderCover;
+        }
+
         using var audio = TagLib.File.Create(media.FullPath);
         var picture = audio.Tag.Pictures.FirstOrDefault(item => item.Type == PictureType.FrontCover) ?? audio.Tag.Pictures.FirstOrDefault();
         if (picture is null || picture.Data.Count == 0)
@@ -230,6 +239,44 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
         }
 
         return new CoverImage(picture.Data.Data, picture.MimeType);
+    }
+
+    private static async Task<CoverImage?> ResolveFolderCoverAsync(string directoryPath, CancellationToken cancellationToken)
+    {
+        foreach (var fileName in CoverFileNames)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var path = Path.Combine(directoryPath, fileName);
+            try
+            {
+                if (!System.IO.File.Exists(path)
+                    || (System.IO.File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                {
+                    continue;
+                }
+
+                var fileInfo = new FileInfo(path);
+                if (fileInfo.Length is <= 0 or > MaximumCoverFileSize)
+                {
+                    continue;
+                }
+
+                var data = await System.IO.File.ReadAllBytesAsync(path, cancellationToken);
+                var contentType = DetectImageContentType(data);
+                if (contentType is not null)
+                {
+                    return new CoverImage(data, contentType);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return null;
     }
 
     public Task<BatchMutationResponse> UpdateMetadataAsync(

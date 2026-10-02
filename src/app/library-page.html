@@ -40,7 +40,7 @@
       <div class="breadcrumbs"><span>YOUR SPACE</span><span class="breadcrumb-divider">/</span><strong>{{ activeSection() }}</strong></div>
       <label class="search-box">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-        <input type="search" placeholder="Search songs, artists..." aria-label="Search songs and artists" [value]="searchQuery()" (input)="searchQuery.set($any($event.target).value)" />
+        <input type="search" placeholder="Search tracks, albums, artists..." aria-label="Search tracks, albums, and artists" [value]="searchQuery()" (input)="setSearchQuery($any($event.target).value)" />
         <kbd>⌘ K</kbd>
       </label>
       <label class="theme-picker"><span>Theme</span><select [value]="user()?.theme ?? 'Light'" (change)="changeTheme($event)">@for (theme of themeOptions; track theme) { <option [value]="theme">{{ theme }}</option> }</select></label>
@@ -62,8 +62,18 @@
       </section>
 
       <section class="track-section">
-        <div class="section-heading"><div><span class="eyebrow">YOUR COLLECTION</span><h2>{{ searchQuery() ? 'Search results' : 'Tracks' }}</h2></div><button class="see-all" (click)="loadLibrary()">Refresh <span aria-hidden="true">↻</span></button></div>
-        @if (isAdmin() && hasSelection()) {
+        <div class="section-heading">
+          <div><span class="eyebrow">YOUR COLLECTION</span><h2>{{ collectionView() === 'albums' ? 'Albums' : collectionView() === 'artists' ? 'Artists' : searchQuery() ? 'Track results' : 'Tracks' }}</h2></div>
+          <div class="collection-actions">
+            <div class="view-switch" role="group" aria-label="Library view">
+              <button type="button" [class.active]="collectionView() === 'tracks'" [attr.aria-pressed]="collectionView() === 'tracks'" (click)="setCollectionView('tracks')">Tracks</button>
+              <button type="button" [class.active]="collectionView() === 'albums'" [attr.aria-pressed]="collectionView() === 'albums'" (click)="setCollectionView('albums')">Albums</button>
+              <button type="button" [class.active]="collectionView() === 'artists'" [attr.aria-pressed]="collectionView() === 'artists'" (click)="setCollectionView('artists')">Artists</button>
+            </div>
+            <button class="see-all" type="button" (click)="loadLibrary()" aria-label="Refresh library" title="Refresh library">Refresh <span aria-hidden="true">↻</span></button>
+          </div>
+        </div>
+        @if (collectionView() === 'tracks' && isAdmin() && hasSelection()) {
           <div class="admin-toolbar">
             <span>{{ selectedTrackIds().size }} selected</span>
             <form class="metadata-editor" (ngSubmit)="saveMetadata()">
@@ -87,24 +97,68 @@
           </div>
           @if (operationMessage) { <p class="operation-message" role="status">{{ operationMessage }}</p> }
         }
-        <div class="track-table">
-          <div class="track-head"><span></span><span>#</span><span>TITLE</span><span>ALBUM</span><span>TIME</span><span></span></div>
-          @if (isLoading()) { <p class="empty-state">Loading your music…</p> }
-          @else if (errorMessage()) { <p class="empty-state" role="alert">{{ errorMessage() }}</p> }
-          @for (track of filteredTracks(); track track.id; let index = $index) {
-            <div class="track-row" [class.now-playing]="currentTrack()?.id === track.id && isPlaying()">
-              <label class="selection-cell">
-                @if (isAdmin()) { <input type="checkbox" [checked]="selectedTrackIds().has(track.id)" [attr.aria-label]="'Select ' + track.title" (change)="toggleSelection(track.id, $event)" /> }
-              </label>
-              <span class="track-number">{{ currentTrack()?.id === track.id && isPlaying() ? '♫' : index + 1 }}</span>
-              <button class="track-title-cell track-select" (click)="chooseTrack(track)"><img [src]="track.coverUrl" [alt]="track.album + ' artwork'" (error)="$any($event.target).style.visibility='hidden'" /><span><strong>{{ track.title }}</strong><small>{{ track.artist }}</small></span></button>
-              <span class="track-album">{{ track.album }}</span><span class="track-duration">{{ formatTime(track.durationSeconds) }}</span>
-              <button class="row-play" aria-label="Play track" (click)="chooseTrack(track)">▶</button>
+        @if (isLoading()) {
+          <p class="empty-state">Loading your music…</p>
+        } @else if (errorMessage()) {
+          <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+        } @else if (collectionView() === 'tracks') {
+          <div class="track-table">
+            <div class="track-head"><span></span><span>#</span><span>TITLE</span><span>ALBUM</span><span>TIME</span><span></span></div>
+            @for (track of visibleTracks(); track track.id; let index = $index) {
+              <div class="track-row" [class.now-playing]="currentTrack()?.id === track.id && isPlaying()">
+                <label class="selection-cell">
+                  @if (isAdmin()) { <input type="checkbox" [checked]="selectedTrackIds().has(track.id)" [attr.aria-label]="'Select ' + track.title" (change)="toggleSelection(track.id, $event)" /> }
+                </label>
+                <span class="track-number">{{ currentTrack()?.id === track.id && isPlaying() ? '♫' : (pageNumber() - 1) * pageSize + index + 1 }}</span>
+                <button class="track-title-cell track-select" (click)="chooseTrack(track)"><img [src]="track.coverUrl" [alt]="track.album + ' artwork'" (error)="$any($event.target).style.visibility='hidden'" /><span><strong>{{ track.title }}</strong><small>{{ track.artist }}</small></span></button>
+                <span class="track-album">{{ track.album }}</span><span class="track-duration">{{ formatTime(track.durationSeconds) }}</span>
+                <button class="row-play" aria-label="Play track" (click)="chooseTrack(track)">▶</button>
+              </div>
+            } @empty {
+              <p class="empty-state">{{ searchQuery() ? 'No tracks match that search.' : 'No tracks yet. An administrator can add a music folder and scan it.' }}</p>
+            }
+          </div>
+        } @else if (collectionView() === 'albums') {
+          @if (visibleAlbums().length) {
+            <div class="collection-grid">
+              @for (album of visibleAlbums(); track album.key) {
+                <button class="collection-tile" type="button" (click)="playGroup(album.tracks)" [attr.aria-label]="'Play album ' + album.title + ' by ' + album.artist" [title]="'Play album: ' + album.title">
+                  <span class="tile-art"><span class="tile-placeholder" aria-hidden="true">♫</span><img [src]="album.coverUrl" [alt]="album.title + ' artwork'" (error)="$any($event.target).style.visibility='hidden'" /><span class="tile-play" aria-hidden="true">▶</span></span>
+                  <span class="tile-title">{{ album.title }}</span>
+                  <span class="tile-detail">{{ album.artist }}</span>
+                  <span class="tile-meta">{{ album.tracks.length }} {{ album.tracks.length === 1 ? 'track' : 'tracks' }}</span>
+                </button>
+              }
             </div>
-          } @empty {
-            @if (!isLoading() && !errorMessage()) { <p class="empty-state">{{ searchQuery() ? 'No tracks match that search.' : 'No tracks yet. An administrator can add a music folder and scan it.' }}</p> }
+          } @else {
+            <p class="empty-state">{{ searchQuery() ? 'No albums match that search.' : 'No albums in your library yet.' }}</p>
           }
-        </div>
+        } @else {
+          @if (visibleArtists().length) {
+            <div class="collection-grid">
+              @for (artist of visibleArtists(); track artist.key) {
+                <button class="collection-tile" type="button" (click)="playGroup(artist.tracks)" [attr.aria-label]="'Play tracks by ' + artist.name" [title]="'Play artist: ' + artist.name">
+                  <span class="tile-art artist-art"><span class="tile-placeholder" aria-hidden="true">♫</span><img [src]="artist.coverUrl" [alt]="artist.name + ' artwork'" (error)="$any($event.target).style.visibility='hidden'" /><span class="tile-play" aria-hidden="true">▶</span></span>
+                  <span class="tile-title">{{ artist.name }}</span>
+                  <span class="tile-detail">{{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}</span>
+                  <span class="tile-meta">{{ artist.tracks.length }} {{ artist.tracks.length === 1 ? 'track' : 'tracks' }}</span>
+                </button>
+              }
+            </div>
+          } @else {
+            <p class="empty-state">{{ searchQuery() ? 'No artists match that search.' : 'No artists in your library yet.' }}</p>
+          }
+        }
+        @if (!isLoading() && !errorMessage() && totalItems() > 0) {
+          <nav class="library-pagination" aria-label="Library pagination">
+            <span>Showing {{ pageStart() }}–{{ pageEnd() }} of {{ totalItems() }}</span>
+            <div class="pagination-controls">
+              <button type="button" aria-label="Previous page" title="Previous page" [disabled]="pageNumber() === 1" (click)="previousPage()">‹</button>
+              <span>Page {{ pageNumber() }} of {{ totalPages() }}</span>
+              <button type="button" aria-label="Next page" title="Next page" [disabled]="pageNumber() === totalPages()" (click)="nextPage()">›</button>
+            </div>
+          </nav>
+        }
       </section>
       <footer class="page-footer"><span>YOUR MUSIC, YOUR MOMENT.</span><span>MADE FOR THE IN-BETWEEN</span></footer>
     </div>

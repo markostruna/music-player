@@ -108,6 +108,19 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.True(coverUpdate.Results.Single().Succeeded);
         Assert.Equal("image/png", cover?.ContentType);
         Assert.Equal(coverBytes, cover?.Data);
+
+        byte[] folderCoverBytes = [.. coverBytes, 1];
+        var folderCoverPath = Path.Combine(albumDirectory, "Folder.jpg");
+        await System.IO.File.WriteAllBytesAsync(folderCoverPath, folderCoverBytes);
+        var folderCover = await library.ResolveCoverAsync(rescannedTrack.Id, CancellationToken.None);
+        Assert.Equal("image/png", folderCover?.ContentType);
+        Assert.Equal(folderCoverBytes, folderCover?.Data);
+
+        System.IO.File.Delete(folderCoverPath);
+        byte[] alternateCoverBytes = [.. coverBytes, 2];
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(albumDirectory, "cover.png"), alternateCoverBytes);
+        var alternateCover = await library.ResolveCoverAsync(rescannedTrack.Id, CancellationToken.None);
+        Assert.Equal(alternateCoverBytes, alternateCover?.Data);
     }
 
     private static async Task CreateWaveFileAsync(string path)

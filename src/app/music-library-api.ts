@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthState, UserRole } from './auth-state';
+import { MUSIC_API_BASE, MUSIC_API_PREFIX } from './api-path';
 
 export interface MusicTrack {
   id: number;
@@ -73,68 +74,73 @@ export class MusicLibraryApi {
   private readonly auth = inject(AuthState);
 
   listTracks(): Promise<MusicTrack[]> {
-    return firstValueFrom(this.http.get<MusicTrack[]>('/api/library/tracks', { withCredentials: true }));
+    return firstValueFrom(this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks`, { withCredentials: true }))
+      .then(tracks => tracks.map(track => ({
+        ...track,
+        streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
+        coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
+      })));
   }
 
   listRoots(): Promise<SourceRoot[]> {
-    return firstValueFrom(this.http.get<SourceRoot[]>('/api/admin/roots', { withCredentials: true }));
+    return firstValueFrom(this.http.get<SourceRoot[]>(`${MUSIC_API_BASE}/admin/roots`, { withCredentials: true }));
   }
 
   listFolders(): Promise<MusicFolder[]> {
-    return firstValueFrom(this.http.get<MusicFolder[]>('/api/admin/roots/folders', { withCredentials: true }));
+    return firstValueFrom(this.http.get<MusicFolder[]>(`${MUSIC_API_BASE}/admin/roots/folders`, { withCredentials: true }));
   }
 
   async addRoot(name: string, path: string): Promise<SourceRoot> {
-    return firstValueFrom(this.http.post<SourceRoot>('/api/admin/roots', { name, path }, await this.writeOptions()));
+    return firstValueFrom(this.http.post<SourceRoot>(`${MUSIC_API_BASE}/admin/roots`, { name, path }, await this.writeOptions()));
   }
 
   async scanRoot(id: number): Promise<ScanSummary> {
-    return firstValueFrom(this.http.post<ScanSummary>(`/api/admin/roots/${id}/scan`, {}, await this.writeOptions()));
+    return firstValueFrom(this.http.post<ScanSummary>(`${MUSIC_API_BASE}/admin/roots/${id}/scan`, {}, await this.writeOptions()));
   }
 
   async removeRoot(id: number): Promise<void> {
-    await firstValueFrom(this.http.delete<void>(`/api/admin/roots/${id}`, await this.writeOptions()));
+    await firstValueFrom(this.http.delete<void>(`${MUSIC_API_BASE}/admin/roots/${id}`, await this.writeOptions()));
   }
 
   async updateMetadata(trackIds: number[], changes: MetadataPatch): Promise<MutationResult[]> {
     const body = { trackIds, changes };
     const response = await firstValueFrom(this.http.post<{ results: MutationResult[] }>(
-      '/api/admin/tracks/metadata', body, await this.writeOptions()));
+      `${MUSIC_API_BASE}/admin/tracks/metadata`, body, await this.writeOptions()));
     return response.results;
   }
 
   async updateCover(trackIds: number[], image: File): Promise<MutationResult[]> {
     const bytes = Array.from(new Uint8Array(await image.arrayBuffer()));
     const response = await firstValueFrom(this.http.post<{ results: MutationResult[] }>(
-      '/api/admin/tracks/cover', { trackIds, image: bytes }, await this.writeOptions()));
+      `${MUSIC_API_BASE}/admin/tracks/cover`, { trackIds, image: bytes }, await this.writeOptions()));
     return response.results;
   }
 
   async moveTracks(trackIds: number[], destinationFolderId: number): Promise<MutationResult[]> {
     const response = await firstValueFrom(this.http.post<{ results: MutationResult[] }>(
-      '/api/admin/tracks/move', { trackIds, destinationFolderId }, await this.writeOptions()));
+      `${MUSIC_API_BASE}/admin/tracks/move`, { trackIds, destinationFolderId }, await this.writeOptions()));
     return response.results;
   }
 
   listUsers(): Promise<ManagedUser[]> {
-    return firstValueFrom(this.http.get<ManagedUser[]>('/api/users', { withCredentials: true }));
+    return firstValueFrom(this.http.get<ManagedUser[]>(`${MUSIC_API_BASE}/users`, { withCredentials: true }));
   }
 
   async createUser(email: string, temporaryPassword: string, role: UserRole): Promise<ManagedUser> {
-    return firstValueFrom(this.http.post<ManagedUser>('/api/users',
+    return firstValueFrom(this.http.post<ManagedUser>(`${MUSIC_API_BASE}/users`,
       { email, temporaryPassword, role }, await this.writeOptions()));
   }
 
   async setUserRole(userId: number, role: UserRole): Promise<void> {
-    await firstValueFrom(this.http.put<void>(`/api/users/${userId}/role`, { role }, await this.writeOptions()));
+    await firstValueFrom(this.http.put<void>(`${MUSIC_API_BASE}/users/${userId}/role`, { role }, await this.writeOptions()));
   }
 
   async setUserEnabled(userId: number, isEnabled: boolean): Promise<void> {
-    await firstValueFrom(this.http.put<void>(`/api/users/${userId}/enabled`, { isEnabled }, await this.writeOptions()));
+    await firstValueFrom(this.http.put<void>(`${MUSIC_API_BASE}/users/${userId}/enabled`, { isEnabled }, await this.writeOptions()));
   }
 
   async resetPassword(userId: number, newPassword: string): Promise<void> {
-    await firstValueFrom(this.http.put<void>(`/api/users/${userId}/password`, { newPassword }, await this.writeOptions()));
+    await firstValueFrom(this.http.put<void>(`${MUSIC_API_BASE}/users/${userId}/password`, { newPassword }, await this.writeOptions()));
   }
 
   private async writeOptions(): Promise<{ headers: { 'X-CSRF-TOKEN': string }; withCredentials: true }> {

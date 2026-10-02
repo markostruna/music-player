@@ -92,7 +92,7 @@ public static class LibraryEndpoints
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("RemoveSourceRoot")
-        .WithSummary("Removes a source root only when it has no catalogued tracks.");
+        .WithSummary("Removes a source root and its catalog entries without deleting music files.");
         roots.MapPost("/{rootId:int}/scan", async Task<Results<Ok<ScanResponse>, NotFound, Conflict<string>>> (
             int rootId,
             IMusicLibraryService music,

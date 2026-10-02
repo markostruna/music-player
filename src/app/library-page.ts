@@ -4,6 +4,24 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthState, ThemeName } from './auth-state';
 import { MetadataPatch, MusicLibraryApi, MusicTrack } from './music-library-api';
 
+type LibraryView = 'tracks' | 'albums' | 'artists';
+
+interface AlbumTile {
+  key: string;
+  title: string;
+  artist: string;
+  tracks: MusicTrack[];
+  coverUrl: string;
+}
+
+interface ArtistTile {
+  key: string;
+  name: string;
+  tracks: MusicTrack[];
+  albumCount: number;
+  coverUrl: string;
+}
+
 @Component({
   selector: 'app-library-page',
   imports: [FormsModule, RouterLink],
@@ -18,6 +36,9 @@ export class LibraryPage implements OnInit {
 
   readonly activeSection = signal('Listen now');
   readonly searchQuery = signal('');
+  readonly collectionView = signal<LibraryView>('tracks');
+  readonly currentPage = signal(1);
+  readonly pageSize = 100;
   readonly isPlaying = signal(false);
   readonly currentTime = signal(0);
   readonly duration = signal(0);
@@ -33,6 +54,60 @@ export class LibraryPage implements OnInit {
     const query = this.searchQuery().trim().toLowerCase();
     return this.tracks().filter((track) => `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query));
   });
+  readonly albums = computed(() => {
+    const groups = new Map<string, AlbumTile>();
+    for (const track of this.tracks()) {
+      const artist = track.albumArtist.trim() || track.artist;
+      const key = `${artist.toLowerCase()}\u0000${track.album.toLowerCase()}`;
+      const group = groups.get(key);
+      if (group) {
+        group.tracks.push(track);
+      } else {
+        groups.set(key, { key, title: track.album, artist, tracks: [track], coverUrl: track.coverUrl });
+      }
+    }
+    return [...groups.values()].sort((first, second) =>
+      first.artist.localeCompare(second.artist) || first.title.localeCompare(second.title));
+  });
+  readonly filteredAlbums = computed(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    return this.albums().filter((album) => `${album.title} ${album.artist}`.toLowerCase().includes(query));
+  });
+  readonly artists = computed(() => {
+    const groups = new Map<string, ArtistTile & { albumKeys: Set<string> }>();
+    for (const track of this.tracks()) {
+      const name = track.artist.trim() || 'Unknown artist';
+      const key = name.toLowerCase();
+      let group = groups.get(key);
+      if (!group) {
+        group = { key, name, tracks: [], albumCount: 0, coverUrl: track.coverUrl, albumKeys: new Set<string>() };
+        groups.set(key, group);
+      }
+      group.tracks.push(track);
+      group.albumKeys.add(`${track.albumArtist.trim() || track.artist}\u0000${track.album}`.toLowerCase());
+    }
+    return [...groups.values()]
+      .map(({ albumKeys, ...artist }) => ({ ...artist, albumCount: albumKeys.size }))
+      .sort((first, second) => first.name.localeCompare(second.name));
+  });
+  readonly filteredArtists = computed(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    return this.artists().filter((artist) => artist.name.toLowerCase().includes(query));
+  });
+  readonly totalItems = computed(() => {
+    switch (this.collectionView()) {
+      case 'albums': return this.filteredAlbums().length;
+      case 'artists': return this.filteredArtists().length;
+      default: return this.filteredTracks().length;
+    }
+  });
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalItems() / this.pageSize)));
+  readonly pageNumber = computed(() => Math.min(this.currentPage(), this.totalPages()));
+  readonly pageStart = computed(() => this.totalItems() === 0 ? 0 : (this.pageNumber() - 1) * this.pageSize + 1);
+  readonly pageEnd = computed(() => Math.min(this.pageNumber() * this.pageSize, this.totalItems()));
+  readonly visibleTracks = computed(() => this.pageSlice(this.filteredTracks()));
+  readonly visibleAlbums = computed(() => this.pageSlice(this.filteredAlbums()));
+  readonly visibleArtists = computed(() => this.pageSlice(this.filteredArtists()));
   readonly themeOptions: ThemeName[] = ['Light', 'Dark', 'Blue'];
 
   metadata: MetadataPatch = {};
@@ -55,6 +130,30 @@ export class LibraryPage implements OnInit {
     } finally {
       this.isLoading.set(false);
     }
+  }
+
+  setCollectionView(view: LibraryView): void {
+    this.collectionView.set(view);
+    this.currentPage.set(1);
+    this.selectedTrackIds.set(new Set<number>());
+  }
+
+  setSearchQuery(query: string): void {
+    this.searchQuery.set(query);
+    this.currentPage.set(1);
+  }
+
+  previousPage(): void {
+    this.currentPage.update((page) => Math.max(1, page - 1));
+  }
+
+  nextPage(): void {
+    this.currentPage.update((page) => Math.min(this.totalPages(), page + 1));
+  }
+
+  playGroup(tracks: MusicTrack[]): void {
+    const firstTrack = tracks[0];
+    if (firstTrack) this.chooseTrack(firstTrack);
   }
 
   chooseTrack(track: MusicTrack): void {
@@ -116,6 +215,11 @@ export class LibraryPage implements OnInit {
   formatTime(seconds: number): string {
     if (!Number.isFinite(seconds)) return '0:00';
     return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
+  }
+
+  private pageSlice<T>(items: T[]): T[] {
+    const start = (this.pageNumber() - 1) * this.pageSize;
+    return items.slice(start, start + this.pageSize);
   }
 
   toggleSelection(trackId: number, event: Event): void {

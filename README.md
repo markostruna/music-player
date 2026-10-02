@@ -104,11 +104,11 @@ DocumentRoot "C:/xampp/htdocs/afterhours"
 
 ProxyRequests Off
 ProxyPreserveHost On
-ProxyPass        /api/ http://127.0.0.1:5080/api/ retry=0
-ProxyPassReverse /api/ http://127.0.0.1:5080/api/
+ProxyPass        /music-api/ http://127.0.0.1:5080/ retry=0
+ProxyPassReverse /music-api/ http://127.0.0.1:5080/
 RequestHeader set X-Forwarded-Proto "https"
 ```
 
 Use a trusted TLS certificate before exposing the site to the internet. Run the API as a Windows service or a Task Scheduler task under a dedicated, non-interactive account that can read the configured music folders and write the database directory. Keep port `5080` private; only Apache should accept public connections. In Production, authentication and CSRF cookies are always marked Secure, so sign-in requires HTTPS. Development adapts cookie security to the local request to support `http://localhost:4200`. Back up the SQLite database and music files separately.
 
-The Angular development proxy in `proxy.conf.json` forwards `/api` to the local API. Production uses the same `/api` paths through Apache, so no public API port or client-side music path is needed.
+The Angular client uses the public `/music-api` prefix, which Apache and the development proxy strip before forwarding to the API's existing `/api` routes. This avoids conflicting with other applications that already use `/api`. No public API port or client-side music path is needed.

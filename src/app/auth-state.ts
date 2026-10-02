@@ -2,6 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { MUSIC_API_BASE } from './api-path';
 
 export type UserRole = 'Admin' | 'Guest';
 export type ThemeName = 'Light' | 'Dark' | 'Blue';
@@ -23,7 +24,7 @@ export class AuthState {
 
   async restore(): Promise<boolean> {
     try {
-      const user = await firstValueFrom(this.http.get<SignedInUser>('/api/auth/me', { withCredentials: true }));
+      const user = await firstValueFrom(this.http.get<SignedInUser>(`${MUSIC_API_BASE}/auth/me`, { withCredentials: true }));
       this.applyUser(user);
       return true;
     } catch {
@@ -35,7 +36,7 @@ export class AuthState {
   async signIn(email: string, password: string): Promise<void> {
     const token = await this.getCsrfToken();
     const user = await firstValueFrom(this.http.post<SignedInUser>(
-      '/api/auth/login',
+      `${MUSIC_API_BASE}/auth/login`,
       { email, password },
       { headers: { 'X-CSRF-TOKEN': token }, withCredentials: true },
     ));
@@ -45,7 +46,7 @@ export class AuthState {
   async signOut(): Promise<void> {
     try {
       const token = await this.getCsrfToken();
-      await firstValueFrom(this.http.post('/api/auth/logout', {}, {
+      await firstValueFrom(this.http.post(`${MUSIC_API_BASE}/auth/logout`, {}, {
         headers: { 'X-CSRF-TOKEN': token },
         withCredentials: true,
       }));
@@ -57,7 +58,7 @@ export class AuthState {
   async setTheme(theme: ThemeName): Promise<void> {
     const token = await this.getCsrfToken();
     const user = await firstValueFrom(this.http.put<SignedInUser>(
-      '/api/auth/theme',
+      `${MUSIC_API_BASE}/auth/theme`,
       { theme },
       { headers: { 'X-CSRF-TOKEN': token }, withCredentials: true },
     ));
@@ -65,7 +66,7 @@ export class AuthState {
   }
 
   async getCsrfToken(): Promise<string> {
-    const result = await firstValueFrom(this.http.get<{ token: string }>('/api/auth/csrf', { withCredentials: true }));
+    const result = await firstValueFrom(this.http.get<{ token: string }>(`${MUSIC_API_BASE}/auth/csrf`, { withCredentials: true }));
     return result.token;
   }
 
