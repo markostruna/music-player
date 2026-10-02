@@ -48,7 +48,7 @@
       <button class="mobile-profile" (click)="signOut()" aria-label="Sign out">{{ user()?.email?.slice(0, 1)?.toUpperCase() }}</button>
     </header>
 
-    <div class="content-scroll">
+    <div class="content-scroll" #contentScroll>
       <section class="greeting-row">
         <div><span class="eyebrow">YOUR PERSONAL COLLECTION</span><h1>A good day to <em>listen.</em></h1><p>Your music, wherever you are.</p></div>
         <button class="text-action" (click)="activeSection.set('Your library')">Your library <span aria-hidden="true">↗</span></button>
@@ -163,11 +163,4 @@
       <footer class="page-footer"><span>YOUR MUSIC, YOUR MOMENT.</span><span>MADE FOR THE IN-BETWEEN</span></footer>
     </div>
   </main>
-
-  <footer class="player-bar">
-    <div class="now-playing-info"><img [src]="currentTrack()?.coverUrl ?? ''" [alt]="(currentTrack()?.album ?? 'Track') + ' artwork'" /><span><strong>{{ currentTrack()?.title ?? 'Nothing playing' }}</strong><small>{{ currentTrack()?.artist ?? 'Choose a track from your library' }}</small></span></div>
-    <div class="player-controls"><div class="transport"><button aria-label="Previous track" title="Previous track" (click)="playAdjacentTrack(-1)">|◀</button><button class="play-toggle" (click)="togglePlayback()" [attr.aria-label]="isPlaying() ? 'Pause' : 'Play'" [title]="isPlaying() ? 'Pause' : 'Play'"><span>{{ isPlaying() ? 'Ⅱ' : '▶' }}</span></button><button aria-label="Next track" title="Next track" (click)="playAdjacentTrack(1)">▶|</button></div><div class="progress-row"><span>{{ formatTime(currentTime()) }}</span><input type="range" min="0" [max]="duration() || currentTrack()?.durationSeconds || 0" [value]="currentTime()" (input)="seek($event)" aria-label="Playback position" /><span>{{ formatTime(duration() || currentTrack()?.durationSeconds || 0) }}</span></div></div>
-    <div class="player-extra"><label class="volume-label" aria-label="Volume">◖<input type="range" min="0" max="100" value="72" (input)="setVolume($event)" aria-label="Volume" /></label></div>
-  </footer>
-  <audio #audioPlayer preload="metadata" (timeupdate)="updatePlaybackTime($event)" (loadedmetadata)="updatePlaybackTime($event)" (ended)="playAdjacentTrack(1)" (play)="isPlaying.set(true)" (pause)="isPlaying.set(false)"></audio>
 </div>

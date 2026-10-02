@@ -1,10 +1,11 @@
-import { Component, computed, ElementRef, inject, OnInit, signal, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, computed, ElementRef, inject, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthState, ThemeName } from './auth-state';
+import { formatTime } from './format-time';
+import { LibraryStore, LibraryView } from './library-store';
 import { MetadataPatch, MusicLibraryApi, MusicTrack } from './music-library-api';
-
-type LibraryView = 'tracks' | 'albums' | 'artists';
+import { PlayerService } from './player.service';
 
 interface AlbumTile {
   key: string;
@@ -27,25 +28,26 @@ interface ArtistTile {
   imports: [FormsModule, RouterLink],
   templateUrl: './library-page.html',
 })
-export class LibraryPage implements OnInit {
+export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthState);
   private readonly router = inject(Router);
   private readonly library = inject(MusicLibraryApi);
+  private readonly store = inject(LibraryStore);
+  private readonly player = inject(PlayerService);
 
-  @ViewChild('audioPlayer') private audioPlayer?: ElementRef<HTMLAudioElement>;
+  @ViewChild('contentScroll') private contentScroll?: ElementRef<HTMLElement>;
 
   readonly activeSection = signal('Listen now');
-  readonly searchQuery = signal('');
-  readonly collectionView = signal<LibraryView>('albums');
-  readonly currentPage = signal(1);
+  readonly searchQuery = this.store.searchQuery;
+  readonly collectionView = this.store.collectionView;
+  readonly currentPage = this.store.currentPage;
   readonly pageSize = 100;
-  readonly isPlaying = signal(false);
-  readonly currentTime = signal(0);
-  readonly duration = signal(0);
-  readonly isLoading = signal(true);
-  readonly errorMessage = signal('');
-  readonly tracks = signal<MusicTrack[]>([]);
-  readonly currentTrack = signal<MusicTrack | null>(null);
+  readonly isPlaying = this.player.isPlaying;
+  readonly isLoading = this.store.isLoading;
+  private readonly themeError = signal('');
+  readonly errorMessage = computed(() => this.store.errorMessage() || this.themeError());
+  readonly tracks = this.store.tracks;
+  readonly currentTrack = this.player.currentTrack;
   readonly isAdmin = this.auth.isAdmin;
   readonly user = this.auth.user;
   readonly selectedTrackIds = signal(new Set<number>());
@@ -115,23 +117,32 @@ export class LibraryPage implements OnInit {
   folders: Awaited<ReturnType<MusicLibraryApi['listFolders']>> = [];
   operationMessage = '';
 
+  readonly formatTime = formatTime;
+
   ngOnInit(): void {
-    void this.loadLibrary();
+    void this.loadLibrary(false);
   }
 
-  async loadLibrary(): Promise<void> {
-    this.isLoading.set(true);
-    this.errorMessage.set('');
-    try {
-      this.tracks.set(await this.library.listTracks());
-      if (this.isAdmin()) this.folders = await this.library.listFolders();
-    } catch {
-      this.errorMessage.set('The library could not be loaded. Check the music server connection.');
-    } finally {
-      this.isLoading.set(false);
+  ngAfterViewInit(): void {
+    if (this.contentScroll) this.contentScroll.nativeElement.scrollTop = this.store.scrollTop;
+  }
+
+  ngOnDestroy(): void {
+    if (this.contentScroll) this.store.scrollTop = this.contentScroll.nativeElement.scrollTop;
+  }
+
+  async loadLibrary(forceRefresh = true): Promise<void> {
+    this.themeError.set('');
+    if (forceRefresh) await this.store.refresh();
+    else await this.store.ensureLoaded();
+    if (this.isAdmin() && !this.store.errorMessage()) {
+      try {
+        this.folders = await this.library.listFolders();
+      } catch {
+        this.themeError.set('The music folders could not be loaded.');
+      }
     }
   }
-
   setCollectionView(view: LibraryView): void {
     this.collectionView.set(view);
     this.currentPage.set(1);
@@ -152,71 +163,17 @@ export class LibraryPage implements OnInit {
   }
 
   playGroup(tracks: MusicTrack[]): void {
-    const firstTrack = tracks[0];
-    if (firstTrack) this.chooseTrack(firstTrack);
+    this.player.play(tracks, 0);
   }
 
   chooseTrack(track: MusicTrack): void {
-    this.currentTrack.set(track);
-    this.currentTime.set(0);
-    const audio = this.audioPlayer?.nativeElement;
-    if (!audio) return;
-    audio.pause();
-    audio.src = track.streamUrl;
-    audio.load();
-    void audio.play().then(() => this.isPlaying.set(true)).catch(() => {
-      this.isPlaying.set(false);
-      this.errorMessage.set('This track could not be played in this browser.');
-    });
+    const queue = this.filteredTracks();
+    this.player.play(queue, queue.findIndex((candidate) => candidate.id === track.id));
   }
 
   playFirstTrack(): void {
-    const firstTrack = this.tracks()[0];
-    if (firstTrack) this.chooseTrack(firstTrack);
+    this.player.play(this.tracks(), 0);
   }
-
-  togglePlayback(): void {
-    const audio = this.audioPlayer?.nativeElement;
-    if (!audio) {
-      this.playFirstTrack();
-      return;
-    }
-    if (audio.paused) {
-      void audio.play().then(() => this.isPlaying.set(true)).catch(() => this.errorMessage.set('Playback could not start.'));
-    } else {
-      audio.pause();
-      this.isPlaying.set(false);
-    }
-  }
-
-  playAdjacentTrack(direction: -1 | 1): void {
-    const tracks = this.tracks();
-    const index = tracks.findIndex((track) => track.id === this.currentTrack()?.id);
-    const nextIndex = index + direction;
-    if (nextIndex >= 0 && nextIndex < tracks.length) this.chooseTrack(tracks[nextIndex]);
-  }
-
-  updatePlaybackTime(event: Event): void {
-    const audio = event.target as HTMLAudioElement;
-    this.currentTime.set(audio.currentTime);
-    this.duration.set(Number.isFinite(audio.duration) ? audio.duration : this.currentTrack()?.durationSeconds ?? 0);
-  }
-
-  seek(event: Event): void {
-    const value = Number((event.target as HTMLInputElement).value);
-    if (this.audioPlayer) this.audioPlayer.nativeElement.currentTime = value;
-    this.currentTime.set(value);
-  }
-
-  setVolume(event: Event): void {
-    if (this.audioPlayer) this.audioPlayer.nativeElement.volume = Number((event.target as HTMLInputElement).value) / 100;
-  }
-
-  formatTime(seconds: number): string {
-    if (!Number.isFinite(seconds)) return '0:00';
-    return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
-  }
-
   private pageSlice<T>(items: T[]): T[] {
     const start = (this.pageNumber() - 1) * this.pageSize;
     return items.slice(start, start + this.pageSize);
@@ -283,11 +240,13 @@ export class LibraryPage implements OnInit {
     try {
       await this.auth.setTheme((event.target as HTMLSelectElement).value as ThemeName);
     } catch {
-      this.errorMessage.set('The theme preference could not be saved.');
+      this.themeError.set('The theme preference could not be saved.');
     }
   }
 
   async signOut(): Promise<void> {
+    this.player.stop();
+    this.store.clear();
     await this.auth.signOut();
     void this.router.navigateByUrl('/login');
   }

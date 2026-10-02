@@ -2,6 +2,8 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthState, UserRole } from './auth-state';
+import { LibraryStore } from './library-store';
+import { PlayerService } from './player.service';
 import { ManagedUser, MusicLibraryApi, SourceRoot } from './music-library-api';
 
 @Component({
@@ -13,6 +15,8 @@ export class AdminPage implements OnInit {
   private readonly api = inject(MusicLibraryApi);
   private readonly auth = inject(AuthState);
   private readonly router = inject(Router);
+  private readonly store = inject(LibraryStore);
+  private readonly player = inject(PlayerService);
 
   readonly roots = signal<SourceRoot[]>([]);
   readonly users = signal<ManagedUser[]>([]);
@@ -62,6 +66,7 @@ export class AdminPage implements OnInit {
     this.statusMessage.set(`Scanning ${root.name}…`);
     try {
       const result = await this.api.scanRoot(root.id);
+      this.store.invalidate();
       this.statusMessage.set(`Scanned ${result.discoveredTracks} tracks; ${result.unreadableTracks} files could not be read.`);
       await this.reload();
     } catch {
@@ -77,6 +82,7 @@ export class AdminPage implements OnInit {
 
     try {
       await this.api.removeRoot(root.id);
+      this.store.invalidate();
       this.statusMessage.set(`${root.name} was removed from the library. Music files were left untouched.`);
       await this.reload();
     } catch {
@@ -131,6 +137,8 @@ export class AdminPage implements OnInit {
   }
 
   async signOut(): Promise<void> {
+    this.player.stop();
+    this.store.clear();
     await this.auth.signOut();
     await this.router.navigateByUrl('/login');
   }

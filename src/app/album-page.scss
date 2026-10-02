@@ -1,7 +1,7 @@
 app-album-page {
   display: block;
   min-height: 100vh;
-  padding: 34px max(24px, calc((100vw - 1080px) / 2)) 120px;
+  padding: 34px max(24px, calc((100vw - 1080px) / 2)) 56px;
   background: var(--paper);
   color: var(--ink);
 }
@@ -154,41 +154,10 @@ app-album-page {
 
 .album-message a { color: var(--accent); font-weight: 700; }
 
-.album-player {
-  position: fixed;
-  z-index: 3;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: grid;
-  min-height: 82px;
-  grid-template-columns: minmax(180px, 1fr) minmax(260px, 1.4fr);
-  align-items: center;
-  gap: 24px;
-  padding: 12px max(24px, calc((100vw - 1080px) / 2));
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.album-player-idle { display: none; }
-
-.album-now-playing { display: flex; min-width: 0; align-items: center; gap: 11px; }
-.album-now-playing img { width: 44px; height: 44px; border-radius: 4px; object-fit: cover; }
-.album-now-playing span { display: grid; min-width: 0; gap: 4px; }
-.album-now-playing strong,
-.album-now-playing small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.album-now-playing strong { font-size: 11px; }
-.album-now-playing small { color: var(--muted); font-size: 10px; }
-.album-player audio { width: 100%; height: 40px; }
-.album-player p { grid-column: 1 / -1; margin: 0; color: #a33b32; font-size: 11px; }
-.album-audio { display: none; }
-
 @media (max-width: 640px) {
-  app-album-page { padding: 24px 18px 130px; }
+  app-album-page { padding: 24px 18px 40px; }
   .album-page-header { margin-bottom: 28px; }
   .album-hero { grid-template-columns: 1fr; gap: 24px; margin-bottom: 38px; }
   .album-cover { width: min(100%, 330px); margin: 0 auto; }
   .album-details h1 { font-size: 34px; }
-  .album-player { grid-template-columns: 1fr; gap: 8px; padding: 10px 16px; }
-  .album-player audio { grid-row: 2; }
 }
