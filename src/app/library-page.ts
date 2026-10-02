@@ -36,7 +36,7 @@ export class LibraryPage implements OnInit {
 
   readonly activeSection = signal('Listen now');
   readonly searchQuery = signal('');
-  readonly collectionView = signal<LibraryView>('tracks');
+  readonly collectionView = signal<LibraryView>('albums');
   readonly currentPage = signal(1);
   readonly pageSize = 100;
   readonly isPlaying = signal(false);
