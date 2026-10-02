@@ -1,0 +1,61 @@
+<main class="album-page">
+  <header class="album-page-header">
+    <a routerLink="/library" aria-label="Back to library">← <span>Back to library</span></a>
+    <span class="eyebrow">YOUR COLLECTION</span>
+  </header>
+
+  @if (isLoading()) {
+    <p class="album-message">Loading album…</p>
+  } @else if (errorMessage()) {
+    <p class="album-message" role="alert">{{ errorMessage() }} <a routerLink="/library">Return to your library</a></p>
+  } @else if (album(); as album) {
+    <section class="album-hero">
+      <div class="album-cover">
+        <span class="album-cover-placeholder" aria-hidden="true">♫</span>
+        <img [src]="album.coverUrl" [alt]="album.title + ' album artwork'" (error)="$any($event.target).style.visibility='hidden'" />
+      </div>
+      <div class="album-details">
+        <span class="album-kind">ALBUM</span>
+        <h1>{{ album.title }}</h1>
+        <p class="album-artist">{{ album.artist }}</p>
+        <dl class="album-metadata">
+          <div><dt>Release date</dt><dd>{{ album.releaseYear ?? 'Unknown' }}</dd></div>
+          <div><dt>Tracks</dt><dd>{{ album.tracks.length }}</dd></div>
+        </dl>
+        <button class="album-play-button" type="button" (click)="playTrack(album.tracks[0])" [disabled]="!album.tracks.length">
+          <span aria-hidden="true">▶</span> Play album
+        </button>
+      </div>
+    </section>
+
+    <section class="album-track-section" aria-labelledby="album-track-heading">
+      <div class="album-track-heading">
+        <span class="eyebrow">THE RECORD</span>
+        <h2 id="album-track-heading">Tracks</h2>
+      </div>
+      <ol class="album-track-list">
+        @for (track of album.tracks; track track.id; let index = $index) {
+          <li>
+            <button class="album-track-row" type="button" [class.album-track-playing]="currentTrack()?.id === track.id && isPlaying()" (click)="playTrack(track)">
+              <span class="album-track-number">{{ track.trackNumber || index + 1 }}</span>
+              <span class="album-track-title"><strong>{{ track.title }}</strong><small>{{ track.artist }}</small></span>
+              <span class="album-track-duration">{{ formatTime(track.durationSeconds) }}</span>
+              <span class="album-track-play" aria-hidden="true">{{ currentTrack()?.id === track.id && isPlaying() ? '♫' : '▶' }}</span>
+            </button>
+          </li>
+        }
+      </ol>
+    </section>
+  }
+
+  <footer class="album-player" [class.album-player-idle]="!currentTrack()">
+    @if (currentTrack()) {
+      <div class="album-now-playing">
+        <img [src]="currentTrack()?.coverUrl" [alt]="currentTrack()?.album + ' artwork'" />
+        <span><strong>{{ currentTrack()?.title }}</strong><small>{{ currentTrack()?.artist }}</small></span>
+      </div>
+      @if (playbackError()) { <p role="alert">{{ playbackError() }}</p> }
+    }
+    <audio #audioPlayer controls [class.album-audio]="!currentTrack()" [attr.aria-label]="currentTrack() ? 'Playing ' + currentTrack()?.title : 'Album playback'" (ended)="playNextTrack()" (play)="isPlaying.set(true)" (pause)="isPlaying.set(false)"></audio>
+  </footer>
+</main>

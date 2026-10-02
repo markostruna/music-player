@@ -122,12 +122,12 @@
           @if (visibleAlbums().length) {
             <div class="collection-grid">
               @for (album of visibleAlbums(); track album.key) {
-                <button class="collection-tile" type="button" (click)="playGroup(album.tracks)" [attr.aria-label]="'Play album ' + album.title + ' by ' + album.artist" [title]="'Play album: ' + album.title">
+                <a class="collection-tile" [routerLink]="['/library/album', album.tracks[0].id]" [attr.aria-label]="'View album ' + album.title + ' by ' + album.artist" [title]="'View album: ' + album.title">
                   <span class="tile-art"><span class="tile-placeholder" aria-hidden="true">♫</span><img [src]="album.coverUrl" [alt]="album.title + ' artwork'" (error)="$any($event.target).style.visibility='hidden'" /><span class="tile-play" aria-hidden="true">▶</span></span>
                   <span class="tile-title">{{ album.title }}</span>
                   <span class="tile-detail">{{ album.artist }}</span>
                   <span class="tile-meta">{{ album.tracks.length }} {{ album.tracks.length === 1 ? 'track' : 'tracks' }}</span>
-                </button>
+                </a>
               }
             </div>
           } @else {
