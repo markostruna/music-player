@@ -7,10 +7,10 @@
 
     <div class="nav-group">
       <span class="nav-label">MENU</span>
-      <button class="nav-item" [class.selected]="activeSection() === 'Listen now'" (click)="activeSection.set('Listen now')">
+      <a class="nav-item" routerLink="/now-playing" routerLinkActive="selected" [routerLinkActiveOptions]="{ exact: true }">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20h-6v-6h-4v6H4v-9.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-        Listen now
-      </button>
+        Now playing
+      </a>
       <button class="nav-item" [class.selected]="activeSection() === 'Discover'" (click)="activeSection.set('Discover')">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
         Discover

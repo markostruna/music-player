@@ -79,6 +79,8 @@ app-library-page {
   transition: background 140ms, color 140ms;
 }
 
+.nav-item { text-decoration: none; }
+
 .nav-item:hover,
 .playlist-link:hover {
   background: #f0f2eb;

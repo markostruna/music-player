@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, computed, ElementRef, inject, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthState, ThemeName } from './auth-state';
 import { formatTime } from './format-time';
 import { LibraryStore, LibraryView } from './library-store';
@@ -25,7 +25,7 @@ interface ArtistTile {
 
 @Component({
   selector: 'app-library-page',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, RouterLinkActive],
   templateUrl: './library-page.html',
 })
 export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
@@ -37,7 +37,7 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
 
   @ViewChild('contentScroll') private contentScroll?: ElementRef<HTMLElement>;
 
-  readonly activeSection = signal('Listen now');
+  readonly activeSection = signal('Your library');
   readonly searchQuery = this.store.searchQuery;
   readonly collectionView = this.store.collectionView;
   readonly currentPage = this.store.currentPage;
