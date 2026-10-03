@@ -1,6 +1,7 @@
-﻿import { Component, computed, inject, OnInit } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthState, ThemeName } from './auth-state';
 import { formatTime } from './format-time';
 import { LibraryStore } from './library-store';
 import { MusicTrack } from './music-library-api';
@@ -8,14 +9,20 @@ import { PlayerService } from './player.service';
 
 @Component({
   selector: 'app-album-page',
-  imports: [RouterLink],
+  imports: [RouterLink, RouterLinkActive],
   templateUrl: './album-page.html',
 })
 export class AlbumPage implements OnInit {
+  private readonly auth = inject(AuthState);
+  private readonly router = inject(Router);
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
   private readonly params = toSignal(inject(ActivatedRoute).paramMap);
 
+  readonly isAdmin = this.auth.isAdmin;
+  readonly user = this.auth.user;
+  readonly themeOptions: ThemeName[] = ['Light', 'Dark', 'Blue'];
+  readonly themeError = signal('');
   readonly isLoading = this.store.isLoading;
   readonly errorMessage = computed(() => {
     if (this.store.errorMessage()) return this.store.errorMessage();
@@ -54,5 +61,21 @@ export class AlbumPage implements OnInit {
 
   playTrack(tracks: MusicTrack[], index: number): void {
     this.player.play(tracks, index);
+  }
+
+  async changeTheme(event: Event): Promise<void> {
+    try {
+      await this.auth.setTheme((event.target as HTMLSelectElement).value as ThemeName);
+      this.themeError.set('');
+    } catch {
+      this.themeError.set('The theme preference could not be saved.');
+    }
+  }
+
+  async signOut(): Promise<void> {
+    this.player.stop();
+    this.store.clear();
+    await this.auth.signOut();
+    void this.router.navigateByUrl('/login');
   }
 }

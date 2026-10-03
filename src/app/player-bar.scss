@@ -99,7 +99,7 @@
 body.has-player {
   app-library-page .workspace { padding-bottom: 82px; }
   app-now-playing-page .workspace { padding-bottom: 82px; }
-  app-album-page { padding-bottom: 120px; }
+  app-album-page .workspace { padding-bottom: 82px; }
   .admin-content { padding-bottom: 110px; }
 }
 
@@ -124,6 +124,8 @@ body.has-player {
     app-now-playing-page .workspace { padding-bottom: 74px; }
     app-now-playing-page .sidebar { bottom: 74px; }
     app-now-playing-page .content-scroll { height: calc(100dvh - 60px - 132px); }
-    app-album-page { padding-bottom: 130px; }
+    app-album-page .workspace { padding-bottom: 74px; }
+    app-album-page .sidebar { bottom: 74px; }
+    app-album-page .content-scroll { height: calc(100dvh - 60px - 132px); }
   }
 }

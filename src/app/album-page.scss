@@ -1,10 +1,12 @@
 app-album-page {
   display: block;
-  min-height: 100vh;
-  padding: 34px max(24px, calc((100vw - 1080px) / 2)) 56px;
+  height: 100vh;
+  overflow: hidden;
   background: var(--paper);
   color: var(--ink);
 }
+
+.album-content { min-height: 0; }
 
 .album-page-header {
   display: flex;
@@ -155,9 +157,12 @@ app-album-page {
 .album-message a { color: var(--accent); font-weight: 700; }
 
 @media (max-width: 640px) {
-  app-album-page { padding: 24px 18px 40px; }
+  app-album-page { height: 100dvh; }
+  .album-page { padding: 24px 18px 40px; }
   .album-page-header { margin-bottom: 28px; }
   .album-hero { grid-template-columns: 1fr; gap: 24px; margin-bottom: 38px; }
   .album-cover { width: min(100%, 330px); margin: 0 auto; }
   .album-details h1 { font-size: 34px; }
+  .theme-picker span,
+  .admin-link { display: none; }
 }
