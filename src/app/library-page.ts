@@ -21,6 +21,8 @@ interface ArtistTile {
   tracks: MusicTrack[];
   albumCount: number;
   coverUrl: string;
+  artistImageUrl: string;
+  artistImageMissing: boolean;
 }
 
 @Component({
@@ -82,7 +84,10 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
       const key = name.toLowerCase();
       let group = groups.get(key);
       if (!group) {
-        group = { key, name, tracks: [], albumCount: 0, coverUrl: track.coverUrl, albumKeys: new Set<string>() };
+        group = {
+          key, name, tracks: [], albumCount: 0, coverUrl: track.coverUrl,
+          artistImageUrl: track.artistImageUrl, artistImageMissing: track.artistImageMissing, albumKeys: new Set<string>(),
+        };
         groups.set(key, group);
       }
       group.tracks.push(track);

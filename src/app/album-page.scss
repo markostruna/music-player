@@ -117,6 +117,28 @@ app-artist-page {
 .album-play-button:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .album-track-section { max-width: 920px; margin: 0 auto; }
+.metadata-description { max-width: 920px; margin: 0 auto 48px; }
+.metadata-description .eyebrow { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: 1.3px; }
+.metadata-description h2 { margin: 5px 0 12px; font: 700 20px 'Manrope', sans-serif; }
+.metadata-description p { max-width: 780px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; white-space: pre-line; }
+.metadata-description textarea {
+  display: block;
+  width: 100%;
+  max-width: 780px;
+  min-height: 110px;
+  padding: 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+.metadata-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.metadata-controls .album-play-button { min-height: 36px; font-size: 11px; }
+.metadata-controls .secondary-action { background: var(--surface-hover); color: var(--ink); }
+.missing-image-label { display: inline-block; margin-top: 8px; color: var(--muted); font-size: 11px; }
 .album-track-heading { margin-bottom: 12px; }
 .album-track-heading h2 { margin: 5px 0 0; font: 700 20px 'Manrope', sans-serif; }
 .album-track-list { margin: 0; padding: 0; list-style: none; }

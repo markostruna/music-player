@@ -1,12 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using System.Security.Cryptography;
+using System.Text;
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
 using TagLib;
 
 namespace MusicPlayer.Api.Services;
 
-public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnvironment environment) : IMusicLibraryService
+public sealed class MusicLibraryService(
+    MusicDbContext database,
+    IWebHostEnvironment environment,
+    IMusicBrainzClient musicBrainz,
+    ILogger<MusicLibraryService> logger) : IMusicLibraryService
 {
     private const int MaximumCoverFileSize = 10 * 1024 * 1024;
 
@@ -176,7 +182,19 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
             .ThenBy(track => track.TrackNumber)
             .ThenBy(track => track.Title)
             .ToListAsync(cancellationToken);
-        return tracks.Select(ToResponse).ToList();
+        var artistMetadata = await database.ArtistMetadata.AsNoTracking().ToDictionaryAsync(item => item.Key, cancellationToken);
+        var albumMetadata = await database.AlbumMetadata.AsNoTracking().ToDictionaryAsync(item => item.Key, cancellationToken);
+        return tracks.Select(track =>
+        {
+            var artistKey = GetArtistMetadataKey(track.Artist);
+            var albumArtist = string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist;
+            var albumKey = GetAlbumMetadataKey(albumArtist, track.Album);
+            artistMetadata.TryGetValue(artistKey, out var artist);
+            var albumArtistKey = GetArtistMetadataKey(albumArtist);
+            artistMetadata.TryGetValue(albumArtistKey, out var albumArtistInfo);
+            albumMetadata.TryGetValue(albumKey, out var album);
+            return ToResponse(track, artist, albumArtistInfo, album);
+        }).ToList();
     }
 
     public async Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken)
@@ -219,6 +237,24 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
 
     public async Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken)
     {
+        var track = await database.Tracks.AsNoTracking().SingleOrDefaultAsync(item => item.Id == trackId, cancellationToken);
+        if (track is not null)
+        {
+            var albumKey = GetAlbumMetadataKey(
+                string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist,
+                track.Album);
+            var metadata = await database.AlbumMetadata.AsNoTracking().SingleOrDefaultAsync(item => item.Key == albumKey, cancellationToken);
+            var customImage = metadata is null
+                ? null
+                : metadata.ImageSourceRootId.HasValue
+                    ? await ReadLibraryImageAsync(metadata.ImageSourceRootId, metadata.ImageRelativePath, cancellationToken)
+                    : await ReadMetadataImageAsync(metadata.ImageFileName, "albums", cancellationToken);
+            if (customImage is not null)
+            {
+                return customImage;
+            }
+        }
+
         var media = await ResolveStreamAsync(trackId, cancellationToken);
         if (media is null)
         {
@@ -239,6 +275,600 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
         }
 
         return new CoverImage(picture.Data.Data, picture.MimeType);
+    }
+
+    public async Task<CoverImage?> ResolveArtistImageAsync(string key, CancellationToken cancellationToken)
+    {
+        var metadata = await database.ArtistMetadata.AsNoTracking().SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+        return metadata is null
+            ? null
+            : metadata.ImageSourceRootId.HasValue
+                ? await ReadLibraryImageAsync(metadata.ImageSourceRootId, metadata.ImageRelativePath, cancellationToken)
+                : await ReadMetadataImageAsync(metadata.ImageFileName, "artists", cancellationToken);
+    }
+
+    public async Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(string artist, CancellationToken cancellationToken)
+    {
+        var name = artist.Trim();
+        var result = await musicBrainz.FindArtistAsync(name, cancellationToken);
+        var key = GetArtistMetadataKey(name);
+        var metadata = await database.ArtistMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+        if (result is null)
+        {
+            return metadata is null
+                ? new MetadataRefreshResponse(false, "", "", null, true, DateTimeOffset.UtcNow)
+                : new MetadataRefreshResponse(
+                    false,
+                    metadata.MusicBrainzId,
+                    metadata.Description,
+                    GetArtistImageUrl(metadata),
+                    metadata.ImageMissing || string.IsNullOrWhiteSpace(metadata.ImageFileName),
+                    metadata.UpdatedAt);
+        }
+
+        if (metadata is null)
+        {
+            metadata = new MusicArtistMetadata { Key = key, Artist = name };
+            database.ArtistMetadata.Add(metadata);
+        }
+        var oldImageFileName = metadata.ImageFileName;
+        var oldImageRootId = metadata.ImageSourceRootId;
+        var oldImageRelativePath = metadata.ImageRelativePath;
+
+        if (!string.IsNullOrWhiteSpace(result.Description))
+        {
+            metadata.Description = result.Description;
+            metadata.DescriptionEdited = false;
+        }
+
+        metadata.MusicBrainzId = result.MusicBrainzId;
+        metadata.UpdatedAt = DateTimeOffset.UtcNow;
+        var imageUpdated = false;
+        string? imageProvider = null;
+        if (result.Image is not null && result.ImageContentType is not null)
+        {
+            var destination = await FindArtistImageDestinationAsync(name, cancellationToken);
+            if (destination is null)
+            {
+                logger.LogWarning("No music folder could be found for artist image {Artist}.", name);
+            }
+            else
+            {
+                var imageFileName = await SaveLookupImageAsync(
+                    result.Image,
+                    result.ImageContentType,
+                    destination,
+                    destination.IsArtistDirectory ? "ArtistCover-MusicBrainz" : $"ArtistCover-{SanitizeFileName(name)}-MusicBrainz",
+                    cancellationToken);
+                if (imageFileName is not null)
+                {
+                    metadata.ImageFileName = imageFileName;
+                    metadata.ImageSourceRootId = destination.SourceRootId;
+                    metadata.ImageRelativePath = NormalizeRelativePath(Path.Combine(destination.RelativeDirectory, imageFileName));
+                    metadata.ImageMissing = false;
+                    imageUpdated = true;
+                    imageProvider = result.ImageProvider;
+                }
+            }
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+        DeleteReplacedImage(oldImageFileName, oldImageRootId, oldImageRelativePath, metadata.ImageFileName,
+            metadata.ImageSourceRootId, metadata.ImageRelativePath, "artists");
+        return new MetadataRefreshResponse(
+            true,
+            metadata.MusicBrainzId,
+            metadata.Description,
+            GetArtistImageUrl(metadata),
+            metadata.ImageMissing || string.IsNullOrWhiteSpace(metadata.ImageFileName),
+            metadata.UpdatedAt,
+            imageUpdated,
+            imageProvider);
+    }
+
+    public async Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(string artist, string album, CancellationToken cancellationToken)
+    {
+        var artistName = artist.Trim();
+        var albumName = album.Trim();
+        var result = await musicBrainz.FindAlbumAsync(artistName, albumName, cancellationToken);
+        var key = GetAlbumMetadataKey(artistName, albumName);
+        var metadata = await database.AlbumMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+        if (result is null)
+        {
+            var existingTrackId = await FindAlbumCoverTrackIdAsync(artistName, albumName, cancellationToken);
+            return metadata is null
+                ? new MetadataRefreshResponse(false, "", "", existingTrackId is null ? null : GetAlbumImageUrl(existingTrackId.Value), true, DateTimeOffset.UtcNow)
+                : new MetadataRefreshResponse(
+                    false,
+                    metadata.MusicBrainzId,
+                    metadata.Description,
+                    existingTrackId is null ? null : GetAlbumImageUrl(existingTrackId.Value, metadata.UpdatedAt),
+                    metadata.ImageMissing,
+                    metadata.UpdatedAt);
+        }
+
+        if (metadata is null)
+        {
+            metadata = new MusicAlbumMetadata { Key = key, Artist = artistName, Album = albumName };
+            database.AlbumMetadata.Add(metadata);
+        }
+        var oldImageFileName = metadata.ImageFileName;
+        var oldImageRootId = metadata.ImageSourceRootId;
+        var oldImageRelativePath = metadata.ImageRelativePath;
+
+        if (!string.IsNullOrWhiteSpace(result.Description))
+        {
+            metadata.Description = result.Description;
+            metadata.DescriptionEdited = false;
+        }
+
+        metadata.MusicBrainzId = result.MusicBrainzId;
+        metadata.UpdatedAt = DateTimeOffset.UtcNow;
+        var imageUpdated = false;
+        string? imageProvider = null;
+        if (result.Image is not null && result.ImageContentType is not null)
+        {
+            var destination = await FindAlbumImageDestinationAsync(artistName, albumName, cancellationToken);
+            if (destination is null)
+            {
+                logger.LogWarning("No music folder could be found for album image {Album} by {Artist}.", albumName, artistName);
+            }
+            else
+            {
+                var imageFileName = await SaveLookupImageAsync(
+                    result.Image, result.ImageContentType, destination, "Cover-MusicBrainz", cancellationToken);
+                if (imageFileName is not null)
+                {
+                    metadata.ImageFileName = imageFileName;
+                    metadata.ImageSourceRootId = destination.SourceRootId;
+                    metadata.ImageRelativePath = NormalizeRelativePath(Path.Combine(destination.RelativeDirectory, imageFileName));
+                    metadata.ImageMissing = false;
+                    imageUpdated = true;
+                    imageProvider = result.ImageProvider;
+                }
+            }
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+        DeleteReplacedImage(oldImageFileName, oldImageRootId, oldImageRelativePath, metadata.ImageFileName,
+            metadata.ImageSourceRootId, metadata.ImageRelativePath, "albums");
+        var trackId = await FindAlbumCoverTrackIdAsync(artistName, albumName, cancellationToken);
+        return new MetadataRefreshResponse(
+            true,
+            metadata.MusicBrainzId,
+            metadata.Description,
+            trackId is null ? null : GetAlbumImageUrl(trackId.Value, metadata.UpdatedAt),
+            metadata.ImageMissing,
+            metadata.UpdatedAt,
+            imageUpdated,
+            imageProvider);
+    }
+
+    public async Task UpdateMetadataDescriptionAsync(
+        MetadataDescriptionRequest request,
+        bool album,
+        CancellationToken cancellationToken)
+    {
+        if (album)
+        {
+            var key = GetAlbumMetadataKey(request.Artist, request.Album);
+            var metadata = await database.AlbumMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+            if (metadata is null)
+            {
+                metadata = new MusicAlbumMetadata { Key = key, Artist = request.Artist.Trim(), Album = request.Album.Trim() };
+                database.AlbumMetadata.Add(metadata);
+            }
+
+            metadata.Description = request.Description.Trim();
+            metadata.DescriptionEdited = true;
+            metadata.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        else
+        {
+            var key = GetArtistMetadataKey(request.Artist);
+            var metadata = await database.ArtistMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+            if (metadata is null)
+            {
+                metadata = new MusicArtistMetadata { Key = key, Artist = request.Artist.Trim() };
+                database.ArtistMetadata.Add(metadata);
+            }
+
+            metadata.Description = request.Description.Trim();
+            metadata.DescriptionEdited = true;
+            metadata.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdateMetadataImageAsync(
+        MetadataImageRequest request,
+        bool album,
+        CancellationToken cancellationToken)
+    {
+        var contentType = DetectImageContentType(request.Image);
+        if (contentType is null || request.Image.Length > MaximumCoverFileSize)
+        {
+            throw new ArgumentException("The image must be a supported PNG, JPEG, GIF, or WebP file under 10 MB.");
+        }
+
+        var key = album ? GetAlbumMetadataKey(request.Artist, request.Album) : GetArtistMetadataKey(request.Artist);
+        var extension = contentType switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" => ".jpg",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            _ => throw new ArgumentException("The image format is not supported."),
+        };
+        var newFileName = $"{key}-{Guid.NewGuid():N}{extension}";
+        var directory = Path.Combine(GetMetadataDirectory(), album ? "albums" : "artists");
+        Directory.CreateDirectory(directory);
+        var imagePath = Path.Combine(directory, newFileName);
+        await System.IO.File.WriteAllBytesAsync(imagePath, request.Image, cancellationToken);
+
+        string? oldFileName;
+        int? oldImageRootId;
+        string? oldImageRelativePath;
+        try
+        {
+            if (album)
+            {
+                var metadata = await database.AlbumMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+                if (metadata is null)
+                {
+                    metadata = new MusicAlbumMetadata { Key = key, Artist = request.Artist.Trim(), Album = request.Album.Trim() };
+                    database.AlbumMetadata.Add(metadata);
+                }
+
+                oldFileName = metadata.ImageFileName;
+                oldImageRootId = metadata.ImageSourceRootId;
+                oldImageRelativePath = metadata.ImageRelativePath;
+                metadata.ImageFileName = newFileName;
+                metadata.ImageSourceRootId = null;
+                metadata.ImageRelativePath = null;
+                metadata.ImageMissing = false;
+                metadata.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            else
+            {
+                var metadata = await database.ArtistMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+                if (metadata is null)
+                {
+                    metadata = new MusicArtistMetadata { Key = key, Artist = request.Artist.Trim() };
+                    database.ArtistMetadata.Add(metadata);
+                }
+
+                oldFileName = metadata.ImageFileName;
+                oldImageRootId = metadata.ImageSourceRootId;
+                oldImageRelativePath = metadata.ImageRelativePath;
+                metadata.ImageFileName = newFileName;
+                metadata.ImageSourceRootId = null;
+                metadata.ImageRelativePath = null;
+                metadata.ImageMissing = false;
+                metadata.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            if (System.IO.File.Exists(imagePath)) System.IO.File.Delete(imagePath);
+            throw;
+        }
+
+        DeleteReplacedImage(oldFileName, oldImageRootId, oldImageRelativePath, newFileName, null, null, album ? "albums" : "artists");
+    }
+
+    private async Task<string?> SaveLookupImageAsync(
+        byte[] image,
+        string contentType,
+        MetadataImageDestination destination,
+        string baseName,
+        CancellationToken cancellationToken)
+    {
+        var validatedType = DetectImageContentType(image);
+        if (validatedType is null || validatedType != contentType || image.Length > MaximumCoverFileSize)
+        {
+            logger.LogWarning("Rejected an invalid image returned by metadata lookup for {FileName}.", baseName);
+            return null;
+        }
+        if (!IsSafePathWithoutLinks(destination.RootPath, destination.DirectoryPath))
+        {
+            throw new InvalidOperationException("The music folder selected for an image is no longer safe.");
+        }
+
+        var extension = validatedType switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" => ".jpg",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            _ => throw new InvalidOperationException("Unsupported metadata image type."),
+        };
+        var fileName = $"{baseName}{extension}";
+        var path = Path.Combine(destination.DirectoryPath, fileName);
+        var temporaryPath = Path.Combine(destination.DirectoryPath, $".{fileName}.{Guid.NewGuid():N}.tmp");
+        await System.IO.File.WriteAllBytesAsync(temporaryPath, image, cancellationToken);
+        try
+        {
+            System.IO.File.Move(temporaryPath, path, overwrite: true);
+        }
+        catch
+        {
+            if (System.IO.File.Exists(temporaryPath)) System.IO.File.Delete(temporaryPath);
+            throw;
+        }
+
+        return fileName;
+    }
+
+    private async Task<MetadataImageDestination?> FindAlbumImageDestinationAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken)
+    {
+        var normalizedArtist = artist.Trim().ToUpperInvariant();
+        var normalizedAlbum = album.Trim().ToUpperInvariant();
+        var tracks = await database.Tracks.AsNoTracking()
+            .Include(track => track.SourceRoot)
+            .Include(track => track.Folder)
+            .Where(track => track.IsAvailable
+                && track.SourceRoot != null
+                && track.SourceRoot.IsEnabled
+                && track.Album.Trim().ToUpper() == normalizedAlbum
+                && (string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist).Trim().ToUpper() == normalizedArtist)
+            .OrderBy(track => track.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var track in tracks)
+        {
+            if (track.SourceRoot is null || track.Folder is null) continue;
+            var destination = TryGetImageDestination(track.SourceRoot, track.Folder.RelativePath);
+            if (destination is not null) return destination;
+        }
+
+        return null;
+    }
+
+    private async Task<MetadataImageDestination?> FindArtistImageDestinationAsync(
+        string artist,
+        CancellationToken cancellationToken)
+    {
+        var normalizedArtist = artist.Trim().ToUpperInvariant();
+        var artistFolders = await database.Folders.AsNoTracking()
+            .Include(folder => folder.SourceRoot)
+            .Where(folder => folder.SourceRoot != null && folder.SourceRoot.IsEnabled
+                && folder.Name.Trim().ToUpper() == normalizedArtist)
+            .OrderBy(folder => folder.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var folder in artistFolders)
+        {
+            if (folder.SourceRoot is null) continue;
+            var destination = TryGetImageDestination(folder.SourceRoot, folder.RelativePath, isArtistDirectory: true);
+            if (destination is not null) return destination;
+        }
+
+        var tracks = await database.Tracks.AsNoTracking()
+            .Include(track => track.SourceRoot)
+            .Include(track => track.Folder)
+            .Where(track => track.IsAvailable
+                && track.SourceRoot != null
+                && track.SourceRoot.IsEnabled
+                && (track.Artist.Trim().ToUpper() == normalizedArtist
+                    || track.AlbumArtist.Trim().ToUpper() == normalizedArtist))
+            .OrderBy(track => track.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var track in tracks)
+        {
+            if (track.SourceRoot is null || track.Folder is null) continue;
+            var trackDirectory = ResolvePath(track.SourceRoot.Path, track.Folder.RelativePath);
+            for (var directory = new DirectoryInfo(trackDirectory);
+                 directory.Exists && IsWithin(directory.FullName, track.SourceRoot.Path);
+                 directory = directory.Parent!)
+            {
+                if (string.Equals(directory.Name, artist.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    var artistDirectory = Path.GetRelativePath(track.SourceRoot.Path, directory.FullName);
+                    var artistDestination = TryGetImageDestination(track.SourceRoot, artistDirectory, isArtistDirectory: true);
+                    if (artistDestination is not null) return artistDestination;
+                    break;
+                }
+
+                if (directory.Parent is null) break;
+            }
+
+            var destination = TryGetImageDestination(track.SourceRoot, track.Folder.RelativePath);
+            if (destination is not null) return destination;
+        }
+
+        return null;
+    }
+
+    private MetadataImageDestination? TryGetImageDestination(
+        MusicSourceRoot root,
+        string relativeDirectory,
+        bool isArtistDirectory = false)
+    {
+        try
+        {
+            var directory = ResolvePath(root.Path, relativeDirectory);
+            if (!Directory.Exists(directory) || (System.IO.File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+            {
+                return null;
+            }
+
+            return new MetadataImageDestination(root.Id, root.Path, relativeDirectory, directory, isArtistDirectory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            logger.LogWarning(exception, "Could not use music folder {RelativeDirectory} for metadata image storage.", relativeDirectory);
+            return null;
+        }
+    }
+
+    private async Task<CoverImage?> ReadMetadataImageAsync(
+        string? fileName,
+        string category,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || Path.GetFileName(fileName) != fileName)
+        {
+            return null;
+        }
+
+        var path = Path.Combine(GetMetadataDirectory(), category, fileName);
+        try
+        {
+            if (!System.IO.File.Exists(path) || (System.IO.File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            {
+                return null;
+            }
+
+            var info = new FileInfo(path);
+            if (info.Length is <= 0 or > MaximumCoverFileSize) return null;
+            var data = await System.IO.File.ReadAllBytesAsync(path, cancellationToken);
+            var contentType = DetectImageContentType(data);
+            return contentType is null ? null : new CoverImage(data, contentType);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not read metadata image {ImageFileName}.", fileName);
+            return null;
+        }
+    }
+
+    private async Task<CoverImage?> ReadLibraryImageAsync(
+        int? sourceRootId,
+        string? relativePath,
+        CancellationToken cancellationToken)
+    {
+        if (!sourceRootId.HasValue || string.IsNullOrWhiteSpace(relativePath)) return null;
+        var root = await database.SourceRoots.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == sourceRootId.Value && item.IsEnabled, cancellationToken);
+        if (root is null) return null;
+
+        try
+        {
+            var path = ResolvePath(root.Path, relativePath);
+            if (!IsSafePathWithoutLinks(root.Path, path)) return null;
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length is <= 0 or > MaximumCoverFileSize) return null;
+            var data = await System.IO.File.ReadAllBytesAsync(path, cancellationToken);
+            var contentType = DetectImageContentType(data);
+            return contentType is null ? null : new CoverImage(data, contentType);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            logger.LogWarning(exception, "Could not read stored library image {RelativePath}.", relativePath);
+            return null;
+        }
+    }
+
+    private static bool IsSafePathWithoutLinks(string rootPath, string fullPath)
+    {
+        if (!Directory.Exists(rootPath)
+            || (System.IO.File.GetAttributes(rootPath) & FileAttributes.ReparsePoint) != 0)
+        {
+            return false;
+        }
+
+        var relative = Path.GetRelativePath(rootPath, fullPath);
+        var current = Path.GetFullPath(rootPath);
+        foreach (var segment in relative.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, segment);
+            if ((System.IO.File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return false;
+        }
+
+        return true;
+    }
+
+    private void DeleteMetadataImage(string? fileName, string category)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || Path.GetFileName(fileName) != fileName) return;
+        var path = Path.Combine(GetMetadataDirectory(), category, fileName);
+        try
+        {
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not remove replaced metadata image {ImageFileName}.", fileName);
+        }
+    }
+
+    private void DeleteReplacedImage(
+        string? oldFileName,
+        int? oldSourceRootId,
+        string? oldRelativePath,
+        string? newFileName,
+        int? newSourceRootId,
+        string? newRelativePath,
+        string category)
+    {
+        var sameLocation = oldSourceRootId.HasValue
+            ? oldSourceRootId == newSourceRootId
+                && string.Equals(oldRelativePath, newRelativePath, StringComparison.OrdinalIgnoreCase)
+            : !newSourceRootId.HasValue && string.Equals(oldFileName, newFileName, StringComparison.Ordinal);
+        if (string.IsNullOrWhiteSpace(oldFileName)
+            || sameLocation)
+        {
+            return;
+        }
+
+        if (oldSourceRootId is null)
+        {
+            DeleteMetadataImage(oldFileName, category);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(oldRelativePath)) return;
+        var rootPath = database.SourceRoots.AsNoTracking()
+            .Where(root => root.Id == oldSourceRootId.Value)
+            .Select(root => root.Path)
+            .FirstOrDefault();
+        if (rootPath is null) return;
+
+        try
+        {
+            var path = ResolvePath(rootPath, oldRelativePath);
+            if (IsSafePathWithoutLinks(rootPath, path) && System.IO.File.Exists(path))
+            {
+                System.IO.File.Delete(path);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            logger.LogWarning(exception, "Could not remove replaced library image {RelativePath}.", oldRelativePath);
+        }
+    }
+
+    private static string? GetArtistImageUrl(MusicArtistMetadata metadata) =>
+        !metadata.ImageMissing && !string.IsNullOrWhiteSpace(metadata.ImageFileName)
+            ? $"/api/library/artists/{metadata.Key}/image?v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
+            : null;
+
+    private static string GetAlbumImageUrl(int trackId, DateTimeOffset? updatedAt = null) =>
+        $"/api/library/tracks/{trackId}/cover{(updatedAt.HasValue ? $"?v={updatedAt.Value.ToUnixTimeMilliseconds()}" : "")}";
+
+    private Task<int?> FindAlbumCoverTrackIdAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken)
+    {
+        var normalizedArtist = artist.Trim().ToUpperInvariant();
+        var normalizedAlbum = album.Trim().ToUpperInvariant();
+        return database.Tracks.AsNoTracking()
+            .Where(track => track.IsAvailable
+                && track.SourceRoot != null
+                && track.SourceRoot.IsEnabled
+                && track.Album.Trim().ToUpper() == normalizedAlbum
+                && (string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist).Trim().ToUpper() == normalizedArtist)
+            .OrderBy(track => track.Id)
+            .Select(track => (int?)track.Id)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private static async Task<CoverImage?> ResolveFolderCoverAsync(string directoryPath, CancellationToken cancellationToken)
@@ -726,7 +1356,11 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
         _ => "application/octet-stream",
     };
 
-    private static TrackResponse ToResponse(MusicTrack track) => new(
+    private static TrackResponse ToResponse(
+        MusicTrack track,
+        MusicArtistMetadata? artist,
+        MusicArtistMetadata? albumArtist,
+        MusicAlbumMetadata? album) => new(
         track.Id,
         track.SourceRootId,
         track.FolderId,
@@ -740,10 +1374,49 @@ public sealed class MusicLibraryService(MusicDbContext database, IWebHostEnviron
         track.Year,
         track.DurationSeconds,
         $"/api/library/tracks/{track.Id}/stream",
-        $"/api/library/tracks/{track.Id}/cover",
-        Path.GetExtension(track.RelativePath).TrimStart('.').ToLowerInvariant());
+        album?.ImageMissing == false && !string.IsNullOrWhiteSpace(album.ImageFileName)
+            ? $"/api/library/tracks/{track.Id}/cover?v={album.UpdatedAt.ToUnixTimeMilliseconds()}"
+            : $"/api/library/tracks/{track.Id}/cover",
+        Path.GetExtension(track.RelativePath).TrimStart('.').ToLowerInvariant(),
+        album?.Description ?? "",
+        artist?.Description ?? "",
+        artist?.ImageMissing == false && !string.IsNullOrWhiteSpace(artist.ImageFileName)
+            ? $"/api/library/artists/{artist.Key}/image?v={artist.UpdatedAt.ToUnixTimeMilliseconds()}"
+            : "",
+        artist is null || artist.ImageMissing || string.IsNullOrWhiteSpace(artist.ImageFileName),
+        albumArtist?.Description ?? "",
+        albumArtist?.ImageMissing == false && !string.IsNullOrWhiteSpace(albumArtist.ImageFileName)
+            ? $"/api/library/artists/{albumArtist.Key}/image?v={albumArtist.UpdatedAt.ToUnixTimeMilliseconds()}"
+            : "",
+        albumArtist is null || albumArtist.ImageMissing || string.IsNullOrWhiteSpace(albumArtist.ImageFileName));
+
+    private static string GetArtistMetadataKey(string artist) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"artist\0{artist.Trim().ToUpperInvariant()}")));
+
+    private static string GetAlbumMetadataKey(string artist, string album) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            $"album\0{artist.Trim().ToUpperInvariant()}\0{album.Trim().ToUpperInvariant()}")));
+
+    private static string GetMetadataDirectory() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterhours", "metadata");
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidCharacters = Path.GetInvalidFileNameChars().Concat("<>:\"/\\|?*".ToCharArray()).ToHashSet();
+        var safeName = new string(value.Trim().Select(character =>
+            char.IsControl(character) || invalidCharacters.Contains(character) ? '_' : character).ToArray()).TrimEnd('.', ' ');
+        if (safeName.Length > 80) safeName = safeName[..80];
+        return string.IsNullOrWhiteSpace(safeName) ? "Unknown" : safeName;
+    }
 
     private readonly record struct AlbumKey(string Album, string Artist);
+
+    private sealed record MetadataImageDestination(
+        int SourceRootId,
+        string RootPath,
+        string RelativeDirectory,
+        string DirectoryPath,
+        bool IsArtistDirectory = false);
 
     private sealed class AlbumKeyComparer : IEqualityComparer<AlbumKey>
     {

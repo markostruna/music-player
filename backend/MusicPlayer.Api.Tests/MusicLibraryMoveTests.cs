@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.Abstractions;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Services;
 
@@ -64,7 +65,7 @@ public sealed class MusicLibraryMoveTests : IAsyncLifetime
         database.Tracks.Add(track);
         await database.SaveChangesAsync();
         trackId = track.Id;
-        library = new MusicLibraryService(database, new TestWebHostEnvironment());
+        library = new MusicLibraryService(database, new TestWebHostEnvironment(), new StubMusicBrainzClient(), NullLogger<MusicLibraryService>.Instance);
     }
 
     public async Task DisposeAsync()

@@ -45,6 +45,7 @@
 
         <div class="content-scroll album-content">
       @if (themeError()) { <p class="album-message" role="alert">{{ themeError() }}</p> }
+      @if (metadataMessage()) { <p class="album-message" role="status">{{ metadataMessage() }}</p> }
       <div class="album-page">
         <header class="album-page-header">
           <a routerLink="/library" aria-label="Back to library">← <span>Back to library</span></a>
@@ -64,11 +65,30 @@
             <div class="album-details">
               <span class="album-kind">ARTIST</span>
               <h1>{{ artist.name }}</h1>
+              @if (artist.imageMissing) { <span class="missing-image-label">Artist picture missing</span> }
               <dl class="album-metadata">
                 <div><dt>Albums</dt><dd>{{ artist.albums.length }}</dd></div>
                 <div><dt>Tracks</dt><dd>{{ artist.trackCount }}</dd></div>
               </dl>
             </div>
+          </section>
+
+          <section class="metadata-description" aria-labelledby="artist-description-heading">
+            <span class="eyebrow">ABOUT THE ARTIST</span>
+            <h2 id="artist-description-heading">Description</h2>
+            @if (isAdmin()) {
+              <textarea aria-label="Artist description" rows="5" [value]="descriptionValue(artist.name, artist.description)" (input)="setDescription($event, artist.name)"></textarea>
+              <div class="metadata-controls">
+                <button class="album-play-button secondary-action" type="button" [disabled]="isRefreshingInformation()" (click)="refreshInformation(artist.name)">
+                  {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
+                </button>
+                <button class="album-play-button" type="button" (click)="saveDescription(artist.name)">Save description</button>
+                <input #pictureInput class="visually-hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" (change)="updatePicture($event, artist.name)" />
+                <button class="album-play-button secondary-action" type="button" (click)="pictureInput.click()">Change artist picture</button>
+              </div>
+            } @else {
+              <p>{{ artist.description || 'No artist description is available.' }}</p>
+            }
           </section>
 
           <section class="album-track-section" aria-labelledby="artist-albums-heading">

@@ -20,6 +20,13 @@ export interface MusicTrack {
   streamUrl: string;
   coverUrl: string;
   fileExtension: string;
+  albumDescription: string;
+  artistDescription: string;
+  artistImageUrl: string;
+  artistImageMissing: boolean;
+  albumArtistDescription: string;
+  albumArtistImageUrl: string;
+  albumArtistImageMissing: boolean;
 }
 
 export interface MusicFolder {
@@ -41,6 +48,17 @@ export interface ScanSummary {
   sourceRootId: number;
   discoveredTracks: number;
   unreadableTracks: number;
+}
+
+export interface MetadataRefreshResult {
+  found: boolean;
+  musicBrainzId: string;
+  description: string;
+  imageUrl: string | null;
+  imageMissing: boolean;
+  updatedAt: string;
+  imageUpdated: boolean;
+  imageProvider: string | null;
 }
 
 export interface MutationResult {
@@ -79,6 +97,8 @@ export class MusicLibraryApi {
         ...track,
         streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
         coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
+        artistImageUrl: track.artistImageUrl ? `${MUSIC_API_PREFIX}${track.artistImageUrl}` : '',
+        albumArtistImageUrl: track.albumArtistImageUrl ? `${MUSIC_API_PREFIX}${track.albumArtistImageUrl}` : '',
       })));
   }
 
@@ -114,6 +134,30 @@ export class MusicLibraryApi {
     const response = await firstValueFrom(this.http.post<{ results: MutationResult[] }>(
       `${MUSIC_API_BASE}/admin/tracks/cover`, { trackIds, image: bytes }, await this.writeOptions()));
     return response.results;
+  }
+
+  async updateDescription(artist: string, album: string | null, description: string): Promise<void> {
+    const path = album === null ? 'artists' : 'albums';
+    await firstValueFrom(this.http.put<void>(`${MUSIC_API_BASE}/admin/metadata/${path}/description`,
+      { artist, album: album ?? '', description }, await this.writeOptions()));
+  }
+
+  async refreshInformation(artist: string, album: string | null): Promise<MetadataRefreshResult> {
+    const path = album === null ? 'artists' : 'albums';
+    const result = await firstValueFrom(this.http.post<MetadataRefreshResult>(
+      `${MUSIC_API_BASE}/admin/metadata/${path}/refresh`,
+      { artist, album: album ?? '' }, await this.writeOptions()));
+    return {
+      ...result,
+      imageUrl: result.imageUrl ? `${MUSIC_API_PREFIX}${result.imageUrl}` : null,
+    };
+  }
+
+  async updateEntityImage(artist: string, album: string | null, image: File): Promise<void> {
+    const path = album === null ? 'artists' : 'albums';
+    const bytes = Array.from(new Uint8Array(await image.arrayBuffer()));
+    await firstValueFrom(this.http.put<void>(`${MUSIC_API_BASE}/admin/metadata/${path}/image`,
+      { artist, album: album ?? '', image: bytes }, await this.writeOptions()));
   }
 
   async moveTracks(trackIds: number[], destinationFolderId: number): Promise<MutationResult[]> {

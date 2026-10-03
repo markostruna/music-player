@@ -11,12 +11,20 @@ using MusicPlayer.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterhours");
 Directory.CreateDirectory(dataDirectory);
+builder.Configuration
+    .AddJsonFile(Path.Combine(dataDirectory, "appsettings.json"), optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
 var databasePath = Environment.GetEnvironmentVariable("MUSICPLAYER_DATABASE_PATH") ?? Path.Combine(dataDirectory, "music-library.db");
 
 builder.WebHost.UseUrls(builder.Configuration["Api:Url"] ?? "http://127.0.0.1:5080");
 builder.Services.AddDbContext<MusicDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
+builder.Services.AddHttpClient<IMusicBrainzClient, MusicBrainzClient>("MetadataProviders", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Logging.AddFilter("System.Net.Http.HttpClient.MetadataProviders", LogLevel.Warning);
 builder.Services.AddScoped<CsrfEndpointFilter>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Identity.IPasswordHasher<MusicUser>, Microsoft.AspNetCore.Identity.PasswordHasher<MusicUser>>();
 builder.Services.AddValidation();
@@ -96,6 +104,34 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var database = scope.ServiceProvider.GetRequiredService<MusicDbContext>();
     await database.Database.EnsureCreatedAsync();
+    await database.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "ArtistMetadata" (
+            "Key" TEXT NOT NULL CONSTRAINT "PK_ArtistMetadata" PRIMARY KEY,
+            "Artist" TEXT NOT NULL,
+            "Description" TEXT NOT NULL,
+            "DescriptionEdited" INTEGER NOT NULL,
+            "MusicBrainzId" TEXT NOT NULL,
+            "ImageFileName" TEXT NULL,
+            "ImageSourceRootId" INTEGER NULL,
+            "ImageRelativePath" TEXT NULL,
+            "ImageMissing" INTEGER NOT NULL,
+            "UpdatedAt" TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS "AlbumMetadata" (
+            "Key" TEXT NOT NULL CONSTRAINT "PK_AlbumMetadata" PRIMARY KEY,
+            "Artist" TEXT NOT NULL,
+            "Album" TEXT NOT NULL,
+            "Description" TEXT NOT NULL,
+            "DescriptionEdited" INTEGER NOT NULL,
+            "MusicBrainzId" TEXT NOT NULL,
+            "ImageFileName" TEXT NULL,
+            "ImageSourceRootId" INTEGER NULL,
+            "ImageRelativePath" TEXT NULL,
+            "ImageMissing" INTEGER NOT NULL,
+            "UpdatedAt" TEXT NOT NULL
+        );
+        """);
+    await EnsureMetadataImageColumnsAsync(database);
     var accounts = scope.ServiceProvider.GetRequiredService<IAccountService>();
     await accounts.BootstrapAdminAsync(
         Environment.GetEnvironmentVariable("MUSICPLAYER_BOOTSTRAP_EMAIL"),
@@ -111,5 +147,49 @@ app.MapUserEndpoints();
 app.MapLibraryEndpoints();
 
 app.Run();
+
+static async Task EnsureMetadataImageColumnsAsync(MusicDbContext database)
+{
+    var connection = database.Database.GetDbConnection();
+    var openedHere = connection.State != System.Data.ConnectionState.Open;
+    if (openedHere) await connection.OpenAsync();
+
+    try
+    {
+        foreach (var (table, column, definition) in new[]
+        {
+            ("ArtistMetadata", "ImageSourceRootId", "INTEGER NULL"),
+            ("ArtistMetadata", "ImageRelativePath", "TEXT NULL"),
+            ("AlbumMetadata", "ImageSourceRootId", "INTEGER NULL"),
+            ("AlbumMetadata", "ImageRelativePath", "TEXT NULL"),
+        })
+        {
+            await using var inspect = connection.CreateCommand();
+            inspect.CommandText = $"PRAGMA table_info(\"{table}\")";
+            await using var reader = await inspect.ExecuteReaderAsync();
+            var found = false;
+            while (await reader.ReadAsync())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.Ordinal))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            await reader.DisposeAsync();
+            if (!found)
+            {
+                await using var alter = connection.CreateCommand();
+                alter.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {definition}";
+                await alter.ExecuteNonQueryAsync();
+            }
+        }
+    }
+    finally
+    {
+        if (openedHere) await connection.CloseAsync();
+    }
+}
 
 public partial class Program;

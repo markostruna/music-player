@@ -34,7 +34,48 @@ public sealed record TrackResponse(
     double DurationSeconds,
     string StreamUrl,
     string CoverUrl,
-    string FileExtension);
+    string FileExtension,
+    string AlbumDescription,
+    string ArtistDescription,
+    string ArtistImageUrl,
+    bool ArtistImageMissing,
+    string AlbumArtistDescription,
+    string AlbumArtistImageUrl,
+    bool AlbumArtistImageMissing);
+
+public sealed record MetadataDescriptionRequest
+{
+    [Required, MaxLength(1024)]
+    public required string Artist { get; init; }
+
+    [MaxLength(1024)]
+    public string Album { get; init; } = "";
+
+    [MaxLength(20000)]
+    public string Description { get; init; } = "";
+}
+
+public sealed record MetadataImageRequest
+{
+    [Required, MaxLength(1024)]
+    public required string Artist { get; init; }
+
+    [MaxLength(1024)]
+    public string Album { get; init; } = "";
+
+    [Required, MinLength(8), MaxLength(10485760)]
+    public required byte[] Image { get; init; }
+}
+
+public sealed record MetadataRefreshResponse(
+    bool Found,
+    string MusicBrainzId,
+    string Description,
+    string? ImageUrl,
+    bool ImageMissing,
+    DateTimeOffset UpdatedAt,
+    bool ImageUpdated = false,
+    string? ImageProvider = null);
 
 /// <summary>An album grouped from embedded track metadata.</summary>
 public sealed record AlbumResponse(

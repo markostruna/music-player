@@ -138,10 +138,10 @@
             <div class="collection-grid">
               @for (artist of visibleArtists(); track artist.key) {
                 <a class="collection-tile" [routerLink]="['/library/artist', artist.name]" [attr.aria-label]="'View artist ' + artist.name" [title]="'View artist: ' + artist.name">
-                  <span class="tile-art artist-art"><span class="tile-placeholder" aria-hidden="true">♫</span><img [src]="artist.coverUrl" [alt]="artist.name + ' artwork'" (error)="$any($event.target).style.visibility='hidden'" /><span class="tile-play" aria-hidden="true">▶</span></span>
+                  <span class="tile-art artist-art"><span class="tile-placeholder" aria-hidden="true">♫</span><img [src]="artist.artistImageUrl || artist.coverUrl" [alt]="artist.name + ' photo'" (error)="$any($event.target).style.visibility='hidden'" /><span class="tile-play" aria-hidden="true">▶</span></span>
                   <span class="tile-title">{{ artist.name }}</span>
                   <span class="tile-detail">{{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}</span>
-                  <span class="tile-meta">{{ artist.tracks.length }} {{ artist.tracks.length === 1 ? 'track' : 'tracks' }}</span>
+                  <span class="tile-meta">{{ artist.tracks.length }} {{ artist.tracks.length === 1 ? 'track' : 'tracks' }}{{ artist.artistImageMissing ? ' · Photo missing' : '' }}</span>
                 </a>
               }
             </div>

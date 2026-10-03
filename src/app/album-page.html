@@ -45,6 +45,7 @@
 
     <div class="content-scroll album-content">
       @if (themeError()) { <p class="album-message" role="alert">{{ themeError() }}</p> }
+      @if (metadataMessage()) { <p class="album-message" role="status">{{ metadataMessage() }}</p> }
       <div class="album-page">
         <header class="album-page-header">
           <a routerLink="/library" aria-label="Back to library">← <span>Back to library</span></a>
@@ -73,6 +74,24 @@
                 <span aria-hidden="true">▶</span> Play album
               </button>
             </div>
+          </section>
+
+          <section class="metadata-description" aria-labelledby="album-description-heading">
+            <span class="eyebrow">ABOUT THIS ALBUM</span>
+            <h2 id="album-description-heading">Description</h2>
+            @if (isAdmin()) {
+              <textarea aria-label="Album description" rows="5" [value]="descriptionValue(album.artist, album.title, album.description)" (input)="setDescription($event, album.artist, album.title)"></textarea>
+              <div class="metadata-controls">
+                <button class="album-play-button secondary-action" type="button" [disabled]="isRefreshingInformation()" (click)="refreshInformation(album.artist, album.title)">
+                  {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
+                </button>
+                <button class="album-play-button" type="button" (click)="saveDescription(album.artist, album.title)">Save description</button>
+                <input #artworkInput class="visually-hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" (change)="updateArtwork($event, album.artist, album.title)" />
+                <button class="album-play-button secondary-action" type="button" (click)="artworkInput.click()">Change album picture</button>
+              </div>
+            } @else {
+              <p>{{ album.description || 'No album description is available.' }}</p>
+            }
           </section>
 
           <section class="album-track-section" aria-labelledby="album-track-heading">

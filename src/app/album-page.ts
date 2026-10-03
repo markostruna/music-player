@@ -4,7 +4,7 @@ import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/r
 import { AuthState, ThemeName } from './auth-state';
 import { formatTime } from './format-time';
 import { LibraryStore } from './library-store';
-import { MusicTrack } from './music-library-api';
+import { MusicLibraryApi, MusicTrack } from './music-library-api';
 import { PlayerService } from './player.service';
 
 @Component({
@@ -16,6 +16,7 @@ export class AlbumPage implements OnInit {
   private readonly auth = inject(AuthState);
   private readonly router = inject(Router);
   private readonly store = inject(LibraryStore);
+  private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
   private readonly params = toSignal(inject(ActivatedRoute).paramMap);
 
@@ -23,6 +24,17 @@ export class AlbumPage implements OnInit {
   readonly user = this.auth.user;
   readonly themeOptions: ThemeName[] = ['Light', 'Dark', 'Blue'];
   readonly themeError = signal('');
+  readonly metadataMessage = signal('');
+  readonly isRefreshingInformation = signal(false);
+  private readonly refreshedInformation = signal<{
+    key: string;
+    description: string;
+    imageUrl: string | null;
+    musicBrainzId: string;
+    updatedAt: string;
+  } | null>(null);
+  descriptionDraft: string | null = null;
+  private descriptionDraftKey: string | null = null;
   readonly isLoading = this.store.isLoading;
   readonly errorMessage = computed(() => {
     if (this.store.errorMessage()) return this.store.errorMessage();
@@ -46,10 +58,15 @@ export class AlbumPage implements OnInit {
         || first.trackNumber - second.trackNumber
         || first.title.localeCompare(second.title));
 
+    const key = `${artist.toLowerCase()}\0${selectedTrack.album.toLowerCase()}`;
+    const refreshed = this.refreshedInformation()?.key === key ? this.refreshedInformation() : null;
     return {
       title: selectedTrack.album,
       artist,
-      coverUrl: selectedTrack.coverUrl,
+      coverUrl: refreshed?.imageUrl || selectedTrack.coverUrl,
+      description: refreshed?.description ?? selectedTrack.albumDescription,
+      musicBrainzId: refreshed?.musicBrainzId ?? '',
+      informationUpdatedAt: refreshed?.updatedAt ?? '',
       releaseYear: albumTracks.find((track) => track.year > 0)?.year,
       tracks: albumTracks,
     };
@@ -61,6 +78,72 @@ export class AlbumPage implements OnInit {
 
   playTrack(tracks: MusicTrack[], index: number): void {
     this.player.play(tracks, index);
+  }
+
+  descriptionValue(artist: string, album: string, description: string): string {
+    return this.descriptionDraftKey === `${artist}\0${album}` ? this.descriptionDraft ?? '' : description;
+  }
+
+  setDescription(event: Event, artist: string, album: string): void {
+    this.descriptionDraftKey = `${artist}\0${album}`;
+    this.descriptionDraft = (event.target as HTMLTextAreaElement).value;
+  }
+
+  async saveDescription(artist: string, album: string): Promise<void> {
+    const key = `${artist}\0${album}`;
+    try {
+      const description = this.descriptionDraftKey === key ? this.descriptionDraft ?? '' : this.album()?.description ?? '';
+      await this.libraryApi.updateDescription(artist, album, description);
+      this.descriptionDraft = null;
+      this.descriptionDraftKey = null;
+      await this.store.refresh();
+      this.metadataMessage.set('Album description saved.');
+    } catch {
+      this.metadataMessage.set('The album description could not be saved.');
+    }
+  }
+
+  async updateArtwork(event: Event, artist: string, album: string): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const image = input.files?.[0];
+    if (!image) return;
+    try {
+      await this.libraryApi.updateEntityImage(artist, album, image);
+      await this.store.refresh();
+      this.metadataMessage.set('Album artwork saved.');
+    } catch {
+      this.metadataMessage.set('The album artwork could not be saved. Use a PNG, JPEG, GIF, or WebP image under 10 MB.');
+    } finally {
+      input.value = '';
+    }
+  }
+
+  async refreshInformation(artist: string, album: string): Promise<void> {
+    this.isRefreshingInformation.set(true);
+    this.metadataMessage.set('');
+    try {
+      const result = await this.libraryApi.refreshInformation(artist, album);
+      if (!result.found) {
+        this.metadataMessage.set('No matching album record was found. Existing information was left unchanged.');
+        return;
+      }
+      this.descriptionDraft = null;
+      this.descriptionDraftKey = null;
+      this.refreshedInformation.set({
+        key: `${artist.toLowerCase()}\0${album.toLowerCase()}`,
+        description: result.description,
+        imageUrl: result.imageUrl,
+        musicBrainzId: result.musicBrainzId,
+        updatedAt: result.updatedAt,
+      });
+      this.metadataMessage.set(
+        `Album information refreshed from MusicBrainz (${result.musicBrainzId}) at ${new Date(result.updatedAt).toLocaleString()}.`,
+      );
+    } catch {
+      this.metadataMessage.set('Album information could not be refreshed. Please try again later.');
+    } finally {
+      this.isRefreshingInformation.set(false);
+    }
   }
 
   async changeTheme(event: Event): Promise<void> {

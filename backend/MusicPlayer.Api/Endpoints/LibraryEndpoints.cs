@@ -40,6 +40,18 @@ public static class LibraryEndpoints
         })
         .WithName("GetTrackCover")
         .WithSummary("Returns the embedded cover art for a track.");
+        library.MapGet("/artists/{key}/image", async Task<Results<FileContentHttpResult, NotFound>> (
+            string key,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            var image = await music.ResolveArtistImageAsync(key, cancellationToken);
+            return image is null
+                ? TypedResults.NotFound()
+                : TypedResults.File(image.Data, image.ContentType);
+        })
+        .WithName("GetArtistImage")
+        .WithSummary("Returns an artist image stored in the application data folder.");
 
         var roots = app.MapGroup("/api/admin/roots")
             .WithTags("Source roots")
@@ -162,5 +174,87 @@ public static class LibraryEndpoints
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("MoveTracks")
         .WithSummary("Moves selected tracks to a folder in a configured source root.");
+
+        var adminMetadata = app.MapGroup("/api/admin/metadata")
+        .WithTags("Metadata management")
+        .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
+        adminMetadata.MapPost("/artists/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
+        MetadataDescriptionRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        if (string.IsNullOrWhiteSpace(request.Artist))
+        {
+            return TypedResults.BadRequest("Artist is required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshArtistMetadataAsync(request.Artist, cancellationToken));
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("RefreshArtistMetadata")
+        .WithSummary("Refreshes one artist's description and image from linked metadata providers.");
+        adminMetadata.MapPost("/albums/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
+        MetadataDescriptionRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        if (string.IsNullOrWhiteSpace(request.Artist) || string.IsNullOrWhiteSpace(request.Album))
+        {
+            return TypedResults.BadRequest("Artist and album are required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(request.Artist, request.Album, cancellationToken));
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("RefreshAlbumMetadata")
+        .WithSummary("Refreshes one album's description and artwork from linked metadata providers.");
+        adminMetadata.MapPut("/artists/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
+        {
+            await music.UpdateMetadataDescriptionAsync(request, album: false, cancellationToken);
+            return TypedResults.NoContent();
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateArtistDescription");
+        adminMetadata.MapPut("/albums/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
+        {
+            await music.UpdateMetadataDescriptionAsync(request, album: true, cancellationToken);
+            return TypedResults.NoContent();
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateAlbumDescription");
+        adminMetadata.MapPut("/artists/image", async Task<Results<NoContent, BadRequest<string>>> (
+        MetadataImageRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        try
+        {
+            await music.UpdateMetadataImageAsync(request, album: false, cancellationToken);
+            return TypedResults.NoContent();
+        }
+        catch (ArgumentException exception)
+        {
+            return TypedResults.BadRequest(exception.Message);
+        }
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateArtistImage");
+        adminMetadata.MapPut("/albums/image", async Task<Results<NoContent, BadRequest<string>>> (
+        MetadataImageRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        try
+        {
+            await music.UpdateMetadataImageAsync(request, album: true, cancellationToken);
+            return TypedResults.NoContent();
+        }
+        catch (ArgumentException exception)
+        {
+            return TypedResults.BadRequest(exception.Message);
+        }
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateAlbumImage");
     }
 }
