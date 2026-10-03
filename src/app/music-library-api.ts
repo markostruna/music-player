@@ -130,9 +130,9 @@ export class MusicLibraryApi {
   }
 
   async updateCover(trackIds: number[], image: File): Promise<MutationResult[]> {
-    const bytes = Array.from(new Uint8Array(await image.arrayBuffer()));
+    const imageData = await this.imageAsBase64(image);
     const response = await firstValueFrom(this.http.post<{ results: MutationResult[] }>(
-      `${MUSIC_API_BASE}/admin/tracks/cover`, { trackIds, image: bytes }, await this.writeOptions()));
+      `${MUSIC_API_BASE}/admin/tracks/cover`, { trackIds, image: imageData }, await this.writeOptions()));
     return response.results;
   }
 
@@ -155,9 +155,9 @@ export class MusicLibraryApi {
 
   async updateEntityImage(artist: string, album: string | null, image: File): Promise<void> {
     const path = album === null ? 'artists' : 'albums';
-    const bytes = Array.from(new Uint8Array(await image.arrayBuffer()));
+    const imageData = await this.imageAsBase64(image);
     await firstValueFrom(this.http.put<void>(`${MUSIC_API_BASE}/admin/metadata/${path}/image`,
-      { artist, album: album ?? '', image: bytes }, await this.writeOptions()));
+      { artist, album: album ?? '', image: imageData }, await this.writeOptions()));
   }
 
   async moveTracks(trackIds: number[], destinationFolderId: number): Promise<MutationResult[]> {
@@ -189,5 +189,15 @@ export class MusicLibraryApi {
 
   private async writeOptions(): Promise<{ headers: { 'X-CSRF-TOKEN': string }; withCredentials: true }> {
     return { headers: { 'X-CSRF-TOKEN': await this.auth.getCsrfToken() }, withCredentials: true };
+  }
+
+  private async imageAsBase64(image: File): Promise<string> {
+    const bytes = new Uint8Array(await image.arrayBuffer());
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
   }
 }
