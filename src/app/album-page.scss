@@ -61,6 +61,72 @@ app-artist-page {
   object-fit: cover;
 }
 
+.album-cover-edit {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 5px;
+  background: rgb(17 25 21 / 82%);
+  color: white;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 140ms;
+}
+
+.album-cover-edit svg { width: 16px; height: 16px; }
+.album-cover:hover .album-cover-edit,
+.album-cover:focus-within .album-cover-edit { opacity: 1; }
+.album-cover-edit:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+
+.cover-dialog-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(10 16 12 / 62%);
+}
+
+.cover-dialog {
+  width: min(100%, 430px);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+}
+
+.cover-dialog h2 { margin: 0 0 8px; font: 700 20px 'Manrope', sans-serif; }
+.cover-dialog > p { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.cover-preview,
+.cover-preview-placeholder {
+  display: grid;
+  width: min(100%, 260px);
+  aspect-ratio: 1;
+  margin: 0 auto 18px;
+  border-radius: 6px;
+  background: var(--surface-hover);
+}
+.cover-preview { object-fit: cover; }
+.cover-preview-placeholder { place-items: center; color: var(--accent); font-size: 56px; }
+.cover-dialog > .album-play-button { min-height: 36px; font-size: 11px; }
+.cover-dialog .secondary-action { background: var(--surface-hover); color: var(--ink); }
+.cover-dialog-error { margin: 12px 0 0 !important; color: #b42318 !important; font-size: 12px !important; }
+.cover-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.cover-dialog-actions .album-play-button { min-height: 38px; font-size: 11px; }
+.cover-dialog-actions .album-play-button:disabled { cursor: not-allowed; opacity: 0.5; }
+
 .album-cover-placeholder { font-size: 64px; }
 
 .album-details { padding-bottom: 6px; }
@@ -188,6 +254,10 @@ app-artist-page {
   .album-details h1 { font-size: 34px; }
   .theme-picker span,
   .admin-link { display: none; }
+}
+
+@media (hover: none) {
+  .album-cover-edit { opacity: 1; }
 }
 
 .album-artist a, .now-playing-artist-name a { color: inherit; text-decoration: none; }

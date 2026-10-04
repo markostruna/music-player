@@ -61,6 +61,12 @@
             <div class="album-cover">
               <span class="album-cover-placeholder" aria-hidden="true">♫</span>
               <img [src]="album.coverUrl" [alt]="album.title + ' album artwork'" (error)="$any($event.target).style.visibility='hidden'" />
+              @if (isAdmin()) {
+                <button class="album-cover-edit" type="button" (click)="openCoverDialog()">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14.5 6.5 3 3M4 20l4.5-.9L19 8.6a2.12 2.12 0 0 0-3-3L5.5 16.1 4 20Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>Change cover</span>
+                </button>
+              }
             </div>
             <div class="album-details">
               <span class="album-kind">ALBUM</span>
@@ -86,13 +92,34 @@
                   {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
                 </button>
                 <button class="album-play-button" type="button" (click)="saveDescription(album.artist, album.title)">Save description</button>
-                <input #artworkInput class="visually-hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" (change)="updateArtwork($event, album.artist, album.title)" />
-                <button class="album-play-button secondary-action" type="button" (click)="artworkInput.click()">Change album picture</button>
               </div>
             } @else {
               <p>{{ album.description || 'No album description is available.' }}</p>
             }
           </section>
+
+          @if (isCoverDialogOpen()) {
+            <div class="cover-dialog-backdrop" (click)="closeCoverDialog()" (keydown.escape)="closeCoverDialog()">
+              <section class="cover-dialog" role="dialog" aria-modal="true" aria-labelledby="cover-dialog-heading" (click)="$event.stopPropagation()">
+                <h2 id="cover-dialog-heading">Change album cover</h2>
+                <p>Choose a new image to preview before saving it as the album cover.</p>
+                @if (coverPreviewUrl()) {
+                  <img class="cover-preview" [src]="coverPreviewUrl()" alt="Preview of the new album cover" />
+                } @else {
+                  <div class="cover-preview-placeholder" aria-hidden="true">♫</div>
+                }
+                <input #coverInput class="visually-hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" (change)="selectCover($event)" />
+                <button class="album-play-button secondary-action" type="button" (click)="coverInput.click()">Choose image</button>
+                @if (coverError()) { <p class="cover-dialog-error" role="alert">{{ coverError() }}</p> }
+                <div class="cover-dialog-actions">
+                  <button class="album-play-button secondary-action" type="button" [disabled]="isSavingCover()" (click)="closeCoverDialog()">Cancel</button>
+                  <button class="album-play-button" type="button" [disabled]="!coverPreviewUrl() || isSavingCover()" (click)="saveCover(album.artist, album.title)">
+                    {{ isSavingCover() ? 'Saving…' : 'OK' }}
+                  </button>
+                </div>
+              </section>
+            </div>
+          }
 
           <section class="album-track-section" aria-labelledby="album-track-heading">
             <div class="album-track-heading">

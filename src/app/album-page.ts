@@ -26,6 +26,12 @@ export class AlbumPage implements OnInit {
   readonly themeError = signal('');
   readonly metadataMessage = signal('');
   readonly isRefreshingInformation = signal(false);
+  readonly isCoverDialogOpen = signal(false);
+  readonly coverPreviewUrl = signal('');
+  readonly coverError = signal('');
+  readonly isSavingCover = signal(false);
+  private readonly selectedCover = signal<File | null>(null);
+  private readonly maxCoverSize = 10 * 1024 * 1024;
   private readonly refreshedInformation = signal<{
     key: string;
     description: string;
@@ -103,19 +109,62 @@ export class AlbumPage implements OnInit {
     }
   }
 
-  async updateArtwork(event: Event, artist: string, album: string): Promise<void> {
+  openCoverDialog(): void {
+    this.coverError.set('');
+    this.isCoverDialogOpen.set(true);
+  }
+
+  closeCoverDialog(): void {
+    if (this.isSavingCover()) return;
+    this.clearCoverSelection();
+    this.coverError.set('');
+    this.isCoverDialogOpen.set(false);
+  }
+
+  selectCover(event: Event): void {
     const input = event.target as HTMLInputElement;
     const image = input.files?.[0];
+    input.value = '';
     if (!image) return;
+
+    this.clearCoverSelection();
+    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.type)) {
+      this.coverError.set('Choose a PNG, JPEG, GIF, or WebP image.');
+      return;
+    }
+    if (image.size > this.maxCoverSize) {
+      this.coverError.set('Choose an image under 10 MB.');
+      return;
+    }
+
+    this.selectedCover.set(image);
+    this.coverPreviewUrl.set(URL.createObjectURL(image));
+    this.coverError.set('');
+  }
+
+  async saveCover(artist: string, album: string): Promise<void> {
+    const image = this.selectedCover();
+    if (!image || this.isSavingCover()) return;
+    this.isSavingCover.set(true);
+    this.coverError.set('');
     try {
       await this.libraryApi.updateEntityImage(artist, album, image);
       await this.store.refresh();
       this.metadataMessage.set('Album artwork saved.');
+      this.clearCoverSelection();
+      this.isCoverDialogOpen.set(false);
     } catch {
-      this.metadataMessage.set('The album artwork could not be saved. Use a PNG, JPEG, GIF, or WebP image under 10 MB.');
+      this.coverError.set('The album artwork could not be saved. Please try again.');
     } finally {
-      input.value = '';
+      this.isSavingCover.set(false);
     }
+  }
+
+  private clearCoverSelection(): void {
+    const previewUrl = this.coverPreviewUrl();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    this.coverPreviewUrl.set('');
+    this.selectedCover.set(null);
   }
 
   async refreshInformation(artist: string, album: string): Promise<void> {
