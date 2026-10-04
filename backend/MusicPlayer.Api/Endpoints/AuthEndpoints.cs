@@ -40,6 +40,19 @@ public static class AuthEndpoints
         .WithName("SignOut")
         .WithSummary("Signs out the current account.");
 
+        auth.MapPost("/refresh", async (HttpContext context) =>
+        {
+            await context.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                context.User,
+                new AuthenticationProperties { IsPersistent = true, AllowRefresh = true });
+            return TypedResults.NoContent();
+        })
+        .RequireAuthorization()
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("RefreshSession")
+        .WithSummary("Renews the signed-in session cookie.");
+
         auth.MapGet("/me", async Task<Results<Ok<UserResponse>, UnauthorizedHttpResult>> (
             ClaimsPrincipal principal,
             IAccountService accounts,

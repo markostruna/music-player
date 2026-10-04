@@ -18,6 +18,7 @@ export interface SignedInUser {
 export class AuthState {
   private readonly http = inject(HttpClient);
   private readonly document = inject(DOCUMENT);
+  private refreshInProgress: Promise<void> | null = null;
   readonly user = signal<SignedInUser | null>(null);
   readonly isAuthenticated = computed(() => this.user() !== null);
   readonly isAdmin = computed(() => this.user()?.role === 'Admin');
@@ -68,6 +69,27 @@ export class AuthState {
   async getCsrfToken(): Promise<string> {
     const result = await firstValueFrom(this.http.get<{ token: string }>(`${MUSIC_API_BASE}/auth/csrf`, { withCredentials: true }));
     return result.token;
+  }
+
+  refreshSession(): Promise<void> {
+    if (!this.refreshInProgress) {
+      this.refreshInProgress = this.requestSessionRefresh().finally(() => {
+        this.refreshInProgress = null;
+      });
+    }
+    return this.refreshInProgress;
+  }
+
+  clearSession(): void {
+    this.applyUser(null);
+  }
+
+  private async requestSessionRefresh(): Promise<void> {
+    const token = await this.getCsrfToken();
+    await firstValueFrom(this.http.post<void>(`${MUSIC_API_BASE}/auth/refresh`, {}, {
+      headers: { 'X-CSRF-TOKEN': token },
+      withCredentials: true,
+    }));
   }
 
   private applyUser(user: SignedInUser | null): void {
