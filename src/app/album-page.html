@@ -71,27 +71,37 @@
             <div class="album-details">
               <span class="album-kind">ALBUM</span>
               <h1>{{ album.title }}</h1>
-              <p class="album-artist"><a [routerLink]="['/library/artist', album.artist]">{{ album.artist }}</a></p>
-              <dl class="album-metadata">
-                <div><dt>Release date</dt><dd>{{ album.releaseYear ?? 'Unknown' }}</dd></div>
-                <div><dt>Tracks</dt><dd>{{ album.tracks.length }}</dd></div>
-              </dl>
-              <button class="album-play-button" type="button" (click)="playTrack(album.tracks, 0)" [disabled]="!album.tracks.length">
-                <span aria-hidden="true">▶</span> Play album
-              </button>
+              <p class="album-artist"><a [routerLink]="['/library/artist', album.artist]">{{ album.artist }}</a> • {{ album.releaseYear ?? 'Unknown' }} • {{ album.tracks.length }} {{ album.tracks.length === 1 ? 'song' : 'songs' }}, {{ formatAlbumDuration(album.totalDurationSeconds) }}</p>
             </div>
           </section>
 
+          <div class="album-actions">
+            <button class="album-play-button" type="button" (click)="playTrack(album.tracks, 0)" [disabled]="!album.tracks.length">
+              <span aria-hidden="true">▶</span> Play album
+            </button>
+            @if (isAdmin()) {
+              <button class="album-play-button secondary-action" type="button" [disabled]="isRefreshingInformation()" (click)="refreshInformation(album.artist, album.title)">
+                {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
+              </button>
+            }
+          </div>
+
           <section class="metadata-description" aria-labelledby="album-description-heading">
             <span class="eyebrow">ABOUT THIS ALBUM</span>
-            <h2 id="album-description-heading">Description</h2>
-            @if (isAdmin()) {
+            <div class="description-heading">
+              <h2 id="album-description-heading">Description</h2>
+              @if (isAdmin() && !isEditingDescription(album.artist, album.title)) {
+                <button class="description-edit" type="button" (click)="editDescription(album.artist, album.title, album.description)">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14.5 6.5 3 3M4 20l4.5-.9L19 8.6a2.12 2.12 0 0 0-3-3L5.5 16.1 4 20Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Edit
+                </button>
+              }
+            </div>
+            @if (isEditingDescription(album.artist, album.title)) {
               <textarea aria-label="Album description" rows="5" [value]="descriptionValue(album.artist, album.title, album.description)" (input)="setDescription($event, album.artist, album.title)"></textarea>
               <div class="metadata-controls">
-                <button class="album-play-button secondary-action" type="button" [disabled]="isRefreshingInformation()" (click)="refreshInformation(album.artist, album.title)">
-                  {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
-                </button>
                 <button class="album-play-button" type="button" (click)="saveDescription(album.artist, album.title)">Save description</button>
+                <button class="album-play-button secondary-action" type="button" (click)="cancelDescriptionEdit()">Cancel edit</button>
               </div>
             } @else {
               <p>{{ album.description || 'No album description is available.' }}</p>

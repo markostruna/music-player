@@ -26,6 +26,7 @@ export class AlbumPage implements OnInit {
   readonly themeError = signal('');
   readonly metadataMessage = signal('');
   readonly isRefreshingInformation = signal(false);
+  readonly editingDescriptionKey = signal<string | null>(null);
   readonly isCoverDialogOpen = signal(false);
   readonly coverPreviewUrl = signal('');
   readonly coverError = signal('');
@@ -49,6 +50,10 @@ export class AlbumPage implements OnInit {
   readonly currentTrack = this.player.currentTrack;
   readonly isPlaying = this.player.isPlaying;
   readonly formatTime = formatTime;
+  formatAlbumDuration(seconds: number): string {
+    const totalMinutes = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds / 60) : 0;
+    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}min`;
+  }
   readonly album = computed(() => {
     const trackId = Number(this.params()?.get('trackId'));
     const selectedTrack = this.store.tracks().find((track) => track.id === trackId);
@@ -75,6 +80,7 @@ export class AlbumPage implements OnInit {
       informationUpdatedAt: refreshed?.updatedAt ?? '',
       releaseYear: albumTracks.find((track) => track.year > 0)?.year,
       tracks: albumTracks,
+      totalDurationSeconds: albumTracks.reduce((total, track) => total + track.durationSeconds, 0),
     };
   });
 
@@ -90,9 +96,26 @@ export class AlbumPage implements OnInit {
     return this.descriptionDraftKey === `${artist}\0${album}` ? this.descriptionDraft ?? '' : description;
   }
 
+  isEditingDescription(artist: string, album: string): boolean {
+    return this.editingDescriptionKey() === `${artist}\0${album}`;
+  }
+
+  editDescription(artist: string, album: string, description: string): void {
+    const key = `${artist}\0${album}`;
+    this.descriptionDraftKey = key;
+    this.descriptionDraft = description;
+    this.editingDescriptionKey.set(key);
+  }
+
   setDescription(event: Event, artist: string, album: string): void {
     this.descriptionDraftKey = `${artist}\0${album}`;
     this.descriptionDraft = (event.target as HTMLTextAreaElement).value;
+  }
+
+  cancelDescriptionEdit(): void {
+    this.descriptionDraft = null;
+    this.descriptionDraftKey = null;
+    this.editingDescriptionKey.set(null);
   }
 
   async saveDescription(artist: string, album: string): Promise<void> {
@@ -102,6 +125,7 @@ export class AlbumPage implements OnInit {
       await this.libraryApi.updateDescription(artist, album, description);
       this.descriptionDraft = null;
       this.descriptionDraftKey = null;
+      this.editingDescriptionKey.set(null);
       await this.store.refresh();
       this.metadataMessage.set('Album description saved.');
     } catch {
@@ -178,6 +202,7 @@ export class AlbumPage implements OnInit {
       }
       this.descriptionDraft = null;
       this.descriptionDraftKey = null;
+      this.editingDescriptionKey.set(null);
       this.refreshedInformation.set({
         key: `${artist.toLowerCase()}\0${album.toLowerCase()}`,
         description: result.description,
