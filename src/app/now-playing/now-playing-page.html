@@ -1,0 +1,37 @@
+<div class="content-scroll now-playing-content">
+  @if (track(); as track) {
+    <section class="now-playing-hero">
+      <div class="now-playing-cover">
+        <span class="now-playing-placeholder" aria-hidden="true">♫</span>
+        <img
+          [src]="track.coverUrl"
+          [alt]="track.album + ' album artwork'"
+          (error)="$any($event.target).style.visibility = 'hidden'"
+        />
+      </div>
+      <div class="now-playing-details">
+        <span class="now-playing-kind">{{ player.isPlaying() ? 'NOW PLAYING' : 'PAUSED' }}</span>
+        <h1>{{ track.title }}</h1>
+        <p class="now-playing-artist-name">
+          <a [routerLink]="['/library/artist', track.artist]">{{ track.artist }}</a>
+        </p>
+        <dl class="now-playing-metadata">
+          <div>
+            <dt>Album</dt>
+            <dd>
+              <a [routerLink]="['/library/album', track.id]">{{ track.album }}</a>
+            </dd>
+          </div>
+          <div>
+            <dt>Release year</dt>
+            <dd>{{ year() ?? 'Unknown' }}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  } @else {
+    <p class="now-playing-message">
+      Nothing is playing. <a routerLink="/library">Choose something from your library</a>
+    </p>
+  }
+</div>

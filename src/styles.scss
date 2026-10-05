@@ -1,74 +1,75 @@
-@use './app/login-page';
-@use './app/library-page';
-@use './app/album-page';
-@use './app/now-playing-page';
-@use './app/player-bar';
-@use './app/library-enhancements';
-@use './app/admin-page';
+@use './app/login/login-page/login-page';
+@use './app/library/library-page/library-page';
+@use './app/shell/music-shell/music-shell';
+@use './app/library/album-page/album-page';
+@use './app/now-playing/now-playing-page';
+@use './app/shell/player-bar/player-bar';
+@use './app/library/library-page/library-enhancements';
+@use './app/admin/admin-page/admin-page';
 
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 :root {
-	color-scheme: light;
-	font-family: 'DM Sans', sans-serif;
-	color: #19221e;
-	background: #f5f6f1;
-	font-synthesis: none;
-	text-rendering: optimizeLegibility;
-	-webkit-font-smoothing: antialiased;
-	--ink: #19221e;
-	--muted: #7b827d;
-	--paper: #f5f6f1;
-	--line: #e6e9e2;
-	--lime: #d4fb58;
-	--forest: #1d3329;
-	--surface: #fbfcf8;
-	--surface-raised: #fff;
-	--surface-hover: #f0f2eb;
-	--accent: #6f8b32;
-	--accent-soft: #edf2e4;
-	--accent-contrast: #1a281c;
-	--control-border: #dfe4dc;
+  color-scheme: light;
+  font-family: 'DM Sans', sans-serif;
+  color: #19221e;
+  background: #f5f6f1;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --ink: #19221e;
+  --muted: #7b827d;
+  --paper: #f5f6f1;
+  --line: #e6e9e2;
+  --lime: #d4fb58;
+  --forest: #1d3329;
+  --surface: #fbfcf8;
+  --surface-raised: #fff;
+  --surface-hover: #f0f2eb;
+  --accent: #6f8b32;
+  --accent-soft: #edf2e4;
+  --accent-contrast: #1a281c;
+  --control-border: #dfe4dc;
 }
 
 :root[data-theme='dark'] {
-	color-scheme: dark;
-	--ink: #edf2ed;
-	--muted: #a8b3ab;
-	--paper: #111915;
-	--line: #344239;
-	--lime: #c7e978;
-	--forest: #294738;
-	--surface: #1a251f;
-	--surface-raised: #22312a;
-	--surface-hover: #2b3a32;
-	--accent: #c7e978;
-	--accent-soft: #2a3b30;
-	--accent-contrast: #182219;
-	--control-border: #45554a;
+  color-scheme: dark;
+  --ink: #edf2ed;
+  --muted: #a8b3ab;
+  --paper: #111915;
+  --line: #344239;
+  --lime: #c7e978;
+  --forest: #294738;
+  --surface: #1a251f;
+  --surface-raised: #22312a;
+  --surface-hover: #2b3a32;
+  --accent: #c7e978;
+  --accent-soft: #2a3b30;
+  --accent-contrast: #182219;
+  --control-border: #45554a;
 }
 
 :root[data-theme='blue'] {
-	color-scheme: light;
-	--ink: #18313c;
-	--muted: #607984;
-	--paper: #e9f2f5;
-	--line: #cedee4;
-	--lime: #b9dfe9;
-	--forest: #23556a;
-	--surface: #f7fbfc;
-	--surface-raised: #fff;
-	--surface-hover: #e3f0f4;
-	--accent: #2d718f;
-	--accent-soft: #d8eaf0;
-	--accent-contrast: #173441;
-	--control-border: #c4d8e0;
+  color-scheme: light;
+  --ink: #18313c;
+  --muted: #607984;
+  --paper: #e9f2f5;
+  --line: #cedee4;
+  --lime: #b9dfe9;
+  --forest: #23556a;
+  --surface: #f7fbfc;
+  --surface-raised: #fff;
+  --surface-hover: #e3f0f4;
+  --accent: #2d718f;
+  --accent-soft: #d8eaf0;
+  --accent-contrast: #173441;
+  --control-border: #c4d8e0;
 }
 
 :root[data-theme='dark'] body,
 :root[data-theme='blue'] body {
-	background: var(--paper);
-	color: var(--ink);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 :root[data-theme='dark'] .sidebar,
@@ -81,8 +82,8 @@
 :root[data-theme='blue'] .player-bar,
 :root[data-theme='blue'] .login-layout,
 :root[data-theme='blue'] .form-panel {
-	background: var(--surface);
-	color: var(--ink);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 :root[data-theme='dark'] .nav-item,
@@ -117,15 +118,15 @@
 :root[data-theme='blue'] .demo-note,
 :root[data-theme='blue'] .form-panel label,
 :root[data-theme='blue'] .empty-state {
-	color: var(--muted);
+  color: var(--muted);
 }
 
 :root[data-theme='dark'] .nav-item.selected,
 :root[data-theme='dark'] .playlist-link.playlist-active,
 :root[data-theme='blue'] .nav-item.selected,
 :root[data-theme='blue'] .playlist-link.playlist-active {
-	background: var(--accent-soft);
-	color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 :root[data-theme='dark'] .nav-item:hover,
@@ -134,8 +135,8 @@
 :root[data-theme='blue'] .nav-item:hover,
 :root[data-theme='blue'] .playlist-link:hover,
 :root[data-theme='blue'] .track-row:hover {
-	background: var(--surface-hover);
-	color: var(--ink);
+  background: var(--surface-hover);
+  color: var(--ink);
 }
 
 :root[data-theme='dark'] .upgrade-note,
@@ -146,14 +147,14 @@
 :root[data-theme='blue'] .search-box,
 :root[data-theme='blue'] .form-panel input,
 :root[data-theme='blue'] .track-title-cell img {
-	border-color: var(--control-border);
-	background: var(--surface-raised);
-	color: var(--ink);
+  border-color: var(--control-border);
+  background: var(--surface-raised);
+  color: var(--ink);
 }
 
 :root[data-theme='dark'] .form-panel input::placeholder,
 :root[data-theme='blue'] .form-panel input::placeholder {
-	color: var(--muted);
+  color: var(--muted);
 }
 
 :root[data-theme='dark'] .track-head,
@@ -168,7 +169,7 @@
 :root[data-theme='blue'] .profile-row,
 :root[data-theme='blue'] .topbar,
 :root[data-theme='blue'] .sidebar {
-	border-color: var(--line);
+  border-color: var(--line);
 }
 
 :root[data-theme='dark'] .form-eyebrow,
@@ -177,7 +178,7 @@
 :root[data-theme='blue'] .form-eyebrow,
 :root[data-theme='blue'] .login-card h2,
 :root[data-theme='blue'] .breadcrumbs strong {
-	color: var(--ink);
+  color: var(--ink);
 }
 
 :root[data-theme='dark'] .login-card h2 em,
@@ -186,42 +187,49 @@
 :root[data-theme='blue'] .login-card h2 em,
 :root[data-theme='blue'] .greeting-row h1 em,
 :root[data-theme='blue'] .now-playing-info small {
-	color: var(--accent);
+  color: var(--accent);
 }
 
 :root[data-theme='dark'] .submit-button,
 :root[data-theme='dark'] .transport .play-toggle,
 :root[data-theme='blue'] .submit-button,
 :root[data-theme='blue'] .transport .play-toggle {
-	background: var(--forest);
-	color: #fff;
+  background: var(--forest);
+  color: #fff;
 }
 
 :root[data-theme='dark'] .welcome-mark,
 :root[data-theme='blue'] .welcome-mark {
-	background: var(--accent-soft);
-	color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 * {
-	box-sizing: border-box;
+  box-sizing: border-box;
 }
 
 body {
-	min-width: 320px;
-	min-height: 100vh;
-	margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+@media (max-width: 319px) {
+  body {
+    min-width: 0;
+    overflow-x: clip;
+  }
 }
 
 button,
 input {
-	font: inherit;
+  font: inherit;
 }
 
 button {
-	color: inherit;
+  color: inherit;
 }
 
 a {
-	color: inherit;
+  color: inherit;
 }

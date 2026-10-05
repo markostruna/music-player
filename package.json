@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build --base-href /music-player/",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "prettier": "prettier --write \"src/**/*.{ts,html,scss,css,json}\""
   },
   "private": true,
   "packageManager": "npm@12.0.2",

@@ -1,0 +1,121 @@
+<div class="content-scroll album-content">
+  @if (metadataMessage()) {
+    <p class="album-message" role="status">{{ metadataMessage() }}</p>
+  }
+  <div class="album-page">
+    <header class="album-page-header">
+      <a routerLink="/library" aria-label="Back to library">← <span>Back to library</span></a>
+      <span class="eyebrow">YOUR COLLECTION</span>
+    </header>
+
+    @if (isLoading()) {
+      <p class="album-message">Loading artist�</p>
+    } @else if (errorMessage()) {
+      <p class="album-message" role="alert">
+        {{ errorMessage() }} <a routerLink="/library">Return to your library</a>
+      </p>
+    } @else if (artist(); as artist) {
+      <section class="album-hero">
+        <div class="album-cover">
+          <span class="album-cover-placeholder" aria-hidden="true">♫</span>
+          <img
+            [src]="artist.coverUrl"
+            [alt]="artist.name + ' photo'"
+            (error)="$any($event.target).style.visibility = 'hidden'"
+          />
+        </div>
+        <div class="album-details">
+          <span class="album-kind">ARTIST</span>
+          <h1>{{ artist.name }}</h1>
+          @if (artist.imageMissing) {
+            <span class="missing-image-label">Artist picture missing</span>
+          }
+          <dl class="album-metadata">
+            <div>
+              <dt>Albums</dt>
+              <dd>{{ artist.albums.length }}</dd>
+            </div>
+            <div>
+              <dt>Tracks</dt>
+              <dd>{{ artist.trackCount }}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="metadata-description" aria-labelledby="artist-description-heading">
+        <span class="eyebrow">ABOUT THE ARTIST</span>
+        <h2 id="artist-description-heading">Description</h2>
+        @if (isAdmin()) {
+          <textarea
+            aria-label="Artist description"
+            rows="5"
+            [value]="descriptionValue(artist.name, artist.description)"
+            (input)="setDescription($event, artist.name)"
+          ></textarea>
+          <div class="metadata-controls">
+            <button
+              class="album-play-button secondary-action"
+              type="button"
+              [disabled]="isRefreshingInformation()"
+              (click)="refreshInformation(artist.name)"
+            >
+              {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
+            </button>
+            <button class="album-play-button" type="button" (click)="saveDescription(artist.name)">
+              Save description
+            </button>
+            <input
+              #pictureInput
+              class="visually-hidden"
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              (change)="updatePicture($event, artist.name)"
+            />
+            <button
+              class="album-play-button secondary-action"
+              type="button"
+              (click)="pictureInput.click()"
+            >
+              Change artist picture
+            </button>
+          </div>
+        } @else {
+          <p>{{ artist.description || 'No artist description is available.' }}</p>
+        }
+      </section>
+
+      <section class="album-track-section" aria-labelledby="artist-albums-heading">
+        <div class="album-track-heading">
+          <span class="eyebrow">DISCOGRAPHY</span>
+          <h2 id="artist-albums-heading">Albums</h2>
+        </div>
+        <div class="collection-grid">
+          @for (album of artist.albums; track album.key) {
+            <a
+              class="collection-tile"
+              [routerLink]="['/library/album', album.tracks[0].id]"
+              [attr.aria-label]="'View album ' + album.title"
+              [title]="'View album: ' + album.title"
+            >
+              <span class="tile-art"
+                ><span class="tile-placeholder" aria-hidden="true">♫</span
+                ><img
+                  [src]="album.coverUrl"
+                  [alt]="album.title + ' artwork'"
+                  (error)="$any($event.target).style.visibility = 'hidden'"
+                /><span class="tile-play" aria-hidden="true">▶</span></span
+              >
+              <span class="tile-title">{{ album.title }}</span>
+              <span class="tile-detail">{{ album.year || 'Unknown year' }}</span>
+              <span class="tile-meta"
+                >{{ album.tracks.length }}
+                {{ album.tracks.length === 1 ? 'track' : 'tracks' }}</span
+              >
+            </a>
+          }
+        </div>
+      </section>
+    }
+  </div>
+</div>

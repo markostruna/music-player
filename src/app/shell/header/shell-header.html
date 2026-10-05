@@ -1,0 +1,37 @@
+<header class="topbar">
+  <div class="breadcrumbs">
+    <span>YOUR SPACE</span>
+    <span class="breadcrumb-divider">/</span>
+    <strong>{{ pageTitle() }}</strong>
+  </div>
+  @if (isLibraryPage()) {
+    <label class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="10.8" cy="10.8" r="6.5" stroke="currentColor" stroke-width="1.7" />
+        <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+      </svg>
+      <input
+        type="search"
+        placeholder="Search tracks, albums, artists..."
+        aria-label="Search tracks, albums, and artists"
+        [value]="searchQuery()"
+        (input)="searchQueryChange.emit($any($event.target).value)"
+      />
+      <kbd>⌘ K</kbd>
+    </label>
+  }
+  <label class="theme-picker">
+    <span>Theme</span>
+    <select [value]="user()?.theme ?? 'Light'" (change)="themeChange.emit($event)">
+      @for (theme of themeOptions(); track theme) {
+        <option [value]="theme">{{ theme }}</option>
+      }
+    </select>
+  </label>
+  @if (isAdmin()) {
+    <a class="admin-link" routerLink="/admin">Manage library</a>
+  }
+  <button type="button" class="mobile-profile" (click)="signOutRequested.emit()" aria-label="Sign out">
+    {{ user()?.email?.slice(0, 1)?.toUpperCase() }}
+  </button>
+</header>

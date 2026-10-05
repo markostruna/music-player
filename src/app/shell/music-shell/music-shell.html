@@ -1,0 +1,28 @@
+<div class="workspace">
+  <app-side-menu
+    [activeSection]="activeSection()"
+    [isLibraryPage]="isLibraryPage()"
+    [user]="user()"
+    (activeSectionChange)="activeSection.set($event)"
+    (signOutRequested)="signOut()"
+  />
+
+  <main class="main-panel">
+    <app-shell-header
+      [pageTitle]="pageTitle()"
+      [isLibraryPage]="isLibraryPage()"
+      [searchQuery]="searchQuery()"
+      [user]="user()"
+      [isAdmin]="isAdmin()"
+      [themeOptions]="themeOptions"
+      (searchQueryChange)="setSearchQuery($event)"
+      (themeChange)="changeTheme($event)"
+      (signOutRequested)="signOut()"
+    />
+
+    @if (themeError()) {
+      <p class="music-shell-error" role="alert">{{ themeError() }}</p>
+    }
+    <router-outlet />
+  </main>
+</div>

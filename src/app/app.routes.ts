@@ -1,20 +1,12 @@
 import { Routes } from '@angular/router';
-import { requireAuth } from './auth.guard';
-import { LoginPage } from './login-page';
-import { LibraryPage } from './library-page';
-import { requireAdmin } from './admin.guard';
-import { AdminPage } from './admin-page';
-import { AlbumPage } from './album-page';
-import { ArtistPage } from './artist-page';
-import { NowPlayingPage } from './now-playing-page';
+import { adminRoutes } from './admin/admin.routes';
+import { loginRoutes } from './login/login.routes';
+import { shellRoutes } from './shell/shell.routes';
 
 export const routes: Routes = [
-	{ path: '', pathMatch: 'full', redirectTo: 'login' },
-	{ path: 'login', component: LoginPage },
-	{ path: 'library/album/:trackId', component: AlbumPage, canActivate: [requireAuth] },
-	{ path: 'library/artist/:name', component: ArtistPage, canActivate: [requireAuth] },
-	{ path: 'now-playing', component: NowPlayingPage, canActivate: [requireAuth] },
-	{ path: 'library', component: LibraryPage, canActivate: [requireAuth] },
-	{ path: 'admin', component: AdminPage, canActivate: [requireAdmin] },
-	{ path: '**', redirectTo: 'login' },
+  { path: '', pathMatch: 'full', redirectTo: 'login' },
+  ...loginRoutes,
+  ...shellRoutes,
+  ...adminRoutes,
+  { path: '**', redirectTo: 'login' },
 ];
