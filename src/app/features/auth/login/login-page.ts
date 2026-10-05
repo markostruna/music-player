@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { AuthState } from './auth-state';
+import { AuthState } from '../../../core/auth/auth-state';
 
 @Component({
   selector: 'app-login-page',

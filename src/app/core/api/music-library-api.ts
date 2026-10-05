@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { AuthState, UserRole } from './auth-state';
+import { AuthState, UserRole } from '../auth/auth-state';
 import { MUSIC_API_BASE, MUSIC_API_PREFIX } from './api-path';
 
 export interface MusicTrack {

@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { MUSIC_API_BASE } from './api-path';
+import { MUSIC_API_BASE } from '../api/api-path';
 
 export type UserRole = 'Admin' | 'Guest';
 export type ThemeName = 'Light' | 'Dark' | 'Blue';

@@ -1,8 +1,8 @@
 import { Component, computed, ElementRef, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { AuthState, ThemeName } from './auth-state';
-import { MetadataPatch, MusicLibraryApi, MusicTrack } from './music-library-api';
+import { AuthState, ThemeName } from '../../core/auth/auth-state';
+import { MetadataPatch, MusicLibraryApi, MusicTrack } from '../../core/api/music-library-api';
 
 type LibraryView = 'tracks' | 'albums' | 'artists';
 

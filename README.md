@@ -90,6 +90,15 @@ dotnet build backend/MusicPlayer.Api/MusicPlayer.Api.csproj
 
 The Angular production files are emitted to `dist/music-player/browser`.
 
+### Angular source structure
+
+The client is organized by feature under `src/app/features`: authentication/login,
+the music library, and administration each keep their page component, template,
+and styles together. Shared application infrastructure lives under
+`src/app/core`, including authentication state and guards, API services, and API
+path configuration. The root app and routing configuration remain directly
+under `src/app`.
+
 ## XAMPP Hosting
 
 Build the Angular application and copy the **contents** of `dist/music-player/browser` to a directory such as `C:/xampp/htdocs/afterhours`. Configure Apache with HTTPS and enable `mod_proxy`, `mod_proxy_http`, `mod_headers`, `mod_dir`, and `mod_ssl`. Add the following directives to the HTTPS virtual host, adjusting the static directory to match your installation:

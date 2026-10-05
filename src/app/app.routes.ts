@@ -1,9 +1,9 @@
 import { Routes } from '@angular/router';
-import { requireAuth } from './auth.guard';
-import { LoginPage } from './login-page';
-import { LibraryPage } from './library-page';
-import { requireAdmin } from './admin.guard';
-import { AdminPage } from './admin-page';
+import { requireAdmin } from './core/auth/admin.guard';
+import { requireAuth } from './core/auth/auth.guard';
+import { AdminPage } from './features/admin/admin-page';
+import { LoginPage } from './features/auth/login/login-page';
+import { LibraryPage } from './features/library/library-page';
 
 export const routes: Routes = [
 	{ path: '', pathMatch: 'full', redirectTo: 'login' },

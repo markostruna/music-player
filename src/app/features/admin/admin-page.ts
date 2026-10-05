@@ -1,8 +1,8 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { AuthState, UserRole } from './auth-state';
-import { ManagedUser, MusicLibraryApi, SourceRoot } from './music-library-api';
+import { AuthState, UserRole } from '../../core/auth/auth-state';
+import { ManagedUser, MusicLibraryApi, SourceRoot } from '../../core/api/music-library-api';
 
 @Component({
   selector: 'app-admin-page',

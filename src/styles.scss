@@ -1,7 +1,7 @@
-@use './app/login-page';
-@use './app/library-page';
-@use './app/library-enhancements';
-@use './app/admin-page';
+@use './app/features/auth/login/login-page';
+@use './app/features/library/library-page';
+@use './app/features/library/library-enhancements';
+@use './app/features/admin/admin-page';
 
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 
