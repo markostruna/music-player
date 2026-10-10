@@ -8,31 +8,35 @@ app-music-shell {
 }
 
 .workspace {
-  display: grid;
+  position: relative;
+  display: block;
   height: auto;
   min-height: 0;
   flex: 1 0 auto;
-  grid-template-columns: 246px minmax(0, 1fr);
   background: var(--paper);
-}
-
-.workspace.menu-hidden {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.workspace.menu-hidden app-side-menu {
-  display: none;
 }
 
 app-side-menu {
   display: block;
-  position: sticky;
+  position: fixed;
+  z-index: 9;
   top: var(--shell-header-height);
-  align-self: start;
+  left: 0;
+  width: 246px;
+  max-width: min(246px, 86vw);
   height: calc(100vh - var(--shell-header-height));
   height: calc(100dvh - var(--shell-header-height));
   min-width: 0;
   min-height: 0;
+  transform: translateX(0);
+  transition: transform 180ms ease;
+  align-self: start;
+}
+
+.workspace.menu-hidden app-side-menu {
+  display: block;
+  transform: translateX(-100%);
+  visibility: hidden;
 }
 
 app-shell-header {
@@ -148,45 +152,37 @@ app-library-page {
   font-size: 12px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  app-side-menu {
+    transition: none;
+  }
+}
+
 @media (max-width: 680px) {
   app-music-shell {
     --shell-header-height: 61px;
   }
 
   app-music-shell .workspace {
-    display: grid;
+    display: block;
     height: auto;
     flex: 1 0 auto;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 0;
-    padding-bottom: 58px;
-  }
-
-  app-music-shell .workspace.menu-hidden {
-    padding-bottom: 58px;
-  }
-
-  app-music-shell .workspace:not(.menu-hidden) app-side-menu {
-    display: block;
-  }
-
-  app-music-shell .workspace.menu-hidden app-side-menu {
-    display: none;
   }
 
   app-music-shell app-side-menu {
     position: static;
-    grid-row: 2;
+    width: auto;
+    max-width: none;
     height: 0;
+    transform: none;
+  }
+
+  app-music-shell .workspace.menu-hidden app-side-menu {
+    transform: none;
   }
 
   app-music-shell .main-panel {
-    grid-row: 1;
     min-height: auto;
-  }
-
-  app-music-shell .menu-toggle {
-    display: none;
   }
 
   app-music-shell .page-heading {
@@ -196,5 +192,4 @@ app-library-page {
   app-music-shell .page-heading-inner {
     padding: 0 16px;
   }
-
 }
