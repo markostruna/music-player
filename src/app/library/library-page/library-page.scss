@@ -245,10 +245,16 @@
   background: #fbfcf8;
 }
 
+.topbar .wordmark {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
 .topbar .theme-picker {
   display: flex;
   align-items: center;
   gap: 7px;
+  margin-left: auto;
   color: var(--muted);
   font-size: 10px;
 }
@@ -943,6 +949,21 @@ kbd {
     min-height: 60px;
     gap: 11px;
     padding: 0 15px;
+  }
+  .topbar .wordmark {
+    gap: 6px;
+    font-size: 12px;
+  }
+  .topbar .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 16px;
+  }
+  .topbar .search-box {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
   }
   .breadcrumbs {
     gap: 7px;

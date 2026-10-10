@@ -1,8 +1,10 @@
 import { Component, input, output } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { SignedInUser, ThemeName } from '@shared/services/auth-state';
 
 @Component({
   selector: 'app-shell-header',
+  imports: [RouterLink],
   templateUrl: './shell-header.html',
 })
 export class ShellHeader {
