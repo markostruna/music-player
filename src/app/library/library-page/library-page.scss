@@ -382,12 +382,12 @@ kbd {
 }
 
 .content-scroll {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   width: 100%;
   max-width: 1380px;
   align-self: center;
-  overflow-y: auto;
-  min-height: 0;
+  overflow-y: visible;
+  min-height: auto;
   padding: 35px 4.1% 20px;
 }
 

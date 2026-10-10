@@ -1,17 +1,17 @@
 app-music-shell {
   display: flex;
-  height: 100vh;
+  min-height: 100vh;
   flex-direction: column;
-  overflow: hidden;
   color: var(--ink);
   background: var(--paper);
+  --shell-header-height: 75px;
 }
 
 .workspace {
   display: grid;
   height: auto;
   min-height: 0;
-  flex: 1 1 0;
+  flex: 1 0 auto;
   grid-template-columns: 246px minmax(0, 1fr);
   background: var(--paper);
 }
@@ -26,6 +26,11 @@ app-music-shell {
 
 app-side-menu {
   display: block;
+  position: sticky;
+  top: var(--shell-header-height);
+  align-self: start;
+  height: calc(100vh - var(--shell-header-height));
+  height: calc(100dvh - var(--shell-header-height));
   min-width: 0;
   min-height: 0;
 }
@@ -33,6 +38,9 @@ app-side-menu {
 app-shell-header {
   display: block;
   flex: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .menu-toggle {
@@ -124,6 +132,16 @@ app-now-playing-page {
   color: var(--ink);
 }
 
+app-library-page {
+  min-height: auto;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.main-panel {
+  min-height: auto;
+}
+
 .music-shell-error {
   margin: 8px 4.1% 0;
   color: #b24a38;
@@ -132,16 +150,15 @@ app-now-playing-page {
 
 @media (max-width: 680px) {
   app-music-shell {
-    height: 100dvh;
-    overflow: visible;
+    --shell-header-height: 61px;
   }
 
   app-music-shell .workspace {
     display: grid;
     height: auto;
-    flex: 1 1 0;
+    flex: 1 0 auto;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 0;
+    grid-template-rows: auto 0;
     padding-bottom: 58px;
   }
 
@@ -158,13 +175,14 @@ app-now-playing-page {
   }
 
   app-music-shell app-side-menu {
+    position: static;
     grid-row: 2;
+    height: 0;
   }
 
   app-music-shell .main-panel {
     grid-row: 1;
-    flex: 1 1 0;
-    min-height: 0;
+    min-height: auto;
   }
 
   app-music-shell .menu-toggle {
@@ -179,9 +197,4 @@ app-now-playing-page {
     padding: 0 16px;
   }
 
-  app-music-shell .content-scroll {
-    height: auto;
-    min-height: 0;
-    flex: 1 1 0;
-  }
 }

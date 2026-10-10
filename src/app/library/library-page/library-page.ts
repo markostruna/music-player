@@ -2,12 +2,10 @@ import {
   AfterViewInit,
   Component,
   computed,
-  ElementRef,
   inject,
   OnDestroy,
   OnInit,
   signal,
-  ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -47,8 +45,6 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
   private readonly shellState = inject(MusicShellState);
-
-  @ViewChild('contentScroll') private contentScroll?: ElementRef<HTMLElement>;
 
   readonly activeSection = this.shellState.activeSection;
   readonly searchQuery = this.store.searchQuery;
@@ -162,11 +158,11 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    if (this.contentScroll) this.contentScroll.nativeElement.scrollTop = this.store.scrollTop;
+    window.scrollTo(0, this.store.scrollTop);
   }
 
   ngOnDestroy(): void {
-    if (this.contentScroll) this.store.scrollTop = this.contentScroll.nativeElement.scrollTop;
+    this.store.scrollTop = window.scrollY;
   }
 
   async loadLibrary(forceRefresh = true): Promise<void> {
