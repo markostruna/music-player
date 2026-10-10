@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
@@ -84,6 +84,18 @@ export class MusicShell {
   }
 
   constructor() {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const mobile = window.matchMedia('(max-width: 680px)');
+      const showMenuOnMobile = () => {
+        if (mobile.matches) {
+          this.menuVisible.set(true);
+        }
+      };
+      showMenuOnMobile();
+      mobile.addEventListener('change', showMenuOnMobile);
+      inject(DestroyRef).onDestroy(() => mobile.removeEventListener('change', showMenuOnMobile));
+    }
+
     effect(() => {
       this.navigationEnd();
       this.activeSection.set('Your library');

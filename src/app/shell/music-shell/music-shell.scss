@@ -195,6 +195,10 @@ app-now-playing-page .content-scroll {
     transform: none;
   }
 
+  app-music-shell .menu-toggle {
+    display: none;
+  }
+
   app-music-shell .main-panel {
     min-height: auto;
   }
