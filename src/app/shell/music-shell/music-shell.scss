@@ -126,30 +126,16 @@ app-shell-header {
 app-library-page,
 app-album-page,
 app-artist-page,
-app-now-playing-page {
+app-now-playing-page,
+app-admin-page {
   display: flex;
   min-width: 0;
-  min-height: 0;
-  flex: 1 1 0;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--paper);
-  color: var(--ink);
-}
-
-app-library-page {
   min-height: auto;
   flex: 0 0 auto;
+  flex-direction: column;
   overflow: visible;
-}
-
-app-album-page .content-scroll,
-app-artist-page .content-scroll,
-app-now-playing-page .content-scroll {
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .main-panel {

@@ -1,26 +1,16 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
-import {
-  LibraryStore,
-  ManagedUser,
-  MusicLibraryApi,
-  PlayerService,
-  SourceRoot,
-} from '@shared/services';
-import { AuthState, UserRole } from '@shared/services/auth-state';
+import { LibraryStore, ManagedUser, MusicLibraryApi, SourceRoot } from '@shared/services';
+import { UserRole } from '@shared/services/auth-state';
 
 @Component({
   selector: 'app-admin-page',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './admin-page.html',
 })
 export class AdminPage implements OnInit {
   private readonly api = inject(MusicLibraryApi);
-  private readonly auth = inject(AuthState);
-  private readonly router = inject(Router);
   private readonly store = inject(LibraryStore);
-  private readonly player = inject(PlayerService);
 
   readonly roots = signal<SourceRoot[]>([]);
   readonly users = signal<ManagedUser[]>([]);
@@ -152,12 +142,5 @@ export class AdminPage implements OnInit {
     } catch {
       this.errorMessage.set('Password reset failed. Use at least 12 characters.');
     }
-  }
-
-  async signOut(): Promise<void> {
-    this.player.stop();
-    this.store.clear();
-    await this.auth.signOut();
-    await this.router.navigateByUrl('/login');
   }
 }

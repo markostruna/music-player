@@ -1,12 +1,7 @@
 import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
-import {
-  ActivatedRoute,
-  NavigationEnd,
-  Router,
-  RouterOutlet,
-} from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthState, ThemeName } from '@shared/services/auth-state';
 import { LibraryStore } from '@shared/services/library-store';
@@ -52,6 +47,8 @@ export class MusicShell {
     switch (childRoute?.snapshot.routeConfig?.path) {
       case 'library':
         return this.activeSection();
+      case 'admin':
+        return 'Manage library';
       case 'library/album/:trackId': {
         const trackId = Number(childRoute.snapshot.paramMap.get('trackId'));
         return this.library.tracks().find((track) => track.id === trackId)?.album ?? 'Album';

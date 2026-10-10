@@ -178,18 +178,18 @@ app-login-page {
   font-size: 14px;
 }
 
-form {
+.form-panel form {
   display: grid;
   gap: 10px;
 }
 
-label {
+.form-panel label {
   color: #303b34;
   font-size: 12px;
   font-weight: 700;
 }
 
-input {
+.form-panel input {
   width: 100%;
   height: 49px;
   margin-bottom: 12px;
@@ -205,11 +205,11 @@ input {
     box-shadow 160ms;
 }
 
-input::placeholder {
+.form-panel input::placeholder {
   color: #a2a9a2;
 }
 
-input:focus {
+.form-panel input:focus {
   border-color: #79982a;
   box-shadow: 0 0 0 3px rgb(212 251 88 / 28%);
 }
