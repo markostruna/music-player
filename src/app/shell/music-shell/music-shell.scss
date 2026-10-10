@@ -9,7 +9,8 @@ app-music-shell {
 
 .workspace {
   position: relative;
-  display: block;
+  display: flex;
+  flex-direction: column;
   height: auto;
   min-height: 0;
   flex: 1 0 auto;
@@ -142,8 +143,21 @@ app-library-page {
   overflow: visible;
 }
 
+app-album-page .content-scroll,
+app-artist-page .content-scroll,
+app-now-playing-page .content-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 .main-panel {
+  display: flex;
+  min-width: 0;
   min-height: auto;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
 .music-shell-error {
@@ -164,13 +178,13 @@ app-library-page {
   }
 
   app-music-shell .workspace {
-    display: block;
+    display: flex;
     height: auto;
     flex: 1 0 auto;
   }
 
   app-music-shell app-side-menu {
-    position: static;
+    position: absolute;
     width: auto;
     max-width: none;
     height: 0;
