@@ -44,17 +44,6 @@ app-library-page {
     color: var(--ink);
   }
 
-  .admin-link {
-    color: var(--accent);
-    font-size: 10px;
-    font-weight: 700;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .admin-link:hover {
-    text-decoration: underline;
-  }
-
   .admin-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -171,8 +160,7 @@ app-library-page {
     max-width: 150px;
     font-size: 9px;
   }
-  app-library-page .theme-picker span,
-  app-library-page .admin-link {
+  app-library-page .theme-picker span {
     display: none;
   }
 }

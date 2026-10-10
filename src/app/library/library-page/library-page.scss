@@ -156,6 +156,10 @@
   margin-top: auto;
 }
 
+.admin-side-link {
+  text-decoration: none;
+}
+
 .upgrade-note {
   display: flex;
   align-items: center;
@@ -241,6 +245,23 @@
   background: #fbfcf8;
 }
 
+.topbar .theme-picker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.topbar .theme-picker select {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
 .breadcrumbs {
   display: flex;
   flex: 1;
@@ -287,11 +308,16 @@
 .search-box input {
   width: 100%;
   min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--ink);
+  appearance: none;
   font-size: 10px;
+  line-height: normal;
 }
 
 .search-box input::placeholder {
@@ -872,16 +898,33 @@ kbd {
   }
   .sidebar > .wordmark,
   .nav-label,
-  .playlist-group,
+  .playlist-group {
+    display: none;
+  }
   .sidebar-bottom {
+    display: contents;
+  }
+  .sidebar-bottom .profile-row {
     display: none;
   }
   .nav-group {
     display: flex;
-    flex: 1;
+    min-width: 0;
+    flex: 3 1 0;
     justify-content: space-around;
     gap: 3px;
     margin: 0;
+  }
+  .admin-side-link {
+    min-width: 0;
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    margin: 0;
+    padding: 3px 5px;
+    font-size: 8px;
+    text-align: center;
   }
   .nav-item {
     min-width: 0;
@@ -1049,8 +1092,7 @@ kbd {
   .theme-picker {
     gap: 0;
   }
-  .theme-picker span,
-  .admin-link {
+  .theme-picker span {
     display: none;
   }
   .theme-picker select {

@@ -1,5 +1,6 @@
 <div class="workspace">
   <app-side-menu
+    [isAdmin]="isAdmin()"
     [activeSection]="activeSection()"
     [isLibraryPage]="isLibraryPage()"
     [user]="user()"
@@ -13,7 +14,6 @@
       [isLibraryPage]="isLibraryPage()"
       [searchQuery]="searchQuery()"
       [user]="user()"
-      [isAdmin]="isAdmin()"
       [themeOptions]="themeOptions"
       (searchQueryChange)="setSearchQuery($event)"
       (themeChange)="changeTheme($event)"

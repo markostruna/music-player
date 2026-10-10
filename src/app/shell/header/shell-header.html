@@ -28,9 +28,6 @@
       }
     </select>
   </label>
-  @if (isAdmin()) {
-    <a class="admin-link" routerLink="/admin">Manage library</a>
-  }
   <button type="button" class="mobile-profile" (click)="signOutRequested.emit()" aria-label="Sign out">
     {{ user()?.email?.slice(0, 1)?.toUpperCase() }}
   </button>

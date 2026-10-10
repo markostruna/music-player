@@ -8,6 +8,7 @@ import { SignedInUser } from '@shared/services/auth-state';
   templateUrl: './side-menu.html',
 })
 export class SideMenu {
+  readonly isAdmin = input.required<boolean>();
   readonly isLibraryPage = input.required<boolean>();
   readonly activeSection = input.required<string>();
   readonly user = input.required<SignedInUser | null>();
