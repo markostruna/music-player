@@ -38,6 +38,7 @@ export class MusicShell {
   readonly activeSection = this.shellState.activeSection;
   readonly isAdmin = this.auth.isAdmin;
   readonly user = this.auth.user;
+  readonly menuVisible = signal(true);
   readonly themeOptions: ThemeName[] = ['Light', 'Dark', 'Blue'];
   readonly themeError = signal('');
   readonly searchQuery = this.library.searchQuery;
@@ -92,6 +93,10 @@ export class MusicShell {
   setSearchQuery(query: string): void {
     this.searchQuery.set(query);
     this.library.currentPage.set(1);
+  }
+
+  toggleMenu(): void {
+    this.menuVisible.update((visible) => !visible);
   }
 
   async changeTheme(event: Event): Promise<void> {

@@ -1,5 +1,18 @@
-<div class="workspace">
+<app-shell-header
+  [menuVisible]="menuVisible()"
+  [isLibraryPage]="isLibraryPage()"
+  [searchQuery]="searchQuery()"
+  [user]="user()"
+  [themeOptions]="themeOptions"
+  (menuToggle)="toggleMenu()"
+  (searchQueryChange)="setSearchQuery($event)"
+  (themeChange)="changeTheme($event)"
+  (signOutRequested)="signOut()"
+/>
+
+<div class="workspace" [class.menu-hidden]="!menuVisible()">
   <app-side-menu
+    id="side-menu"
     [isAdmin]="isAdmin()"
     [activeSection]="activeSection()"
     [isLibraryPage]="isLibraryPage()"
@@ -9,16 +22,6 @@
   />
 
   <main class="main-panel">
-    <app-shell-header
-      [isLibraryPage]="isLibraryPage()"
-      [searchQuery]="searchQuery()"
-      [user]="user()"
-      [themeOptions]="themeOptions"
-      (searchQueryChange)="setSearchQuery($event)"
-      (themeChange)="changeTheme($event)"
-      (signOutRequested)="signOut()"
-    />
-
     <header class="page-heading">
       <button class="page-back-button" type="button" aria-label="Go back" (click)="goBack()">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">

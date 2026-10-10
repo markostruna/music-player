@@ -1,4 +1,21 @@
 <header class="topbar">
+  <button
+    type="button"
+    class="menu-toggle"
+    [attr.aria-label]="menuVisible() ? 'Hide navigation menu' : 'Show navigation menu'"
+    [attr.aria-expanded]="menuVisible()"
+    aria-controls="side-menu"
+    (click)="menuToggle.emit()"
+  >
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 6h16M4 12h16M4 18h16"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+    </svg>
+  </button>
   <a class="wordmark" routerLink="/library" aria-label="Afterhours home">
     <span class="brand-mark" aria-hidden="true">a.</span>
     <span>afterhours</span>
