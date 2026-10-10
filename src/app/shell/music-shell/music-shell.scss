@@ -281,3 +281,35 @@ app-admin-page {
     padding: 0 16px;
   }
 }
+
+@media (max-width: 680px) and (orientation: portrait) {
+  app-music-shell:has(app-now-playing-page) app-side-menu {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  app-music-shell:has(app-now-playing-page) app-shell-header,
+  app-music-shell:has(app-now-playing-page) app-side-menu,
+  app-music-shell:has(app-now-playing-page) .page-heading {
+    display: none;
+  }
+
+  app-music-shell:has(app-now-playing-page) {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  app-music-shell:has(app-now-playing-page) .workspace {
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    padding-bottom: 0;
+  }
+
+  app-music-shell:has(app-now-playing-page) .main-panel,
+  app-music-shell:has(app-now-playing-page) app-now-playing-page {
+    height: 100%;
+    min-height: 0;
+  }
+}

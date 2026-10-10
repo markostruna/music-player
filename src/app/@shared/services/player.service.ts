@@ -16,6 +16,7 @@ export class PlayerService {
   readonly isPlaying = signal(false);
   readonly currentTime = signal(0);
   readonly duration = signal(0);
+  readonly volumePercent = signal(72);
   readonly errorMessage = signal('');
 
   constructor() {
@@ -69,7 +70,9 @@ export class PlayerService {
   }
 
   setVolume(percent: number): void {
-    this.audio.volume = Math.min(1, Math.max(0, percent / 100));
+    const volume = Math.min(1, Math.max(0, percent / 100));
+    this.audio.volume = volume;
+    this.volumePercent.set(volume * 100);
   }
 
   stop(): void {

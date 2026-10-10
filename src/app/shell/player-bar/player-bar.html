@@ -116,7 +116,7 @@
           type="range"
           min="0"
           max="100"
-          value="72"
+          [value]="player.volumePercent()"
           (input)="setVolume($event)"
           aria-label="Volume"
       /></label>

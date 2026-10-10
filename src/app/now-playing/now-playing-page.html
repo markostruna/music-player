@@ -1,5 +1,35 @@
 <div class="content-scroll now-playing-content">
   @if (track(); as track) {
+    @if (showQueue()) {
+      <aside class="queue-panel" aria-label="Play queue">
+        <div class="queue-heading">
+          <strong>Play queue</strong
+          ><button type="button" aria-label="Close play queue" (click)="showQueue.set(false)">
+            ✕
+          </button>
+        </div>
+        <ol>
+          @for (queued of player.queue(); track $index; let index = $index) {
+            <li>
+              <button
+                type="button"
+                [class.queue-current]="index === player.currentIndex()"
+                (click)="player.playFromQueue(index)"
+              >
+                <span class="queue-index">{{
+                  index === player.currentIndex() && player.isPlaying() ? '♫' : index + 1
+                }}</span>
+                <span class="queue-title"
+                  ><strong>{{ queued.title }}</strong
+                  ><small>{{ queued.artist }}</small></span
+                >
+                <span class="queue-duration">{{ formatTime(queued.durationSeconds) }}</span>
+              </button>
+            </li>
+          }
+        </ol>
+      </aside>
+    }
     <section class="now-playing-hero">
       <div class="now-playing-cover">
         <span class="now-playing-placeholder" aria-hidden="true">♫</span>
@@ -10,23 +40,88 @@
         />
       </div>
       <div class="now-playing-details">
-        <span class="now-playing-kind">{{ player.isPlaying() ? 'NOW PLAYING' : 'PAUSED' }}</span>
         <h1>{{ track.title }}</h1>
         <p class="now-playing-artist-name">
           <a [routerLink]="['/library/artist', track.artist]">{{ track.artist }}</a>
         </p>
-        <dl class="now-playing-metadata">
-          <div>
-            <dt>Album</dt>
-            <dd>
-              <a [routerLink]="['/library/album', track.id]">{{ track.album }}</a>
-            </dd>
+        <p class="now-playing-album">
+          <a [routerLink]="['/library/album', track.id]">{{ track.album }}</a>
+          <span aria-hidden="true"> • </span>{{ year() ?? 'Unknown' }}
+        </p>
+        <div class="now-playing-controls">
+          <div class="now-playing-transport">
+            <button
+              type="button"
+              aria-label="Previous track"
+              title="Previous track"
+              (click)="player.previous()"
+            >
+              |◀
+            </button>
+            <button
+              type="button"
+              class="now-playing-play-toggle"
+              (click)="player.toggle()"
+              [attr.aria-label]="player.isPlaying() ? 'Pause' : 'Play'"
+              [title]="player.isPlaying() ? 'Pause' : 'Play'"
+            >
+              <span>{{ player.isPlaying() ? 'Ⅱ' : '▶' }}</span>
+            </button>
+            <button
+              type="button"
+              aria-label="Stop playback"
+              title="Stop playback"
+              (click)="player.stop()"
+            >
+              ■
+            </button>
+            <button
+              type="button"
+              aria-label="Next track"
+              title="Next track"
+              [disabled]="!player.hasNext()"
+              (click)="player.next()"
+            >
+              ▶|
+            </button>
           </div>
-          <div>
-            <dt>Release year</dt>
-            <dd>{{ year() ?? 'Unknown' }}</dd>
+          <div class="now-playing-progress">
+            <span>{{ formatTime(player.currentTime()) }}</span>
+            <input
+              type="range"
+              min="0"
+              [max]="player.duration() || track.durationSeconds"
+              [value]="player.currentTime()"
+              (input)="seek($event)"
+              aria-label="Playback position"
+            />
+            <span>{{ formatTime(player.duration() || track.durationSeconds) }}</span>
           </div>
-        </dl>
+          <div class="now-playing-extra">
+            <button
+              type="button"
+              [class.active]="showQueue()"
+              [attr.aria-pressed]="showQueue()"
+              aria-label="Play queue"
+              title="Play queue"
+              (click)="showQueue.set(!showQueue())"
+            >
+              ☰
+            </button>
+            <label aria-label="Volume"
+              >◖<input
+                type="range"
+                min="0"
+                max="100"
+                [value]="player.volumePercent()"
+                (input)="setVolume($event)"
+                aria-label="Volume"
+            /></label>
+          </div>
+        </div>
+        @if (player.errorMessage()) {
+          <p class="now-playing-error" role="alert">{{ player.errorMessage() }}</p>
+        }
       </div>
     </section>
   } @else {
