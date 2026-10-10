@@ -142,9 +142,9 @@ public sealed class MusicLibraryService(
                     : new MusicTrack { SourceRootId = rootId, RelativePath = relativePath, Title = string.Empty };
                 track.FolderId = folder.Id;
                 track.Title = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(filePath) : tag.Title.Trim();
-                track.Artist = FirstTag(tag.Performers, "Unknown artist");
+                track.Artist = JoinArtistTags(tag.Performers, "Unknown artist");
                 track.Album = string.IsNullOrWhiteSpace(tag.Album) ? folder.Name : tag.Album.Trim();
-                track.AlbumArtist = FirstTag(tag.AlbumArtists, string.Empty);
+                track.AlbumArtist = JoinArtistTags(tag.AlbumArtists, string.Empty);
                 track.Genre = FirstTag(tag.Genres, string.Empty);
                 track.TrackNumber = tag.Track;
                 track.DiscNumber = tag.Disc;
@@ -1347,6 +1347,14 @@ public sealed class MusicLibraryService(
 
     private static string FirstTag(string[]? tags, string fallback) =>
         tags?.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? fallback;
+
+    private static string JoinArtistTags(string[]? tags, string fallback)
+    {
+        var values = tags?.Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .ToArray();
+        return values is { Length: > 0 } ? string.Join("/", values) : fallback;
+    }
 
     private static string GetContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {

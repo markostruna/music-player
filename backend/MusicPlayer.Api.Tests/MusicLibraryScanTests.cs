@@ -129,6 +129,34 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ScanPreservesSlashesInMultiValueArtistTags()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Back in Black");
+        Directory.CreateDirectory(albumDirectory);
+        var audioPath = Path.Combine(albumDirectory, "track.wav");
+        await CreateWaveFileAsync(audioPath);
+        using (var audio = TagLib.File.Create(audioPath))
+        {
+            audio.Tag.Performers = ["AC", "DC"];
+            audio.Tag.AlbumArtists = ["AC", "DC"];
+            audio.Tag.Album = "Back in Black";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Test Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        var track = Assert.Single(await library.GetTracksAsync(CancellationToken.None));
+        Assert.Equal("AC/DC", track.Artist);
+        Assert.Equal("AC/DC", track.AlbumArtist);
+    }
+
+    [Fact]
     public async Task ArtistAndAlbumDescriptionsAndImagesCanBeEditedAndPersisted()
     {
         var albumDirectory = Path.Combine(sourceDirectory, "Metadata Album");

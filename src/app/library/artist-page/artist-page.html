@@ -18,6 +18,20 @@
             [alt]="artist.name + ' photo'"
             (error)="$any($event.target).style.visibility = 'hidden'"
           />
+          @if (isAdmin()) {
+            <button class="album-cover-edit" type="button" (click)="openPictureDialog()">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="m14.5 6.5 3 3M4 20l4.5-.9L19 8.6a2.12 2.12 0 0 0-3-3L5.5 16.1 4 20Z"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span>Change picture</span>
+            </button>
+          }
         </div>
         <div class="album-details">
           <span class="album-kind">ARTIST</span>
@@ -38,10 +52,43 @@
         </div>
       </section>
 
+      @if (isAdmin()) {
+        <div class="album-actions">
+          <button
+            class="album-play-button secondary-action"
+            type="button"
+            [disabled]="isRefreshingInformation()"
+            (click)="refreshInformation(artist.name)"
+          >
+            {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
+          </button>
+        </div>
+      }
+
       <section class="metadata-description" aria-labelledby="artist-description-heading">
         <span class="eyebrow">ABOUT THE ARTIST</span>
-        <h2 id="artist-description-heading">Description</h2>
-        @if (isAdmin()) {
+        <div class="description-heading">
+          <h2 id="artist-description-heading">Description</h2>
+          @if (isAdmin() && !isEditingDescription(artist.name)) {
+            <button
+              class="description-edit"
+              type="button"
+              (click)="editDescription(artist.name, artist.description)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="m14.5 6.5 3 3M4 20l4.5-.9L19 8.6a2.12 2.12 0 0 0-3-3L5.5 16.1 4 20Z"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Edit
+            </button>
+          }
+        </div>
+        @if (isEditingDescription(artist.name)) {
           <textarea
             aria-label="Artist description"
             rows="5"
@@ -49,36 +96,84 @@
             (input)="setDescription($event, artist.name)"
           ></textarea>
           <div class="metadata-controls">
-            <button
-              class="album-play-button secondary-action"
-              type="button"
-              [disabled]="isRefreshingInformation()"
-              (click)="refreshInformation(artist.name)"
-            >
-              {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
-            </button>
             <button class="album-play-button" type="button" (click)="saveDescription(artist.name)">
               Save description
             </button>
-            <input
-              #pictureInput
-              class="visually-hidden"
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
-              (change)="updatePicture($event, artist.name)"
-            />
             <button
               class="album-play-button secondary-action"
               type="button"
-              (click)="pictureInput.click()"
+              (click)="cancelDescriptionEdit()"
             >
-              Change artist picture
+              Cancel edit
             </button>
           </div>
         } @else {
           <p>{{ artist.description || 'No artist description is available.' }}</p>
         }
       </section>
+
+      @if (isPictureDialogOpen()) {
+        <div
+          class="cover-dialog-backdrop"
+          (click)="closePictureDialog()"
+          (keydown.escape)="closePictureDialog()"
+        >
+          <section
+            class="cover-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="picture-dialog-heading"
+            (click)="$event.stopPropagation()"
+          >
+            <h2 id="picture-dialog-heading">Change artist picture</h2>
+            <p>Choose a new image to preview before saving it as the artist picture.</p>
+            @if (picturePreviewUrl()) {
+              <img
+                class="cover-preview"
+                [src]="picturePreviewUrl()"
+                alt="Preview of the new artist picture"
+              />
+            } @else {
+              <div class="cover-preview-placeholder" aria-hidden="true">♫</div>
+            }
+            <input
+              #pictureInput
+              class="visually-hidden"
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              (change)="selectPicture($event)"
+            />
+            <button
+              class="album-play-button secondary-action"
+              type="button"
+              (click)="pictureInput.click()"
+            >
+              Choose image
+            </button>
+            @if (pictureError()) {
+              <p class="cover-dialog-error" role="alert">{{ pictureError() }}</p>
+            }
+            <div class="cover-dialog-actions">
+              <button
+                class="album-play-button secondary-action"
+                type="button"
+                [disabled]="isSavingPicture()"
+                (click)="closePictureDialog()"
+              >
+                Cancel
+              </button>
+              <button
+                class="album-play-button"
+                type="button"
+                [disabled]="!picturePreviewUrl() || isSavingPicture()"
+                (click)="savePicture(artist.name)"
+              >
+                {{ isSavingPicture() ? 'Saving…' : 'OK' }}
+              </button>
+            </div>
+          </section>
+        </div>
+      }
 
       <section class="album-track-section" aria-labelledby="artist-albums-heading">
         <div class="album-track-heading">

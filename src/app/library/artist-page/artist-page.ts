@@ -21,6 +21,13 @@ export class ArtistPage implements OnInit {
   readonly isAdmin = this.auth.isAdmin;
   readonly metadataMessage = signal('');
   readonly isRefreshingInformation = signal(false);
+  readonly editingDescriptionArtist = signal<string | null>(null);
+  readonly isPictureDialogOpen = signal(false);
+  readonly picturePreviewUrl = signal('');
+  readonly pictureError = signal('');
+  readonly isSavingPicture = signal(false);
+  private readonly selectedPicture = signal<File | null>(null);
+  private readonly maxPictureSize = 10 * 1024 * 1024;
   private readonly refreshedInformation = signal<{
     artist: string;
     description: string;
@@ -107,9 +114,25 @@ export class ArtistPage implements OnInit {
     return this.descriptionDraftArtist === artist ? (this.descriptionDraft ?? '') : description;
   }
 
+  isEditingDescription(artist: string): boolean {
+    return this.editingDescriptionArtist() === artist;
+  }
+
+  editDescription(artist: string, description: string): void {
+    this.descriptionDraftArtist = artist;
+    this.descriptionDraft = description;
+    this.editingDescriptionArtist.set(artist);
+  }
+
   setDescription(event: Event, artist: string): void {
     this.descriptionDraftArtist = artist;
     this.descriptionDraft = (event.target as HTMLTextAreaElement).value;
+  }
+
+  cancelDescriptionEdit(): void {
+    this.descriptionDraft = null;
+    this.descriptionDraftArtist = null;
+    this.editingDescriptionArtist.set(null);
   }
 
   async saveDescription(artist: string): Promise<void> {
@@ -121,6 +144,7 @@ export class ArtistPage implements OnInit {
       await this.libraryApi.updateDescription(artist, null, description);
       this.descriptionDraft = null;
       this.descriptionDraftArtist = null;
+      this.editingDescriptionArtist.set(null);
       await this.store.refresh();
       this.metadataMessage.set('Artist description saved.');
     } catch {
@@ -128,21 +152,62 @@ export class ArtistPage implements OnInit {
     }
   }
 
-  async updatePicture(event: Event, artist: string): Promise<void> {
+  openPictureDialog(): void {
+    this.pictureError.set('');
+    this.isPictureDialogOpen.set(true);
+  }
+
+  closePictureDialog(): void {
+    if (this.isSavingPicture()) return;
+    this.clearPictureSelection();
+    this.pictureError.set('');
+    this.isPictureDialogOpen.set(false);
+  }
+
+  selectPicture(event: Event): void {
     const input = event.target as HTMLInputElement;
     const image = input.files?.[0];
+    input.value = '';
     if (!image) return;
+
+    this.clearPictureSelection();
+    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.type)) {
+      this.pictureError.set('Choose a PNG, JPEG, GIF, or WebP image.');
+      return;
+    }
+    if (image.size > this.maxPictureSize) {
+      this.pictureError.set('Choose an image under 10 MB.');
+      return;
+    }
+
+    this.selectedPicture.set(image);
+    this.picturePreviewUrl.set(URL.createObjectURL(image));
+    this.pictureError.set('');
+  }
+
+  async savePicture(artist: string): Promise<void> {
+    const image = this.selectedPicture();
+    if (!image || this.isSavingPicture()) return;
+    this.isSavingPicture.set(true);
+    this.pictureError.set('');
     try {
       await this.libraryApi.updateEntityImage(artist, null, image);
       await this.store.refresh();
       this.metadataMessage.set('Artist picture saved.');
+      this.clearPictureSelection();
+      this.isPictureDialogOpen.set(false);
     } catch {
-      this.metadataMessage.set(
-        'The artist picture could not be saved. Use a PNG, JPEG, GIF, or WebP image under 10 MB.',
-      );
+      this.pictureError.set('The artist picture could not be saved. Please try again.');
     } finally {
-      input.value = '';
+      this.isSavingPicture.set(false);
     }
+  }
+
+  private clearPictureSelection(): void {
+    const previewUrl = this.picturePreviewUrl();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    this.picturePreviewUrl.set('');
+    this.selectedPicture.set(null);
   }
 
   async refreshInformation(artist: string): Promise<void> {
@@ -158,6 +223,7 @@ export class ArtistPage implements OnInit {
       }
       this.descriptionDraft = null;
       this.descriptionDraftArtist = null;
+      this.editingDescriptionArtist.set(null);
       this.refreshedInformation.set({
         artist: artist.toLowerCase(),
         description: result.description,
