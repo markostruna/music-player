@@ -290,6 +290,62 @@ body.has-player {
       padding-bottom: 132px;
     }
   }
+
+  @media (max-width: 680px) and (orientation: portrait) {
+    .player-bar {
+      height: 112px;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      grid-template-rows: minmax(40px, 1fr) auto;
+      gap: 0 8px;
+      padding: 7px 14px 5px;
+    }
+    .player-bar .now-playing-info {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .player-bar .player-controls {
+      display: contents;
+    }
+    .player-bar .transport {
+      grid-column: 2;
+      grid-row: 1;
+      height: 36px;
+      gap: 12px;
+    }
+    .player-bar .transport .play-toggle {
+      width: 32px;
+      height: 32px;
+    }
+    .player-bar .progress-row {
+      display: flex;
+      width: 100%;
+      max-width: none;
+      grid-column: 1 / -1;
+      grid-row: 2;
+      gap: 8px;
+      font-size: 9px;
+    }
+    .player-bar .player-extra {
+      position: static;
+      grid-column: 3;
+      grid-row: 1;
+      justify-self: end;
+    }
+    .queue-panel {
+      bottom: 178px;
+    }
+    body.has-player {
+      app-music-shell .workspace {
+        padding-bottom: 170px;
+      }
+      .admin-content {
+        padding-bottom: 170px;
+      }
+    }
+    app-music-shell ~ app-player-bar .player-bar {
+      bottom: 58px;
+    }
+  }
   app-music-shell ~ app-player-bar {
     .player-bar {
       bottom: 58px;

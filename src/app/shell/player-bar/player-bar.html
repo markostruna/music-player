@@ -70,6 +70,14 @@
         </button>
         <button
           type="button"
+          aria-label="Stop playback"
+          title="Stop playback"
+          (click)="player.stop()"
+        >
+          ■
+        </button>
+        <button
+          type="button"
           aria-label="Next track"
           title="Next track"
           [disabled]="!player.hasNext()"
