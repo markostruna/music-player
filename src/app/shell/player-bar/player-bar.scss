@@ -1,6 +1,6 @@
 .player-bar {
   position: fixed;
-  z-index: 3;
+  z-index: 5;
   right: 0;
   bottom: 0;
   left: 0;
@@ -289,8 +289,13 @@ body.has-player {
     app-music-shell .workspace {
       padding-bottom: 132px;
     }
-    app-music-shell .sidebar {
-      bottom: 74px;
+  }
+  app-music-shell ~ app-player-bar {
+    .player-bar {
+      bottom: 58px;
+    }
+    .queue-panel {
+      bottom: 140px;
     }
   }
 }
