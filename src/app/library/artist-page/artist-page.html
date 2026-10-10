@@ -3,11 +3,6 @@
     <p class="album-message" role="status">{{ metadataMessage() }}</p>
   }
   <div class="album-page">
-    <header class="album-page-header">
-      <a routerLink="/library" aria-label="Back to library">← <span>Back to library</span></a>
-      <span class="eyebrow">YOUR COLLECTION</span>
-    </header>
-
     @if (isLoading()) {
       <p class="album-message">Loading artist�</p>
     } @else if (errorMessage()) {

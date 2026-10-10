@@ -1,4 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Location } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   ActivatedRoute,
@@ -20,6 +21,7 @@ import { SideMenu } from '../side-menu/side-menu';
   templateUrl: './music-shell.html',
 })
 export class MusicShell {
+  private readonly location = inject(Location);
   private readonly auth = inject(AuthState);
   private readonly library = inject(LibraryStore);
   private readonly player = inject(PlayerService);
@@ -75,6 +77,10 @@ export class MusicShell {
         return 'Now playing';
     }
   });
+
+  goBack(): void {
+    this.location.back();
+  }
 
   constructor() {
     effect(() => {

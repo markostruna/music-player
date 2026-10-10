@@ -2,24 +2,6 @@
   min-height: 0;
 }
 
-.album-page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 42px;
-}
-
-.album-page-header a {
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.album-page-header a:hover {
-  color: var(--accent);
-}
-
 .album-page .eyebrow {
   color: var(--muted);
   font-size: 9px;
@@ -424,9 +406,6 @@
 @media (max-width: 640px) {
   .album-page {
     padding: 24px 18px 40px;
-  }
-  .album-page-header {
-    margin-bottom: 28px;
   }
   .album-hero {
     grid-template-columns: 1fr;

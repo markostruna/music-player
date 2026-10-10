@@ -6,7 +6,6 @@ import { SignedInUser, ThemeName } from '@shared/services/auth-state';
   templateUrl: './shell-header.html',
 })
 export class ShellHeader {
-  readonly pageTitle = input.required<string>();
   readonly isLibraryPage = input.required<boolean>();
   readonly searchQuery = input.required<string>();
   readonly user = input.required<SignedInUser | null>();
