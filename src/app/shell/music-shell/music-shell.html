@@ -23,21 +23,23 @@
 
   <main class="main-panel">
     <header class="page-heading">
-      <button class="page-back-button" type="button" aria-label="Go back" (click)="goBack()">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="m15 18-6-6 6-6"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
-      <div class="breadcrumbs">
-        <span>YOUR SPACE</span>
-        <span class="breadcrumb-divider">/</span>
-        <strong>{{ pageTitle() }}</strong>
+      <div class="page-heading-inner">
+        <button class="page-back-button" type="button" aria-label="Go back" (click)="goBack()">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="m15 18-6-6 6-6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <div class="breadcrumbs">
+          <span>YOUR SPACE</span>
+          <span class="breadcrumb-divider">/</span>
+          <strong>{{ pageTitle() }}</strong>
+        </div>
       </div>
     </header>
 
