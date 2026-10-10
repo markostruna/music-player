@@ -1060,3 +1060,9 @@ kbd {
     height: 26px;
   }
 }
+
+@media (min-width: 520px) and (max-width: 680px) and (orientation: landscape) {
+  .collection-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
