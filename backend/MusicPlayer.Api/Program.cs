@@ -20,6 +20,9 @@ builder.WebHost.UseUrls(builder.Configuration["Api:Url"] ?? "http://127.0.0.1:50
 builder.Services.AddDbContext<MusicDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
+builder.Services.AddSingleton<LibraryOperationManager>();
+builder.Services.AddHostedService<LibraryOperationManager>(provider =>
+    provider.GetRequiredService<LibraryOperationManager>());
 builder.Services.AddHttpClient<IMusicBrainzClient, MusicBrainzClient>("MetadataProviders", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);

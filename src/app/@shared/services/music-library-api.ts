@@ -44,10 +44,20 @@ export interface SourceRoot {
   isEnabled: boolean;
 }
 
-export interface ScanSummary {
+export type LibraryOperationType = 'scan' | 'metadata-refresh';
+export type LibraryOperationState = 'queued' | 'running' | 'completed' | 'failed';
+
+export interface LibraryOperationStatus {
+  id: string;
   sourceRootId: number;
-  discoveredTracks: number;
-  unreadableTracks: number;
+  rootName: string;
+  operationType: LibraryOperationType;
+  state: LibraryOperationState;
+  message: string;
+  completedUnits: number;
+  totalUnits: number;
+  startedAt: string;
+  finishedAt: string | null;
 }
 
 export interface MetadataRefreshResult {
@@ -131,13 +141,39 @@ export class MusicLibraryApi {
     );
   }
 
-  async scanRoot(id: number): Promise<ScanSummary> {
+  async scanRoot(id: number): Promise<LibraryOperationStatus> {
     return firstValueFrom(
-      this.http.post<ScanSummary>(
+      this.http.post<LibraryOperationStatus>(
         `${MUSIC_API_BASE}/admin/roots/${id}/scan`,
         {},
         await this.writeOptions(),
       ),
+    );
+  }
+
+  async refreshRootMetadata(id: number): Promise<LibraryOperationStatus> {
+    return firstValueFrom(
+      this.http.post<LibraryOperationStatus>(
+        `${MUSIC_API_BASE}/admin/roots/${id}/metadata-refresh`,
+        {},
+        await this.writeOptions(),
+      ),
+    );
+  }
+
+  getLibraryOperation(id: string): Promise<LibraryOperationStatus> {
+    return firstValueFrom(
+      this.http.get<LibraryOperationStatus>(`${MUSIC_API_BASE}/admin/operations/${id}`, {
+        withCredentials: true,
+      }),
+    );
+  }
+
+  getActiveLibraryOperation(): Promise<LibraryOperationStatus | null> {
+    return firstValueFrom(
+      this.http.get<LibraryOperationStatus | null>(`${MUSIC_API_BASE}/admin/operations/active`, {
+        withCredentials: true,
+      }),
     );
   }
 

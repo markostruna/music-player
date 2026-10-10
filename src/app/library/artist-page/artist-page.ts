@@ -5,6 +5,7 @@ import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore } from '@shared/services/library-store';
 import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
+import { ToastService } from '@shared/services/toast-service';
 
 @Component({
   selector: 'app-artist-page',
@@ -16,10 +17,10 @@ export class ArtistPage implements OnInit {
   private readonly store = inject(LibraryStore);
   private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
+  private readonly toast = inject(ToastService);
   private readonly params = toSignal(inject(ActivatedRoute).paramMap);
 
   readonly isAdmin = this.auth.isAdmin;
-  readonly metadataMessage = signal('');
   readonly isRefreshingInformation = signal(false);
   readonly editingDescriptionArtist = signal<string | null>(null);
   readonly isPictureDialogOpen = signal(false);
@@ -146,9 +147,9 @@ export class ArtistPage implements OnInit {
       this.descriptionDraftArtist = null;
       this.editingDescriptionArtist.set(null);
       await this.store.refresh();
-      this.metadataMessage.set('Artist description saved.');
+      this.toast.show('Artist description saved.', 'success');
     } catch {
-      this.metadataMessage.set('The artist description could not be saved.');
+      this.toast.show('The artist description could not be saved.', 'error');
     }
   }
 
@@ -193,7 +194,7 @@ export class ArtistPage implements OnInit {
     try {
       await this.libraryApi.updateEntityImage(artist, null, image);
       await this.store.refresh();
-      this.metadataMessage.set('Artist picture saved.');
+      this.toast.show('Artist picture saved.', 'success');
       this.clearPictureSelection();
       this.isPictureDialogOpen.set(false);
     } catch {
@@ -212,12 +213,12 @@ export class ArtistPage implements OnInit {
 
   async refreshInformation(artist: string): Promise<void> {
     this.isRefreshingInformation.set(true);
-    this.metadataMessage.set('');
     try {
       const result = await this.libraryApi.refreshInformation(artist, null);
       if (!result.found) {
-        this.metadataMessage.set(
+        this.toast.show(
           'No matching artist record was found. Existing information was left unchanged.',
+          'error',
         );
         return;
       }
@@ -232,12 +233,14 @@ export class ArtistPage implements OnInit {
         musicBrainzId: result.musicBrainzId,
         updatedAt: result.updatedAt,
       });
-      this.metadataMessage.set(
+      this.toast.show(
         `Artist information refreshed from MusicBrainz (${result.musicBrainzId}). ${this.pictureRefreshStatus(result)} Updated ${new Date(result.updatedAt).toLocaleString()}.`,
+        'success',
       );
     } catch {
-      this.metadataMessage.set(
+      this.toast.show(
         'Artist information could not be refreshed. Please try again later.',
+        'error',
       );
     } finally {
       this.isRefreshingInformation.set(false);

@@ -49,8 +49,25 @@
             <strong>{{ root.name }}</strong
             ><small>{{ root.path }} · {{ root.trackCount }} tracks</small>
           </div>
-          <button type="button" (click)="scanRoot(root)">Scan</button>
-          <button type="button" class="danger-action" (click)="removeRoot(root)">Remove</button>
+          <button type="button" [disabled]="operations.isRunning()" (click)="scanRoot(root)">
+            Scan
+          </button>
+          <button
+            type="button"
+            [disabled]="operations.isRunning() || root.trackCount === 0"
+            [title]="root.trackCount === 0 ? 'Scan this folder before refreshing metadata' : ''"
+            (click)="refreshRootMetadata(root)"
+          >
+            Refresh metadata
+          </button>
+          <button
+            type="button"
+            class="danger-action"
+            [disabled]="operations.isRunning()"
+            (click)="removeRoot(root)"
+          >
+            Remove
+          </button>
         </div>
       } @empty {
         @if (!isLoading()) {

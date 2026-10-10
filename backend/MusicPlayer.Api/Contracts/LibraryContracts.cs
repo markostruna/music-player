@@ -89,6 +89,27 @@ public sealed record AlbumResponse(
 /// <summary>Summary of a completed source scan.</summary>
 public sealed record ScanResponse(int SourceRootId, int DiscoveredTracks, int UnreadableTracks);
 
+/// <summary>Summary of metadata refreshed for one configured source root.</summary>
+public sealed record RootMetadataRefreshResponse(
+    int SourceRootId,
+    int ArtistsProcessed,
+    int AlbumsProcessed,
+    int ArtistImagesUpdated,
+    int AlbumImagesUpdated);
+
+/// <summary>Current status of a background source-root operation.</summary>
+public sealed record LibraryOperationStatus(
+    Guid Id,
+    int SourceRootId,
+    string RootName,
+    string OperationType,
+    string State,
+    string Message,
+    int CompletedUnits,
+    int TotalUnits,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? FinishedAt);
+
 /// <summary>A media file resolved from a catalog record.</summary>
 public sealed record ResolvedMedia(string FullPath, string ContentType);
 

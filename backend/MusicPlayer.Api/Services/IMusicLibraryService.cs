@@ -9,6 +9,10 @@ public interface IMusicLibraryService
     Task<bool> RemoveRootAsync(int rootId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MusicFolderResponse>> GetFoldersAsync(CancellationToken cancellationToken);
     Task<ScanResponse> ScanAsync(int rootId, CancellationToken cancellationToken);
+    Task<RootMetadataRefreshResponse> RefreshRootMetadataAsync(
+        int rootId,
+        Action<int, int, string> reportProgress,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken);
     Task<ResolvedMedia?> ResolveStreamAsync(int trackId, CancellationToken cancellationToken);

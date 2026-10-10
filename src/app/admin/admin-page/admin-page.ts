@@ -1,7 +1,8 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, effect, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LibraryStore, ManagedUser, MusicLibraryApi, SourceRoot } from '@shared/services';
 import { UserRole } from '@shared/services/auth-state';
+import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 
 @Component({
   selector: 'app-admin-page',
@@ -11,6 +12,8 @@ import { UserRole } from '@shared/services/auth-state';
 export class AdminPage implements OnInit {
   private readonly api = inject(MusicLibraryApi);
   private readonly store = inject(LibraryStore);
+  readonly operations = inject(LibraryOperationTracker);
+  private readonly handledOperations = new Set<string>();
 
   readonly roots = signal<SourceRoot[]>([]);
   readonly users = signal<ManagedUser[]>([]);
@@ -25,6 +28,16 @@ export class AdminPage implements OnInit {
   temporaryPassword = '';
   newRole: UserRole = 'Guest';
   resetPasswords: Record<number, string> = {};
+
+  constructor() {
+    effect(() => {
+      const operation = this.operations.operation();
+      if (operation?.state === 'completed' && !this.handledOperations.has(operation.id)) {
+        this.handledOperations.add(operation.id);
+        void this.reload();
+      }
+    });
+  }
 
   ngOnInit(): void {
     void this.reload();
@@ -59,16 +72,22 @@ export class AdminPage implements OnInit {
   }
 
   async scanRoot(root: SourceRoot): Promise<void> {
-    this.statusMessage.set(`Scanning ${root.name}…`);
+    this.errorMessage.set('');
+    this.statusMessage.set('');
     try {
-      const result = await this.api.scanRoot(root.id);
-      this.store.invalidate();
-      this.statusMessage.set(
-        `Scanned ${result.discoveredTracks} tracks; ${result.unreadableTracks} files could not be read.`,
-      );
-      await this.reload();
+      await this.operations.startScan(root.id);
     } catch {
       this.errorMessage.set(`The scan of ${root.name} could not be completed.`);
+    }
+  }
+
+  async refreshRootMetadata(root: SourceRoot): Promise<void> {
+    this.errorMessage.set('');
+    this.statusMessage.set('');
+    try {
+      await this.operations.startMetadataRefresh(root.id);
+    } catch {
+      this.errorMessage.set(`Metadata for ${root.name} could not be refreshed.`);
     }
   }
 

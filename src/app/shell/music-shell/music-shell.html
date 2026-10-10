@@ -10,6 +10,42 @@
   (signOutRequested)="signOut()"
 />
 
+<app-toast-message />
+
+@if (libraryOperations.operation(); as operation) {
+  <div
+    class="library-operation-indicator"
+    [class.library-operation-failed]="operation.state === 'failed'"
+    [class.library-operation-complete]="operation.state === 'completed'"
+    [attr.role]="operation.state === 'failed' ? 'alert' : 'status'"
+    [attr.aria-live]="operation.state === 'failed' ? 'assertive' : 'polite'"
+  >
+    @if (operation.state === 'queued' || operation.state === 'running') {
+      <span class="library-operation-spinner" aria-hidden="true"></span>
+    } @else if (operation.state === 'completed') {
+      <span class="library-operation-check" aria-hidden="true">✓</span>
+    }
+    <div class="library-operation-copy">
+      <strong>
+        {{ operation.operationType === 'scan' ? 'Scanning' : 'Refreshing metadata' }}
+        {{ operation.rootName }}
+      </strong>
+      <span>{{
+        libraryOperations.pollingError()
+          ? 'Status temporarily unavailable; the operation may still be running.'
+          : operation.message
+      }}</span>
+      @if (operation.totalUnits > 0 && operation.state === 'running') {
+        <progress
+          [max]="operation.totalUnits"
+          [value]="operation.completedUnits"
+          aria-label="Metadata refresh progress"
+        ></progress>
+      }
+    </div>
+  </div>
+}
+
 <div class="workspace" [class.menu-hidden]="!menuVisible()">
   <app-side-menu
     id="side-menu"

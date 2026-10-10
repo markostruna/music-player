@@ -256,6 +256,44 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RefreshRootMetadataProcessesDistinctArtistsAndAlbums()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Batch Album");
+        Directory.CreateDirectory(albumDirectory);
+        foreach (var fileName in new[] { "one.wav", "two.wav" })
+        {
+            var audioPath = Path.Combine(albumDirectory, fileName);
+            await CreateWaveFileAsync(audioPath);
+            using var audio = TagLib.File.Create(audioPath);
+            audio.Tag.Performers = ["Batch Performer"];
+            audio.Tag.Album = "Batch Album";
+            audio.Tag.AlbumArtists = ["Batch Album Artist"];
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Batch Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        var progress = new List<(int Completed, int Total)>();
+
+        var result = await library.RefreshRootMetadataAsync(
+            root.Id,
+            (completed, total, _) => progress.Add((completed, total)),
+            CancellationToken.None);
+
+        Assert.Equal(2, result.ArtistsProcessed);
+        Assert.Equal(1, result.AlbumsProcessed);
+        Assert.Equal(0, result.ArtistImagesUpdated);
+        Assert.Equal(0, result.AlbumImagesUpdated);
+        Assert.Equal(2, musicBrainz.ArtistLookups);
+        Assert.Equal(1, musicBrainz.AlbumLookups);
+        Assert.Equal((3, 3), progress[^1]);
+    }
+
+    [Fact]
     public async Task MusicBrainzImagesAreSavedBesideAlbumAndArtistMusic()
     {
         const string artistName = "Refresh Artist";

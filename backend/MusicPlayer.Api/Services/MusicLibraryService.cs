@@ -172,6 +172,86 @@ public sealed class MusicLibraryService(
         return new ScanResponse(rootId, discovered, unreadable);
     }
 
+    public async Task<RootMetadataRefreshResponse> RefreshRootMetadataAsync(
+        int rootId,
+        Action<int, int, string> reportProgress,
+        CancellationToken cancellationToken)
+    {
+        var rootExists = await database.SourceRoots.AnyAsync(
+            root => root.Id == rootId && root.IsEnabled,
+            cancellationToken);
+        if (!rootExists)
+        {
+            throw new KeyNotFoundException("The source root was not found.");
+        }
+
+        var tracks = await database.Tracks.AsNoTracking()
+            .Where(track => track.SourceRootId == rootId && track.IsAvailable)
+            .Select(track => new { track.Artist, track.AlbumArtist, track.Album })
+            .ToListAsync(cancellationToken);
+
+        var artists = tracks
+            .SelectMany(track => new[] { track.Artist.Trim(), track.AlbumArtist.Trim() })
+            .Where(artist => !string.IsNullOrWhiteSpace(artist))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(artist => artist, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var albums = new List<(string Artist, string Album)>();
+        var albumKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var track in tracks)
+        {
+            var album = track.Album.Trim();
+            var artist = string.IsNullOrWhiteSpace(track.AlbumArtist)
+                ? track.Artist.Trim()
+                : track.AlbumArtist.Trim();
+            if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(album)
+                || !albumKeys.Add($"{artist}\0{album}"))
+            {
+                continue;
+            }
+
+            albums.Add((artist, album));
+        }
+
+        var total = artists.Length + albums.Count;
+        var completed = 0;
+        var artistImagesUpdated = 0;
+        var albumImagesUpdated = 0;
+        foreach (var artist in artists)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await RefreshArtistMetadataAsync(artist, cancellationToken);
+            if (result.ImageUpdated)
+            {
+                artistImagesUpdated++;
+            }
+
+            completed++;
+            reportProgress(completed, total, $"Processed artist {artist}");
+        }
+
+        foreach (var album in albums)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await RefreshAlbumMetadataAsync(album.Artist, album.Album, cancellationToken);
+            if (result.ImageUpdated)
+            {
+                albumImagesUpdated++;
+            }
+
+            completed++;
+            reportProgress(completed, total, $"Processed album {album.Album}");
+        }
+
+        return new RootMetadataRefreshResponse(
+            rootId,
+            artists.Length,
+            albums.Count,
+            artistImagesUpdated,
+            albumImagesUpdated);
+    }
+
     public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken)
     {
         var tracks = await database.Tracks.AsNoTracking()

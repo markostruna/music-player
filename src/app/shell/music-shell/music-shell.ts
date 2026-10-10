@@ -9,10 +9,12 @@ import { PlayerService } from '@shared/services/player.service';
 import { ShellHeader } from '../header/shell-header';
 import { MusicShellState } from './music-shell-state';
 import { SideMenu } from '../side-menu/side-menu';
+import { ToastMessageComponent } from '@shared/components/toast-message/toast-message';
+import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 
 @Component({
   selector: 'app-music-shell',
-  imports: [RouterOutlet, SideMenu, ShellHeader],
+  imports: [RouterOutlet, SideMenu, ShellHeader, ToastMessageComponent],
   templateUrl: './music-shell.html',
 })
 export class MusicShell {
@@ -20,6 +22,7 @@ export class MusicShell {
   private readonly auth = inject(AuthState);
   private readonly library = inject(LibraryStore);
   private readonly player = inject(PlayerService);
+  readonly libraryOperations = inject(LibraryOperationTracker);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly shellState = inject(MusicShellState);

@@ -233,3 +233,46 @@ button {
 a {
   color: inherit;
 }
+
+.toast-message {
+  position: fixed;
+  z-index: 1000;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(440px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid #24804b;
+  border-radius: 10px;
+  background: #e8f7ee;
+  color: #155b32;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 18%);
+  font-size: 14px;
+}
+
+.toast-message-error {
+  border-color: #bd3434;
+  background: #fff0f0;
+  color: #8c2020;
+}
+
+.toast-message button {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+@media (max-width: 640px) {
+  .toast-message {
+    top: 12px;
+    right: 16px;
+  }
+}

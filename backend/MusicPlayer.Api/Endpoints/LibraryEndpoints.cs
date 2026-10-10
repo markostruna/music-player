@@ -105,27 +105,84 @@ public static class LibraryEndpoints
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("RemoveSourceRoot")
         .WithSummary("Removes a source root and its catalog entries without deleting music files.");
-        roots.MapPost("/{rootId:int}/scan", async Task<Results<Ok<ScanResponse>, NotFound, Conflict<string>>> (
+        roots.MapPost("/{rootId:int}/scan", async Task<Results<Accepted<LibraryOperationStatus>, NotFound, Conflict<string>>> (
             int rootId,
             IMusicLibraryService music,
+            LibraryOperationManager operations,
             CancellationToken cancellationToken) =>
         {
-            try
-            {
-                return TypedResults.Ok(await music.ScanAsync(rootId, cancellationToken));
-            }
-            catch (KeyNotFoundException)
+            var root = (await music.GetRootsAsync(cancellationToken))
+                .SingleOrDefault(item => item.Id == rootId && item.IsEnabled);
+            if (root is null)
             {
                 return TypedResults.NotFound();
             }
-            catch (InvalidOperationException exception)
+
+            if (!operations.TryStart(rootId, root.Name, LibraryOperationManager.ScanOperation, out var operation))
             {
-                return TypedResults.Conflict(exception.Message);
+                return TypedResults.Conflict("Another library operation is already running.");
             }
+
+            return TypedResults.Accepted($"/api/admin/operations/{operation.Id}", operation);
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("ScanSourceRoot")
-        .WithSummary("Scans a configured source for WAV, MP3, and FLAC files.");
+        .WithSummary("Starts a background scan of a configured source folder.");
+        roots.MapPost("/{rootId:int}/metadata-refresh", async Task<Results<Accepted<LibraryOperationStatus>, NotFound, Conflict<string>>> (
+            int rootId,
+            IMusicLibraryService music,
+            LibraryOperationManager operations,
+            CancellationToken cancellationToken) =>
+        {
+            var root = (await music.GetRootsAsync(cancellationToken))
+                .SingleOrDefault(item => item.Id == rootId && item.IsEnabled);
+            if (root is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            if (!operations.TryStart(
+                rootId,
+                root.Name,
+                LibraryOperationManager.MetadataRefreshOperation,
+                out var operation))
+            {
+                return TypedResults.Conflict("Another library operation is already running.");
+            }
+
+            return TypedResults.Accepted($"/api/admin/operations/{operation.Id}", operation);
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("RefreshSourceRootMetadata")
+        .WithSummary("Starts refreshing metadata and images for artists and albums in a source folder.");
+
+        var adminOperations = app.MapGroup("/api/admin/operations")
+            .WithTags("Library operations")
+            .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
+        adminOperations.MapGet("/active", Results<Ok<LibraryOperationStatus>, NoContent> (
+            LibraryOperationManager operations) =>
+        {
+            var operation = operations.GetActive();
+            return operation is null
+                ? TypedResults.NoContent()
+                : TypedResults.Ok(operation);
+        })
+        .WithName("GetActiveLibraryOperation")
+        .WithSummary("Gets the active background library operation, if one exists.");
+        adminOperations.MapGet("/{operationId:guid}", Results<Ok<LibraryOperationStatus>, NotFound> (
+            Guid operationId,
+            LibraryOperationManager operations) =>
+        {
+            var operation = operations.Get(operationId);
+            if (operation is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            return TypedResults.Ok(operation);
+        })
+        .WithName("GetLibraryOperation")
+        .WithSummary("Gets the current status of a background library operation.");
 
         var adminTracks = app.MapGroup("/api/admin/tracks")
             .WithTags("Track management")

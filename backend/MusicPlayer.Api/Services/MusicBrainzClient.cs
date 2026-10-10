@@ -44,16 +44,18 @@ public sealed class MusicBrainzClient(
         string musicBrainzId,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(fanartApiKey))
+        // A personal key is accepted by Fanart.tv as the api_key when no project key is configured.
+        var apiKey = string.IsNullOrWhiteSpace(fanartApiKey) ? fanartClientKey : fanartApiKey;
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
-            logger.LogWarning("Fanart.tv developer API key is not configured; using the linked artist image fallback.");
+            logger.LogWarning("Fanart.tv API key is not configured; using the linked artist image fallback.");
             return null;
         }
 
         try
         {
-            var uri = $"https://webservice.fanart.tv/v3/music/{Uri.EscapeDataString(musicBrainzId)}?api_key={Uri.EscapeDataString(fanartApiKey)}";
-            if (!string.IsNullOrWhiteSpace(fanartClientKey))
+            var uri = $"https://webservice.fanart.tv/v3/music/{Uri.EscapeDataString(musicBrainzId)}?api_key={Uri.EscapeDataString(apiKey)}";
+            if (!string.IsNullOrWhiteSpace(fanartClientKey) && !string.IsNullOrWhiteSpace(fanartApiKey))
             {
                 uri += $"&client_key={Uri.EscapeDataString(fanartClientKey)}";
             }
