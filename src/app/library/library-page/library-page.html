@@ -6,7 +6,7 @@
       <p>Your music, wherever you are.</p>
     </div>
     <button class="text-action" (click)="activeSection.set('Your library')">
-      Your library <span aria-hidden="true">↗</span>
+      Your library <span aria-hidden="true">â†—</span>
     </button>
   </section>
 
@@ -21,7 +21,7 @@
       <h2>Find your<br />own frequency.</h2>
       <p>Pick a track from your collection and settle in.</p>
       <button class="feature-play" (click)="playFirstTrack()">
-        <span aria-hidden="true">▶</span> Play first track
+        <span aria-hidden="true">â–¶</span> Play first track
       </button>
     </div>
     <div class="feature-index"><span>01</span><span class="index-line"></span><span>03</span></div>
@@ -77,7 +77,7 @@
           aria-label="Refresh library"
           title="Refresh library"
         >
-          Refresh <span aria-hidden="true">↻</span>
+          Refresh <span aria-hidden="true">â†»</span>
         </button>
       </div>
     </div>
@@ -141,7 +141,7 @@
           [value]="destinationFolderId ?? ''"
           (change)="setDestinationFolder($event)"
         >
-          <option value="">Move to folder…</option>
+          <option value="">Move to folderâ€¦</option>
           @for (folder of folders; track folder.id) {
             <option [value]="folder.id">
               {{ folder.name }}{{ folder.relativePath ? ' / ' + folder.relativePath : '' }}
@@ -162,7 +162,7 @@
       }
     }
     @if (isLoading()) {
-      <p class="empty-state">Loading your music…</p>
+      <p class="empty-state">Loading your musicâ€¦</p>
     } @else if (errorMessage()) {
       <p class="empty-state" role="alert">{{ errorMessage() }}</p>
     } @else if (collectionView() === 'tracks') {
@@ -188,7 +188,7 @@
             </label>
             <span class="track-number">{{
               currentTrack()?.id === track.id && isPlaying()
-                ? '♫'
+                ? 'â™«'
                 : (pageNumber() - 1) * pageSize + index + 1
             }}</span>
             <button class="track-title-cell track-select" (click)="chooseTrack(track)">
@@ -203,7 +203,7 @@
             </button>
             <span class="track-album">{{ track.album }}</span
             ><span class="track-duration">{{ formatTime(track.durationSeconds) }}</span>
-            <button class="row-play" aria-label="Play track" (click)="chooseTrack(track)">▶</button>
+            <button class="row-play" aria-label="Play track" (click)="chooseTrack(track)">â–¶</button>
           </div>
         } @empty {
           <p class="empty-state">
@@ -226,13 +226,26 @@
               [title]="'View album: ' + album.title"
             >
               <span class="tile-art"
-                ><span class="tile-placeholder" aria-hidden="true">♫</span
+                ><span class="tile-placeholder" aria-hidden="true">â™«</span
                 ><img
                   [src]="album.coverUrl"
                   [alt]="album.title + ' artwork'"
                   (error)="$any($event.target).style.visibility = 'hidden'"
-                /><span class="tile-play" aria-hidden="true">▶</span></span
-              >
+                /><button
+                  class="tile-play tile-menu-button"
+                  type="button"
+                  aria-haspopup="menu"
+                  [attr.aria-expanded]="albumMenu()?.album?.key === album.key"
+                  [attr.aria-label]="'Actions for ' + album.title"
+                  [class.menu-open]="albumMenu()?.album?.key === album.key"
+                  (click)="openAlbumMenu(album, $event)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="5" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="19" cy="12" r="2" />
+                  </svg></button
+              ></span>
               <span class="tile-title">{{ album.title }}</span>
               <span class="tile-detail">{{ album.artist }}</span>
               <span class="tile-meta"
@@ -242,6 +255,28 @@
             </a>
           }
         </div>
+        @if (albumMenu(); as menu) {
+          <div
+            class="album-menu-backdrop"
+            (click)="closeAlbumMenu()"
+            (keydown.escape)="closeAlbumMenu()"
+          ></div>
+          <div
+            class="album-menu"
+            role="menu"
+            [style.left.px]="menu.left"
+            [style.top.px]="menu.top"
+            (keydown.escape)="closeAlbumMenu()"
+          >
+            <button type="button" role="menuitem" (click)="playAlbumFromMenu()">Play</button>
+            <button type="button" role="menuitem" (click)="enqueueAlbumFromMenu()">Enqueue</button>
+            @if (isAdmin()) {
+              <button type="button" role="menuitem" (click)="identifyAlbumFromMenu()">
+                Identify
+              </button>
+            }
+          </div>
+        }
       } @else {
         <p class="empty-state">
           {{ searchQuery() ? 'No albums match that search.' : 'No albums in your library yet.' }}
@@ -258,12 +293,12 @@
               [title]="'View artist: ' + artist.name"
             >
               <span class="tile-art artist-art"
-                ><span class="tile-placeholder" aria-hidden="true">♫</span
+                ><span class="tile-placeholder" aria-hidden="true">â™«</span
                 ><img
                   [src]="artist.artistImageUrl || artist.coverUrl"
                   [alt]="artist.name + ' photo'"
                   (error)="$any($event.target).style.visibility = 'hidden'"
-                /><span class="tile-play" aria-hidden="true">▶</span></span
+                /><span class="tile-play" aria-hidden="true">â–¶</span></span
               >
               <span class="tile-title">{{ artist.name }}</span>
               <span class="tile-detail"
@@ -271,7 +306,7 @@
               >
               <span class="tile-meta"
                 >{{ artist.tracks.length }} {{ artist.tracks.length === 1 ? 'track' : 'tracks'
-                }}{{ artist.artistImageMissing ? ' · Photo missing' : '' }}</span
+                }}{{ artist.artistImageMissing ? ' Â· Photo missing' : '' }}</span
               >
             </a>
           }
@@ -284,7 +319,7 @@
     }
     @if (!isLoading() && !errorMessage() && totalItems() > 0) {
       <nav class="library-pagination" aria-label="Library pagination">
-        <span>Showing {{ pageStart() }}–{{ pageEnd() }} of {{ totalItems() }}</span>
+        <span>Showing {{ pageStart() }}â€“{{ pageEnd() }} of {{ totalItems() }}</span>
         <div class="pagination-controls">
           <button
             type="button"
@@ -293,7 +328,7 @@
             [disabled]="pageNumber() === 1"
             (click)="previousPage()"
           >
-            ‹
+            â€¹
           </button>
           <span>Page {{ pageNumber() }} of {{ totalPages() }}</span>
           <button
@@ -303,7 +338,7 @@
             [disabled]="pageNumber() === totalPages()"
             (click)="nextPage()"
           >
-            ›
+            â€º
           </button>
         </div>
       </nav>
@@ -313,3 +348,6 @@
     <span>YOUR MUSIC, YOUR MOMENT.</span><span>MADE FOR THE IN-BETWEEN</span>
   </footer>
 </div>
+@if (identifyRequest(); as request) {
+  <app-identify-album-dialog [album]="request" (closed)="closeIdentify($event)" />
+}

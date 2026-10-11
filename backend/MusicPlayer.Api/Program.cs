@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Endpoints;
 using MusicPlayer.Api.Services;
+using MusicPlayer.Api.Services.Identification;
 
 var builder = WebApplication.CreateBuilder(args);
 var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterhours");
@@ -27,6 +28,15 @@ builder.Services.AddHttpClient<IMusicBrainzClient, MusicBrainzClient>("MetadataP
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
+builder.Services.AddHttpClient<MusicBrainzAlbumProvider>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient<DiscogsAlbumProvider>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient<SpotifyAlbumProvider>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<MusicBrainzAlbumProvider>());
+builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<DiscogsAlbumProvider>());
+builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<SpotifyAlbumProvider>());
+builder.Services.AddSingleton<SafeImageFetcher>();
+builder.Services.AddHttpClient<IAlbumIdentificationService, AlbumIdentificationService>(client =>
+    client.Timeout = TimeSpan.FromSeconds(15));
 builder.Logging.AddFilter("System.Net.Http.HttpClient.MetadataProviders", LogLevel.Warning);
 builder.Services.AddScoped<CsrfEndpointFilter>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Identity.IPasswordHasher<MusicUser>, Microsoft.AspNetCore.Identity.PasswordHasher<MusicUser>>();
@@ -148,6 +158,7 @@ app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" }))
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapLibraryEndpoints();
+app.MapIdentifyEndpoints();
 
 app.Run();
 

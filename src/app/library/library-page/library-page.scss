@@ -670,9 +670,52 @@ kbd {
 }
 
 .collection-tile:hover .tile-play,
-.collection-tile:focus-visible .tile-play {
+.collection-tile:focus-visible .tile-play,
+.tile-play:focus-visible,
+.tile-play.menu-open {
   opacity: 1;
   transform: translateY(0);
+}
+.tile-menu-button {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+.tile-menu-button svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.album-menu-backdrop {
+  position: fixed;
+  z-index: 29;
+  inset: 0;
+}
+.album-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  min-width: 150px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 24%);
+}
+.album-menu button {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.album-menu button:hover,
+.album-menu button:focus-visible {
+  background: var(--surface-hover);
 }
 .collection-tile:focus-visible {
   outline: 2px solid #6f8b32;

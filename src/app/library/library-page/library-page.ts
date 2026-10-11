@@ -14,6 +14,8 @@ import { formatTime } from '@shared/utils/format-time';
 import { LibraryStore, LibraryView } from '@shared/services/library-store';
 import { MetadataPatch, MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
+import { ToastService } from '@shared/services/toast-service';
+import { IdentifyAlbumDialog, IdentifyAlbumRequest } from '../identify-album-dialog/identify-album-dialog';
 import { MusicShellState } from '../../shell/music-shell/music-shell-state';
 
 interface AlbumTile {
@@ -36,7 +38,7 @@ interface ArtistTile {
 
 @Component({
   selector: 'app-library-page',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, IdentifyAlbumDialog],
   templateUrl: './library-page.html',
 })
 export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
@@ -45,6 +47,10 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
   private readonly shellState = inject(MusicShellState);
+  private readonly toast = inject(ToastService);
+
+  readonly identifyRequest = signal<IdentifyAlbumRequest | null>(null);
+  readonly albumMenu = signal<{ album: AlbumTile; left: number; top: number } | null>(null);
 
   readonly activeSection = this.shellState.activeSection;
   readonly searchQuery = this.store.searchQuery;
@@ -200,6 +206,59 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     this.player.play(tracks, 0);
   }
 
+  openAlbumMenu(album: AlbumTile, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.albumMenu()?.album.key === album.key) {
+      this.albumMenu.set(null);
+      return;
+    }
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const menuWidth = 160;
+    const menuHeight = 130;
+    this.albumMenu.set({
+      album,
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8)),
+      top:
+        rect.bottom + menuHeight > window.innerHeight
+          ? Math.max(8, rect.top - menuHeight)
+          : rect.bottom + 4,
+    });
+  }
+
+  closeAlbumMenu(): void {
+    this.albumMenu.set(null);
+  }
+
+  playAlbumFromMenu(): void {
+    const menu = this.albumMenu();
+    this.closeAlbumMenu();
+    if (menu) this.player.play(menu.album.tracks, 0);
+  }
+
+  enqueueAlbumFromMenu(): void {
+    const menu = this.albumMenu();
+    this.closeAlbumMenu();
+    if (!menu) return;
+    this.player.enqueue(menu.album.tracks);
+    this.toast.show(`Added ${menu.album.title} to the queue.`, 'success');
+  }
+
+  identifyAlbumFromMenu(): void {
+    const menu = this.albumMenu();
+    this.closeAlbumMenu();
+    if (!menu) return;
+    this.identifyRequest.set({
+      title: menu.album.title,
+      artist: menu.album.artist,
+      tracks: menu.album.tracks,
+    });
+  }
+
+  async closeIdentify(changed: boolean): Promise<void> {
+    this.identifyRequest.set(null);
+    if (changed) await this.store.refresh();
+  }
   chooseTrack(track: MusicTrack): void {
     const queue = this.filteredTracks();
     this.player.play(

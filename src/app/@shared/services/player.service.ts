@@ -38,6 +38,15 @@ export class PlayerService {
     this.startIndex(index);
   }
 
+  enqueue(tracks: MusicTrack[]): void {
+    if (!tracks.length) return;
+    if (!this.queue().length) {
+      this.play(tracks, 0);
+      return;
+    }
+    this.queue.update((queue) => [...queue, ...tracks]);
+  }
+
   playFromQueue(index: number): void {
     if (index >= 0 && index < this.queue().length) this.startIndex(index);
   }

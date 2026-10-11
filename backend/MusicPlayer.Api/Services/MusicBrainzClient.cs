@@ -7,8 +7,6 @@ public sealed class MusicBrainzClient(
     ILogger<MusicBrainzClient> logger,
     IConfiguration configuration) : IMusicBrainzClient
 {
-    private static readonly SemaphoreSlim MusicBrainzThrottle = new(1, 1);
-    private static DateTimeOffset nextMusicBrainzRequest;
     private const int MaximumImageSize = 10 * 1024 * 1024;
     private readonly string? fanartApiKey = configuration["FanartTv:ApiKey"];
     private readonly string? fanartClientKey = configuration["FanartTv:ClientKey"];
@@ -207,21 +205,7 @@ public sealed class MusicBrainzClient(
     {
         try
         {
-            await MusicBrainzThrottle.WaitAsync(cancellationToken);
-            try
-            {
-                var delay = nextMusicBrainzRequest - DateTimeOffset.UtcNow;
-                if (delay > TimeSpan.Zero)
-                {
-                    await Task.Delay(delay, cancellationToken);
-                }
-
-                nextMusicBrainzRequest = DateTimeOffset.UtcNow.AddSeconds(1);
-            }
-            finally
-            {
-                MusicBrainzThrottle.Release();
-            }
+            await MusicBrainzRateLimiter.WaitAsync(cancellationToken);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, $"https://musicbrainz.org/ws/2/{path}");
             request.Headers.UserAgent.ParseAdd("AfterhoursMusicPlayer/1.0 (https://github.com/markostruna/music-player)");

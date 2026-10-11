@@ -1,0 +1,268 @@
+<div class="identify-backdrop" (click)="close()"></div>
+<div
+  class="identify-dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="identify-title"
+  (keydown.escape)="close()"
+>
+  <header class="identify-header">
+    <div>
+      <h2 id="identify-title">Identify album</h2>
+      <p>{{ album().title }} · {{ album().artist }}</p>
+    </div>
+    <button type="button" class="icon-button" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  <ol class="stepper" aria-label="Progress">
+    @for (item of steps; track item.id; let i = $index) {
+      <li [class.active]="step() === item.id" [class.complete]="stepIndex() > i || step() === 'done'">
+        <span>{{ i + 1 }}</span> {{ item.label }}
+      </li>
+    }
+  </ol>
+
+  @if (error()) {
+    <p class="identify-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="identify-body">
+    @switch (step()) {
+      @case ('match') {
+        <label class="field">
+          <span>Provider</span>
+          <select [ngModel]="providerId()" (ngModelChange)="changeProvider($event)" [disabled]="busy()">
+            @for (provider of providers(); track provider.id) {
+              <option [value]="provider.id" [disabled]="!provider.isConfigured">
+                {{ provider.name }}{{ provider.isConfigured ? '' : ' (not configured)' }}
+              </option>
+            }
+          </select>
+        </label>
+
+        @if (!providerReady()) {
+          <p class="hint">
+            This provider needs credentials in the server configuration (Discogs:Token, or
+            Spotify:ClientId and Spotify:ClientSecret).
+          </p>
+        } @else if (matchMode() === 'custom') {
+          <form class="search-form" (ngSubmit)="search()">
+            <label class="field"
+              ><span>Artist</span
+              ><input name="artist" [(ngModel)]="customArtist" maxlength="512"
+            /></label>
+            <label class="field"
+              ><span>Album title</span
+              ><input name="album" [(ngModel)]="customAlbum" maxlength="512"
+            /></label>
+            <label class="field"
+              ><span>Release year</span
+              ><input name="year" type="number" min="1000" max="3000" [(ngModel)]="customYear"
+            /></label>
+            <div class="actions">
+              <button type="button" class="secondary" (click)="backToSuggestions()">
+                Back to suggestions
+              </button>
+              <button type="submit" [disabled]="busy()">Search</button>
+            </div>
+          </form>
+        } @else {
+          <h3>{{ matchMode() === 'results' ? 'Search results' : 'Suggested matches' }}</h3>
+          @if (!matches().length && !busy()) {
+            <p class="hint">No matches found.</p>
+          }
+          <ul class="match-list">
+            @for (match of matches(); track match.provider + match.id) {
+              <li>
+                <label [class.selected]="selectedMatch()?.id === match.id">
+                  <input
+                    type="radio"
+                    name="match"
+                    [checked]="selectedMatch()?.id === match.id"
+                    (change)="selectedMatch.set(match)"
+                  />
+                  @if (match.coverUrl) {
+                    <img [src]="match.coverUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                  } @else {
+                    <span class="no-cover"></span>
+                  }
+                  <span class="match-text">
+                    <strong>{{ match.title }}</strong>
+                    <small>
+                      {{ match.artist }}{{ match.year ? ' · ' + match.year : ''
+                      }}{{ match.trackCount ? ' · ' + match.trackCount + ' tracks' : ''
+                      }}{{ match.detail ? ' · ' + match.detail : '' }}
+                    </small>
+                  </span>
+                </label>
+              </li>
+            }
+          </ul>
+          <div class="actions">
+            @if (matchMode() === 'results') {
+              <button type="button" class="secondary" (click)="startCustom()">Return to search</button>
+            } @else {
+              <button type="button" class="secondary" (click)="startCustom()">Custom search…</button>
+            }
+            <button type="button" [disabled]="!selectedMatch() || busy()" (click)="acceptMatch()">
+              Select match
+            </button>
+          </div>
+        }
+      }
+
+      @case ('review') {
+        <div class="review-grid">
+          <label class="field"
+            ><span>Album title</span><input [(ngModel)]="albumTitle" maxlength="1024"
+          /></label>
+          <label class="field"
+            ><span>Album artist</span><input [(ngModel)]="albumArtist" maxlength="1024"
+          /></label>
+          <label class="field"
+            ><span>Year</span><input type="number" min="0" max="3000" [(ngModel)]="year"
+          /></label>
+          <label class="field"
+            ><span>Genre</span><input [(ngModel)]="genre" maxlength="256"
+          /></label>
+        </div>
+        @if (detail?.match?.coverUrl; as cover) {
+          <img class="review-cover" [src]="cover" alt="Album cover" referrerpolicy="no-referrer" />
+        }
+        <div class="table-wrap">
+          <table class="track-table">
+            <thead>
+              <tr>
+                <th>Disc</th>
+                <th>#</th>
+                <th>Title</th>
+                <th>Artist</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.id; let i = $index) {
+                <tr>
+                  <td>
+                    <input type="number" min="0" [ngModel]="row.discNumber" (ngModelChange)="updateRow(i, 'discNumber', $event)" />
+                  </td>
+                  <td>
+                    <input type="number" min="0" [ngModel]="row.trackNumber" (ngModelChange)="updateRow(i, 'trackNumber', $event)" />
+                  </td>
+                  <td>
+                    <input [ngModel]="row.title" (ngModelChange)="updateRow(i, 'title', $event)" maxlength="1024" [attr.aria-label]="'Title of ' + row.fileName" />
+                  </td>
+                  <td>
+                    <input [ngModel]="row.artist" (ngModelChange)="updateRow(i, 'artist', $event)" maxlength="1024" />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">Accepting writes these tags to the audio files.</p>
+        <div class="actions">
+          <button type="button" class="secondary" [disabled]="busy()" (click)="step.set('match')">
+            Back
+          </button>
+          <button type="button" [disabled]="busy()" (click)="acceptTags()">Accept tags</button>
+        </div>
+      }
+
+      @case ('cover') {
+        @for (warning of coverWarnings(); track warning) {
+          <p class="hint">{{ warning }}</p>
+        }
+        <div class="cover-grid">
+          @for (cover of covers(); track cover.id) {
+            <button
+              type="button"
+              class="cover-option"
+              [class.selected]="selectedCover()?.id === cover.id"
+              (click)="chooseCover(cover)"
+            >
+              <img [src]="cover.previewUrl" [alt]="cover.label" loading="lazy" />
+              <span>{{ cover.source }}</span>
+              <small>{{ cover.label }}</small>
+            </button>
+          }
+        </div>
+        <div class="custom-cover">
+          <label class="field">
+            <span>Upload image</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" (change)="chooseUpload($event)" />
+          </label>
+          <div class="field">
+            <span>Image address</span>
+            <div class="inline">
+              <input [(ngModel)]="customUrl" placeholder="https://…" />
+              <button type="button" class="secondary" (click)="previewUrl()">Preview</button>
+            </div>
+          </div>
+        </div>
+        @if (selectedCover(); as selected) {
+          <figure class="cover-preview">
+            <img [src]="selected.previewUrl" alt="Selected cover preview" />
+            <figcaption>Preview</figcaption>
+          </figure>
+        }
+        <div class="actions">
+          <button type="button" class="secondary" [disabled]="busy()" (click)="skipCover()">
+            Skip
+          </button>
+          <button type="button" [disabled]="!selectedCover() || busy()" (click)="acceptCover()">
+            Use this cover
+          </button>
+        </div>
+      }
+
+      @case ('move') {
+        <p>
+          Optionally move the album folder, with all tracks, pictures and subfolders, to
+          <code>&lt;artist&gt;/&lt;year&gt; - &lt;album&gt;</code>.
+        </p>
+        <label class="field">
+          <span>Destination library</span>
+          <select [ngModel]="destinationRootId" (ngModelChange)="changeDestination($event)" [disabled]="busy()">
+            @for (root of roots(); track root.id) {
+              <option [ngValue]="root.id">{{ root.name }} — {{ root.path }}</option>
+            }
+          </select>
+        </label>
+        @if (movePlan(); as plan) {
+          <dl class="move-plan">
+            @if (plan.sourcePath) {
+              <dt>From</dt>
+              <dd>{{ plan.sourcePath }}</dd>
+            }
+            <dt>To</dt>
+            <dd>{{ plan.destinationPath }}</dd>
+          </dl>
+          @if (!plan.canMove) {
+            <p class="identify-error">{{ plan.reason }}</p>
+          }
+        }
+        <div class="actions">
+          <button type="button" class="secondary" [disabled]="busy()" (click)="finishWithoutMove()">
+            Skip
+          </button>
+          <button type="button" [disabled]="!movePlan()?.canMove || busy()" (click)="moveAlbum()">
+            Move album
+          </button>
+        </div>
+      }
+
+      @case ('done') {
+        <p class="done">The album has been identified.</p>
+        @if (moveResult()) {
+          <p>{{ moveResult() }}</p>
+        }
+        <div class="actions">
+          <button type="button" (click)="close()">Close</button>
+        </div>
+      }
+    }
+    @if (busy()) {
+      <p class="hint" aria-live="polite">Working…</p>
+    }
+  </div>
+</div>
