@@ -47,8 +47,6 @@ export class MusicShell {
   readonly headerVisible = signal(true);
   readonly searchQuery = this.library.searchQuery;
   private lastScrollY = 0;
-  private playerScrollY = 0;
-  private playerVisible = true;
   private readonly headerScrollThreshold = 100;
   readonly isLibraryPage = computed(() => {
     this.navigationEnd();
@@ -123,37 +121,12 @@ export class MusicShell {
     } else if (scrollDelta > 0) {
       this.lastScrollY = currentScrollY;
     }
-    this.updatePlayerVisibility(currentScrollY);
-  }
-
-  // Mirror of the header: hides on scroll up, shows on scroll down.
-  private updatePlayerVisibility(currentScrollY: number): void {
-    const scrollDelta = currentScrollY - this.playerScrollY;
-    if (this.playerVisible) {
-      if (scrollDelta <= -this.headerScrollThreshold) {
-        this.setPlayerVisible(false);
-        this.playerScrollY = currentScrollY;
-      } else if (scrollDelta > 0) {
-        this.playerScrollY = currentScrollY;
-      }
-    } else if (scrollDelta >= this.headerScrollThreshold) {
-      this.setPlayerVisible(true);
-      this.playerScrollY = currentScrollY;
-    } else if (scrollDelta < 0) {
-      this.playerScrollY = currentScrollY;
-    }
-  }
-
-  private setPlayerVisible(visible: boolean): void {
-    this.playerVisible = visible;
-    document.body.classList.toggle('player-hidden', !visible);
   }
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.lastScrollY = window.scrollY;
-      this.playerScrollY = window.scrollY;
-      inject(DestroyRef).onDestroy(() => this.setPlayerVisible(true));
+      inject(DestroyRef).onDestroy(() => document.body.classList.remove('player-hidden'));
     }
 
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -179,7 +152,10 @@ export class MusicShell {
       this.navigationEnd();
       this.activeSection.set('Your library');
       this.headerVisible.set(true);
-      this.setPlayerVisible(true);
+    });
+
+    effect(() => {
+      document.body.classList.toggle('player-hidden', !this.headerVisible());
     });
   }
 
