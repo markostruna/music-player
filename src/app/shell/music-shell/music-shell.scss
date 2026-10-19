@@ -289,6 +289,57 @@ app-playlists-page {
   }
 }
 
+/* Short landscape phones: the bottom nav is replaced by a toggleable left drawer. */
+@media (max-width: 680px) and (max-height: 500px) and (orientation: landscape) {
+  app-music-shell .menu-toggle {
+    display: grid;
+  }
+
+  app-music-shell app-side-menu {
+    position: fixed;
+    width: 220px;
+    max-width: 86vw;
+    height: calc(100dvh - var(--shell-header-height));
+    transform: translateX(0);
+  }
+
+  app-music-shell .workspace.menu-hidden app-side-menu {
+    transform: translateX(-100%);
+  }
+
+  app-side-menu .sidebar {
+    position: static;
+    height: 100%;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 12px;
+    border-top: 0;
+    border-right: 1px solid var(--line);
+  }
+
+  app-side-menu .nav-group {
+    display: grid;
+    flex: 0 0 auto;
+    justify-content: stretch;
+    gap: 4px;
+    margin: 0;
+  }
+
+  app-side-menu .nav-item {
+    min-height: 40px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+
+  app-side-menu .nav-item svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 @media (max-width: 680px) and (orientation: portrait) {
   app-music-shell:has(app-now-playing-page) app-side-menu {
     display: none;
