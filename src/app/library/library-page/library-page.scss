@@ -255,6 +255,7 @@
 .account-menu-container {
   position: relative;
   flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .account-trigger {
@@ -271,7 +272,8 @@
 }
 
 .account-trigger:focus-visible,
-.account-menu button:focus-visible {
+.account-menu button:focus-visible,
+.account-menu a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -299,8 +301,11 @@
   box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
 }
 
-.account-menu button {
+.account-menu button,
+.account-menu a {
+  display: flex;
   min-height: 36px;
+  align-items: center;
   padding: 0 10px;
   border: 0;
   border-radius: 5px;
@@ -309,6 +314,7 @@
   cursor: pointer;
   font-size: 12px;
   text-align: left;
+  text-decoration: none;
 }
 
 .account-menu button:disabled {
@@ -317,6 +323,10 @@
 }
 
 .account-menu .account-menu-logout:hover {
+  background: var(--surface-hover);
+}
+
+.account-menu a:hover {
   background: var(--surface-hover);
 }
 
@@ -563,8 +573,10 @@ kbd {
 .feature-play:hover {
   background: #e1ff7c;
 }
-.feature-play span {
-  font-size: 9px;
+.feature-play svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
 }
 
 .feature-index {
@@ -720,6 +732,12 @@ kbd {
     transform 140ms;
 }
 
+.tile-play svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .collection-tile:hover .tile-play,
 .collection-tile:focus-visible .tile-play,
 .tile-play:focus-visible,
@@ -826,8 +844,17 @@ kbd {
   background: #fbfcf8;
   color: #314422;
   cursor: pointer;
-  font-size: 19px;
   line-height: 1;
+}
+
+.pagination-controls button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .pagination-controls button:disabled {
@@ -933,9 +960,21 @@ kbd {
   text-align: right;
 }
 .row-play {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #809a3d;
-  font-size: 10px;
+  cursor: pointer;
   opacity: 0;
+}
+.row-play svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 .track-row:hover .row-play {
   opacity: 1;

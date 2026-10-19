@@ -1,0 +1,153 @@
+.settings-page,
+.playlists-page {
+  width: 100%;
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 34px 4.1% 56px;
+  color: var(--ink);
+}
+
+.settings-intro,
+.playlists-intro {
+  margin-bottom: 28px;
+}
+
+.settings-intro h1,
+.playlists-intro h1 {
+  margin: 8px 0 5px;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(26px, 3vw, 36px);
+  font-weight: 700;
+}
+
+.settings-intro p,
+.playlists-intro p,
+.settings-card p,
+.playlist-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-card {
+  display: flex;
+  min-height: 102px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 14px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.settings-card h2,
+.playlist-card h2 {
+  margin: 0 0 6px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-theme-picker {
+  display: grid;
+  min-width: 150px;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.settings-theme-picker select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.settings-action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.settings-action:hover {
+  filter: brightness(0.96);
+}
+
+.settings-error {
+  color: #b24a38;
+  font-size: 12px;
+}
+
+.playlist-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 245px), 1fr));
+  gap: 18px;
+}
+
+.playlist-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.playlist-art {
+  display: grid;
+  aspect-ratio: 1.7;
+  place-items: center;
+  color: rgb(25 34 30 / 70%);
+}
+
+.playlist-art span {
+  font-family: 'Manrope', sans-serif;
+  font-size: 54px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.playlist-swatch-lime {
+  background: linear-gradient(135deg, #e7f4c2, #c5df75);
+}
+
+.playlist-swatch-peach {
+  background: linear-gradient(135deg, #f2d1c2, #dfa18b);
+}
+
+.playlist-swatch-blue {
+  background: linear-gradient(135deg, #d4e6dc, #9ebfb3);
+}
+
+.playlist-card-copy {
+  padding: 16px;
+}
+
+@media (max-width: 680px) {
+  .settings-page,
+  .playlists-page {
+    padding: 26px 16px 40px;
+  }
+
+  .settings-card {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .settings-theme-picker {
+    width: 100%;
+  }
+}

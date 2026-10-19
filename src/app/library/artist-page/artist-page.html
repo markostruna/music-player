@@ -1,7 +1,7 @@
 <div class="content-scroll album-content">
   <div class="album-page">
     @if (isLoading()) {
-      <p class="album-message">Loading artist�</p>
+      <p class="album-message">Loading artist…</p>
     } @else if (errorMessage()) {
       <p class="album-message" role="alert">
         {{ errorMessage() }} <a routerLink="/library">Return to your library</a>

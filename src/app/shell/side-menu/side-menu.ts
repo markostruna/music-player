@@ -7,7 +7,6 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   templateUrl: './side-menu.html',
 })
 export class SideMenu {
-  readonly isAdmin = input.required<boolean>();
   readonly isLibraryPage = input.required<boolean>();
   readonly activeSection = input.required<string>();
   readonly activeSectionChange = output<string>();

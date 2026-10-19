@@ -1,0 +1,23 @@
+<section class="playlists-page">
+  <header class="playlists-intro">
+    <span class="eyebrow">YOUR COLLECTION</span>
+    <h1>Playlists</h1>
+    <p>Your playlists, all in one place.</p>
+  </header>
+
+  <div class="playlist-cards">
+    @for (playlist of playlists; track playlist.name) {
+      <article class="playlist-card">
+        <div class="playlist-art" [class]="playlist.swatch" aria-hidden="true">
+          <span>{{ playlist.name.slice(0, 1) }}</span>
+        </div>
+        <div class="playlist-card-copy">
+          <h2>{{ playlist.name }}</h2>
+          <p>{{ playlist.description }}</p>
+        </div>
+      </article>
+    } @empty {
+      <p class="empty-state">No playlists yet.</p>
+    }
+  </div>
+</section>

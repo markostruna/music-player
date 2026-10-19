@@ -37,14 +37,6 @@
         <kbd>⌘ K</kbd>
       </label>
     }
-    <label class="theme-picker">
-      <span>Theme</span>
-      <select [value]="user()?.theme ?? 'Light'" (change)="themeChange.emit($event)">
-        @for (theme of themeOptions(); track theme) {
-          <option [value]="theme">{{ theme }}</option>
-        }
-      </select>
-    </label>
     <div class="account-menu-container" (click)="$event.stopPropagation()">
       <button
         type="button"
@@ -63,7 +55,12 @@
       @if (accountMenuOpen()) {
         <div id="account-menu" class="account-menu" role="menu" aria-label="Account menu">
           <button type="button" role="menuitem" disabled aria-disabled="true">Profile</button>
-          <button type="button" role="menuitem" disabled aria-disabled="true">Settings</button>
+          <a
+            routerLink="/settings"
+            role="menuitem"
+            (click)="closeAccountMenu()"
+            >Settings</a
+          >
           <button
             type="button"
             role="menuitem"

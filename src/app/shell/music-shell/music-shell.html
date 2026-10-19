@@ -3,10 +3,8 @@
   [isLibraryPage]="isLibraryPage()"
   [searchQuery]="searchQuery()"
   [user]="user()"
-  [themeOptions]="themeOptions"
   (menuToggle)="toggleMenu()"
   (searchQueryChange)="setSearchQuery($event)"
-  (themeChange)="changeTheme($event)"
   (signOutRequested)="signOut()"
 />
 
@@ -49,7 +47,6 @@
 <div class="workspace" [class.menu-hidden]="!menuVisible()">
   <app-side-menu
     id="side-menu"
-    [isAdmin]="isAdmin()"
     [activeSection]="activeSection()"
     [isLibraryPage]="isLibraryPage()"
     (activeSectionChange)="activeSection.set($event)"
@@ -77,9 +74,6 @@
       </div>
     </header>
 
-    @if (themeError()) {
-      <p class="music-shell-error" role="alert">{{ themeError() }}</p>
-    }
     <router-outlet />
   </main>
 </div>

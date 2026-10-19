@@ -138,6 +138,13 @@ app-admin-page {
   color: var(--ink);
 }
 
+app-settings-page,
+app-playlists-page {
+  display: block;
+  min-width: 0;
+  flex: 1 0 auto;
+}
+
 .main-panel {
   display: flex;
   min-width: 0;

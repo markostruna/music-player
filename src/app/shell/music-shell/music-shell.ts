@@ -3,7 +3,7 @@ import { Location } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
-import { AuthState, ThemeName } from '@shared/services/auth-state';
+import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore } from '@shared/services/library-store';
 import { PlayerService } from '@shared/services/player.service';
 import { ShellHeader } from '../header/shell-header';
@@ -34,11 +34,8 @@ export class MusicShell {
   );
 
   readonly activeSection = this.shellState.activeSection;
-  readonly isAdmin = this.auth.isAdmin;
   readonly user = this.auth.user;
   readonly menuVisible = signal(true);
-  readonly themeOptions: ThemeName[] = ['Light', 'Dark', 'Blue'];
-  readonly themeError = signal('');
   readonly searchQuery = this.library.searchQuery;
   readonly isLibraryPage = computed(() => {
     this.navigationEnd();
@@ -52,6 +49,10 @@ export class MusicShell {
         return this.activeSection();
       case 'admin':
         return 'Manage library';
+      case 'playlists':
+        return 'Playlists';
+      case 'settings':
+        return 'Settings';
       case 'library/album/:trackId': {
         const trackId = Number(childRoute.snapshot.paramMap.get('trackId'));
         return this.library.tracks().find((track) => track.id === trackId)?.album ?? 'Album';
@@ -116,15 +117,6 @@ export class MusicShell {
 
   toggleMenu(): void {
     this.menuVisible.update((visible) => !visible);
-  }
-
-  async changeTheme(event: Event): Promise<void> {
-    try {
-      await this.auth.setTheme((event.target as HTMLSelectElement).value as ThemeName);
-      this.themeError.set('');
-    } catch {
-      this.themeError.set('The theme preference could not be saved.');
-    }
   }
 
   async signOut(): Promise<void> {
