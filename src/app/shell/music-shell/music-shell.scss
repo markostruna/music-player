@@ -46,6 +46,19 @@ app-shell-header {
   position: sticky;
   top: 0;
   z-index: 10;
+  transform: translateY(0);
+  transition: transform 220ms ease;
+  will-change: transform;
+}
+
+app-shell-header.header-hidden {
+  transform: translateY(-100%);
+}
+
+app-shell-header.header-hidden ~ .workspace app-side-menu {
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
 }
 
 .menu-toggle {
@@ -244,8 +257,13 @@ app-playlists-page {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  app-side-menu {
+  app-side-menu,
+  app-shell-header {
     transition: none;
+  }
+
+  app-shell-header {
+    will-change: auto;
   }
 }
 

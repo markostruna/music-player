@@ -1,4 +1,12 @@
-import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  HostListener,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { Location } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
@@ -36,7 +44,12 @@ export class MusicShell {
   readonly activeSection = this.shellState.activeSection;
   readonly user = this.auth.user;
   readonly menuVisible = signal(true);
+  readonly headerVisible = signal(true);
   readonly searchQuery = this.library.searchQuery;
+  private lastScrollY = 0;
+  private playerScrollY = 0;
+  private playerVisible = true;
+  private readonly headerScrollThreshold = 100;
   readonly isLibraryPage = computed(() => {
     this.navigationEnd();
     return this.route.firstChild?.snapshot.routeConfig?.path === 'library';
@@ -84,7 +97,65 @@ export class MusicShell {
     this.location.back();
   }
 
+  @HostListener('window:scroll')
+  updateHeaderVisibility(): void {
+    const currentScrollY = window.scrollY;
+
+    if (currentScrollY <= 10) {
+      this.headerVisible.set(true);
+      this.lastScrollY = currentScrollY;
+      return;
+    }
+
+    // lastScrollY is the extreme point reached so far in the current state:
+    // the lowest position while visible, the highest while hidden.
+    const scrollDelta = currentScrollY - this.lastScrollY;
+    if (this.headerVisible()) {
+      if (scrollDelta >= this.headerScrollThreshold) {
+        this.headerVisible.set(false);
+        this.lastScrollY = currentScrollY;
+      } else if (scrollDelta < 0) {
+        this.lastScrollY = currentScrollY;
+      }
+    } else if (scrollDelta <= -this.headerScrollThreshold) {
+      this.headerVisible.set(true);
+      this.lastScrollY = currentScrollY;
+    } else if (scrollDelta > 0) {
+      this.lastScrollY = currentScrollY;
+    }
+    this.updatePlayerVisibility(currentScrollY);
+  }
+
+  // Mirror of the header: hides on scroll up, shows on scroll down.
+  private updatePlayerVisibility(currentScrollY: number): void {
+    const scrollDelta = currentScrollY - this.playerScrollY;
+    if (this.playerVisible) {
+      if (scrollDelta <= -this.headerScrollThreshold) {
+        this.setPlayerVisible(false);
+        this.playerScrollY = currentScrollY;
+      } else if (scrollDelta > 0) {
+        this.playerScrollY = currentScrollY;
+      }
+    } else if (scrollDelta >= this.headerScrollThreshold) {
+      this.setPlayerVisible(true);
+      this.playerScrollY = currentScrollY;
+    } else if (scrollDelta < 0) {
+      this.playerScrollY = currentScrollY;
+    }
+  }
+
+  private setPlayerVisible(visible: boolean): void {
+    this.playerVisible = visible;
+    document.body.classList.toggle('player-hidden', !visible);
+  }
+
   constructor() {
+    if (typeof window !== 'undefined') {
+      this.lastScrollY = window.scrollY;
+      this.playerScrollY = window.scrollY;
+      inject(DestroyRef).onDestroy(() => this.setPlayerVisible(true));
+    }
+
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mobile = window.matchMedia('(max-width: 680px)');
       const landscape = window.matchMedia('(orientation: landscape)');
@@ -107,6 +178,8 @@ export class MusicShell {
     effect(() => {
       this.navigationEnd();
       this.activeSection.set('Your library');
+      this.headerVisible.set(true);
+      this.setPlayerVisible(true);
     });
   }
 

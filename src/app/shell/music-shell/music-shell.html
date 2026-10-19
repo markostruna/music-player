@@ -1,4 +1,5 @@
 <app-shell-header
+  [class.header-hidden]="!headerVisible()"
   [menuVisible]="menuVisible()"
   [isLibraryPage]="isLibraryPage()"
   [searchQuery]="searchQuery()"

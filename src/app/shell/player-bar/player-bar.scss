@@ -12,6 +12,7 @@
   padding: 0 25px;
   border-top: 1px solid #e2e6de;
   background: #fbfcf8;
+  transition: transform 220ms ease;
 
   a {
     color: inherit;
@@ -241,6 +242,16 @@ body.has-player {
   }
   .admin-content {
     padding-bottom: 110px;
+  }
+}
+
+body.player-hidden .player-bar {
+  transform: translateY(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-bar {
+    transition: none;
   }
 }
 
