@@ -86,14 +86,21 @@ export class MusicShell {
   constructor() {
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mobile = window.matchMedia('(max-width: 680px)');
-      const showMenuOnMobile = () => {
-        if (mobile.matches) {
+      const landscape = window.matchMedia('(orientation: landscape)');
+      const updateMenuVisibility = () => {
+        if (landscape.matches) {
+          this.menuVisible.set(false);
+        } else if (mobile.matches) {
           this.menuVisible.set(true);
         }
       };
-      showMenuOnMobile();
-      mobile.addEventListener('change', showMenuOnMobile);
-      inject(DestroyRef).onDestroy(() => mobile.removeEventListener('change', showMenuOnMobile));
+      updateMenuVisibility();
+      mobile.addEventListener('change', updateMenuVisibility);
+      landscape.addEventListener('change', updateMenuVisibility);
+      inject(DestroyRef).onDestroy(() => {
+        mobile.removeEventListener('change', updateMenuVisibility);
+        landscape.removeEventListener('change', updateMenuVisibility);
+      });
     }
 
     effect(() => {
