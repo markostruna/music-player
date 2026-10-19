@@ -177,39 +177,21 @@
 }
 
 .upgrade-note strong,
-.upgrade-note small,
-.profile-name strong,
-.profile-name small {
+.upgrade-note small {
   display: block;
 }
 
-.upgrade-note strong,
-.profile-name strong {
+.upgrade-note strong {
   font-size: 10px;
 }
 
-.upgrade-note small,
-.profile-name small {
+.upgrade-note small {
   margin-top: 3px;
   color: #858d85;
   font-size: 9px;
 }
 
-.profile-row {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 3px 18px;
-  border: 0;
-  border-top: 1px solid var(--line);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-}
-
-.avatar,
-.mobile-profile {
+.account-avatar {
   display: grid;
   width: 32px;
   height: 32px;
@@ -220,12 +202,6 @@
   color: #41572d;
   font-size: 10px;
   font-weight: 700;
-}
-
-.profile-more {
-  margin-left: auto;
-  color: #767e76;
-  font-size: 19px;
 }
 
 .main-panel {
@@ -274,6 +250,84 @@
   border-radius: 5px;
   background: var(--surface-raised);
   color: var(--ink);
+}
+
+.account-menu-container {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.account-trigger:focus-visible,
+.account-menu button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.account-username {
+  max-width: 220px;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 9px);
+  right: 0;
+  display: grid;
+  width: 176px;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+}
+
+.account-menu button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.account-menu button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.account-menu .account-menu-logout:hover {
+  background: var(--surface-hover);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
 }
 
 .breadcrumbs {
@@ -375,12 +429,6 @@ kbd {
   border-radius: 50%;
   background: #f18b72;
 }
-.mobile-profile {
-  display: none;
-  border: 0;
-  cursor: pointer;
-}
-
 .content-scroll {
   flex: 0 0 auto;
   width: 100%;
@@ -967,9 +1015,6 @@ kbd {
   .sidebar-bottom {
     display: contents;
   }
-  .sidebar-bottom .profile-row {
-    display: none;
-  }
   .nav-group {
     display: flex;
     min-width: 0;
@@ -1045,11 +1090,14 @@ kbd {
   .notification-button {
     display: none;
   }
-  .mobile-profile {
+  .account-avatar {
     display: grid;
     width: 30px;
     height: 30px;
     font-size: 9px;
+  }
+  .account-username {
+    display: none;
   }
   .content-scroll {
     padding: 24px 16px 20px;
@@ -1182,7 +1230,7 @@ kbd {
     min-height: 28px;
     padding: 0 2px;
   }
-  .mobile-profile {
+  .account-avatar {
     width: 26px;
     height: 26px;
   }

@@ -45,13 +45,35 @@
         }
       </select>
     </label>
-    <button
-      type="button"
-      class="mobile-profile"
-      (click)="signOutRequested.emit()"
-      aria-label="Sign out"
-    >
-      {{ user()?.email?.slice(0, 1)?.toUpperCase() }}
-    </button>
+    <div class="account-menu-container" (click)="$event.stopPropagation()">
+      <button
+        type="button"
+        class="account-trigger"
+        [attr.aria-expanded]="accountMenuOpen()"
+        aria-haspopup="menu"
+        [attr.aria-controls]="accountMenuOpen() ? 'account-menu' : null"
+        (click)="toggleAccountMenu()"
+      >
+        <span class="account-avatar" aria-hidden="true">
+          {{ user()?.email?.slice(0, 1)?.toUpperCase() }}
+        </span>
+        <span class="account-username">{{ user()?.email }}</span>
+        <span class="visually-hidden">Open account menu</span>
+      </button>
+      @if (accountMenuOpen()) {
+        <div id="account-menu" class="account-menu" role="menu" aria-label="Account menu">
+          <button type="button" role="menuitem" disabled aria-disabled="true">Profile</button>
+          <button type="button" role="menuitem" disabled aria-disabled="true">Settings</button>
+          <button
+            type="button"
+            role="menuitem"
+            class="account-menu-logout"
+            (click)="closeAccountMenu(); signOutRequested.emit()"
+          >
+            Logout
+          </button>
+        </div>
+      }
+    </div>
   </div>
 </header>

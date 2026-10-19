@@ -106,13 +106,5 @@
         Manage library
       </a>
     }
-    <button type="button" class="profile-row" (click)="signOutRequested.emit()" title="Sign out">
-      <span class="avatar">{{ user()?.email?.slice(0, 1)?.toUpperCase() }}</span>
-      <span class="profile-name">
-        <strong>{{ user()?.email }}</strong>
-        <small>{{ user()?.role }}</small>
-      </span>
-      <span class="profile-more">↪</span>
-    </button>
   </div>
 </aside>
