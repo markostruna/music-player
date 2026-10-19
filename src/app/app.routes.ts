@@ -1,14 +1,10 @@
 import { Routes } from '@angular/router';
-import { requireAuth } from './auth.guard';
-import { LoginPage } from './login-page';
-import { LibraryPage } from './library-page';
-import { requireAdmin } from './admin.guard';
-import { AdminPage } from './admin-page';
+import { loginRoutes } from './login/login.routes';
+import { shellRoutes } from './shell/shell.routes';
 
 export const routes: Routes = [
-	{ path: '', pathMatch: 'full', redirectTo: 'login' },
-	{ path: 'login', component: LoginPage },
-	{ path: 'library', component: LibraryPage, canActivate: [requireAuth] },
-	{ path: 'admin', component: AdminPage, canActivate: [requireAdmin] },
-	{ path: '**', redirectTo: 'login' },
+  { path: '', pathMatch: 'full', redirectTo: 'login' },
+  ...loginRoutes,
+  ...shellRoutes,
+  { path: '**', redirectTo: 'login' },
 ];

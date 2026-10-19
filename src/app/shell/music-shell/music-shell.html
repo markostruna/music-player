@@ -1,0 +1,79 @@
+<app-shell-header
+  [menuVisible]="menuVisible()"
+  [isLibraryPage]="isLibraryPage()"
+  [searchQuery]="searchQuery()"
+  [user]="user()"
+  (menuToggle)="toggleMenu()"
+  (searchQueryChange)="setSearchQuery($event)"
+  (signOutRequested)="signOut()"
+/>
+
+<app-toast-message />
+
+@if (libraryOperations.operation(); as operation) {
+  <div
+    class="library-operation-indicator"
+    [class.library-operation-failed]="operation.state === 'failed'"
+    [class.library-operation-complete]="operation.state === 'completed'"
+    [attr.role]="operation.state === 'failed' ? 'alert' : 'status'"
+    [attr.aria-live]="operation.state === 'failed' ? 'assertive' : 'polite'"
+  >
+    @if (operation.state === 'queued' || operation.state === 'running') {
+      <span class="library-operation-spinner" aria-hidden="true"></span>
+    } @else if (operation.state === 'completed') {
+      <span class="library-operation-check" aria-hidden="true">✓</span>
+    }
+    <div class="library-operation-copy">
+      <strong>
+        {{ operation.operationType === 'scan' ? 'Scanning' : 'Refreshing metadata' }}
+        {{ operation.rootName }}
+      </strong>
+      <span>{{
+        libraryOperations.pollingError()
+          ? 'Status temporarily unavailable; the operation may still be running.'
+          : operation.message
+      }}</span>
+      @if (operation.totalUnits > 0 && operation.state === 'running') {
+        <progress
+          [max]="operation.totalUnits"
+          [value]="operation.completedUnits"
+          aria-label="Metadata refresh progress"
+        ></progress>
+      }
+    </div>
+  </div>
+}
+
+<div class="workspace" [class.menu-hidden]="!menuVisible()">
+  <app-side-menu
+    id="side-menu"
+    [activeSection]="activeSection()"
+    [isLibraryPage]="isLibraryPage()"
+    (activeSectionChange)="activeSection.set($event)"
+  />
+
+  <main class="main-panel">
+    <header class="page-heading">
+      <div class="page-heading-inner">
+        <button class="page-back-button" type="button" aria-label="Go back" (click)="goBack()">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="m15 18-6-6 6-6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <div class="breadcrumbs">
+          <span>YOUR SPACE</span>
+          <span class="breadcrumb-divider">/</span>
+          <strong>{{ pageTitle() }}</strong>
+        </div>
+      </div>
+    </header>
+
+    <router-outlet />
+  </main>
+</div>

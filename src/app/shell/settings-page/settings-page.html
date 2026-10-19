@@ -1,0 +1,36 @@
+<section class="settings-page">
+  <header class="settings-intro">
+    <span class="eyebrow">PREFERENCES</span>
+    <h1>Settings</h1>
+    <p>Make Afterhours feel like your own.</p>
+  </header>
+
+  <section class="settings-card" aria-labelledby="appearance-title">
+    <div>
+      <h2 id="appearance-title">Appearance</h2>
+      <p>Choose the color theme used throughout the app.</p>
+    </div>
+    <label class="settings-theme-picker">
+      <span>Theme</span>
+      <select [value]="user()?.theme ?? 'Light'" (change)="changeTheme($event)">
+        @for (theme of themeOptions; track theme) {
+          <option [value]="theme">{{ theme }}</option>
+        }
+      </select>
+    </label>
+  </section>
+
+  @if (errorMessage()) {
+    <p class="settings-error" role="alert">{{ errorMessage() }}</p>
+  }
+
+  @if (isAdmin()) {
+    <section class="settings-card" aria-labelledby="library-settings-title">
+      <div>
+        <h2 id="library-settings-title">Music library</h2>
+        <p>Manage music folders, scanning, and library accounts.</p>
+      </div>
+      <a class="settings-action" routerLink="/admin">Manage library</a>
+    </section>
+  }
+</section>

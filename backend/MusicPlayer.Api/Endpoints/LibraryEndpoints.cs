@@ -40,6 +40,18 @@ public static class LibraryEndpoints
         })
         .WithName("GetTrackCover")
         .WithSummary("Returns the embedded cover art for a track.");
+        library.MapGet("/artists/{key}/image", async Task<Results<FileContentHttpResult, NotFound>> (
+            string key,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            var image = await music.ResolveArtistImageAsync(key, cancellationToken);
+            return image is null
+                ? TypedResults.NotFound()
+                : TypedResults.File(image.Data, image.ContentType);
+        })
+        .WithName("GetArtistImage")
+        .WithSummary("Returns an artist image stored in the application data folder.");
 
         var roots = app.MapGroup("/api/admin/roots")
             .WithTags("Source roots")
@@ -93,27 +105,84 @@ public static class LibraryEndpoints
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("RemoveSourceRoot")
         .WithSummary("Removes a source root and its catalog entries without deleting music files.");
-        roots.MapPost("/{rootId:int}/scan", async Task<Results<Ok<ScanResponse>, NotFound, Conflict<string>>> (
+        roots.MapPost("/{rootId:int}/scan", async Task<Results<Accepted<LibraryOperationStatus>, NotFound, Conflict<string>>> (
             int rootId,
             IMusicLibraryService music,
+            LibraryOperationManager operations,
             CancellationToken cancellationToken) =>
         {
-            try
-            {
-                return TypedResults.Ok(await music.ScanAsync(rootId, cancellationToken));
-            }
-            catch (KeyNotFoundException)
+            var root = (await music.GetRootsAsync(cancellationToken))
+                .SingleOrDefault(item => item.Id == rootId && item.IsEnabled);
+            if (root is null)
             {
                 return TypedResults.NotFound();
             }
-            catch (InvalidOperationException exception)
+
+            if (!operations.TryStart(rootId, root.Name, LibraryOperationManager.ScanOperation, out var operation))
             {
-                return TypedResults.Conflict(exception.Message);
+                return TypedResults.Conflict("Another library operation is already running.");
             }
+
+            return TypedResults.Accepted($"/api/admin/operations/{operation.Id}", operation);
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("ScanSourceRoot")
-        .WithSummary("Scans a configured source for WAV, MP3, and FLAC files.");
+        .WithSummary("Starts a background scan of a configured source folder.");
+        roots.MapPost("/{rootId:int}/metadata-refresh", async Task<Results<Accepted<LibraryOperationStatus>, NotFound, Conflict<string>>> (
+            int rootId,
+            IMusicLibraryService music,
+            LibraryOperationManager operations,
+            CancellationToken cancellationToken) =>
+        {
+            var root = (await music.GetRootsAsync(cancellationToken))
+                .SingleOrDefault(item => item.Id == rootId && item.IsEnabled);
+            if (root is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            if (!operations.TryStart(
+                rootId,
+                root.Name,
+                LibraryOperationManager.MetadataRefreshOperation,
+                out var operation))
+            {
+                return TypedResults.Conflict("Another library operation is already running.");
+            }
+
+            return TypedResults.Accepted($"/api/admin/operations/{operation.Id}", operation);
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("RefreshSourceRootMetadata")
+        .WithSummary("Starts refreshing metadata and images for artists and albums in a source folder.");
+
+        var adminOperations = app.MapGroup("/api/admin/operations")
+            .WithTags("Library operations")
+            .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
+        adminOperations.MapGet("/active", Results<Ok<LibraryOperationStatus>, NoContent> (
+            LibraryOperationManager operations) =>
+        {
+            var operation = operations.GetActive();
+            return operation is null
+                ? TypedResults.NoContent()
+                : TypedResults.Ok(operation);
+        })
+        .WithName("GetActiveLibraryOperation")
+        .WithSummary("Gets the active background library operation, if one exists.");
+        adminOperations.MapGet("/{operationId:guid}", Results<Ok<LibraryOperationStatus>, NotFound> (
+            Guid operationId,
+            LibraryOperationManager operations) =>
+        {
+            var operation = operations.Get(operationId);
+            if (operation is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            return TypedResults.Ok(operation);
+        })
+        .WithName("GetLibraryOperation")
+        .WithSummary("Gets the current status of a background library operation.");
 
         var adminTracks = app.MapGroup("/api/admin/tracks")
             .WithTags("Track management")
@@ -162,5 +231,87 @@ public static class LibraryEndpoints
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("MoveTracks")
         .WithSummary("Moves selected tracks to a folder in a configured source root.");
+
+        var adminMetadata = app.MapGroup("/api/admin/metadata")
+        .WithTags("Metadata management")
+        .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
+        adminMetadata.MapPost("/artists/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
+        MetadataDescriptionRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        if (string.IsNullOrWhiteSpace(request.Artist))
+        {
+            return TypedResults.BadRequest("Artist is required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshArtistMetadataAsync(request.Artist, cancellationToken));
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("RefreshArtistMetadata")
+        .WithSummary("Refreshes one artist's description and image from linked metadata providers.");
+        adminMetadata.MapPost("/albums/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
+        MetadataDescriptionRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        if (string.IsNullOrWhiteSpace(request.Artist) || string.IsNullOrWhiteSpace(request.Album))
+        {
+            return TypedResults.BadRequest("Artist and album are required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(request.Artist, request.Album, cancellationToken));
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("RefreshAlbumMetadata")
+        .WithSummary("Refreshes one album's description and artwork from linked metadata providers.");
+        adminMetadata.MapPut("/artists/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
+        {
+            await music.UpdateMetadataDescriptionAsync(request, album: false, cancellationToken);
+            return TypedResults.NoContent();
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateArtistDescription");
+        adminMetadata.MapPut("/albums/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
+        {
+            await music.UpdateMetadataDescriptionAsync(request, album: true, cancellationToken);
+            return TypedResults.NoContent();
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateAlbumDescription");
+        adminMetadata.MapPut("/artists/image", async Task<Results<NoContent, BadRequest<string>>> (
+        MetadataImageRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        try
+        {
+            await music.UpdateMetadataImageAsync(request, album: false, cancellationToken);
+            return TypedResults.NoContent();
+        }
+        catch (ArgumentException exception)
+        {
+            return TypedResults.BadRequest(exception.Message);
+        }
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateArtistImage");
+        adminMetadata.MapPut("/albums/image", async Task<Results<NoContent, BadRequest<string>>> (
+        MetadataImageRequest request,
+        IMusicLibraryService music,
+        CancellationToken cancellationToken) =>
+        {
+        try
+        {
+            await music.UpdateMetadataImageAsync(request, album: true, cancellationToken);
+            return TypedResults.NoContent();
+        }
+        catch (ArgumentException exception)
+        {
+            return TypedResults.BadRequest(exception.Message);
+        }
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateAlbumImage");
     }
 }
