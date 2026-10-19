@@ -479,8 +479,11 @@ kbd {
   font-weight: 700;
 }
 
-.text-action span {
-  font-size: 14px;
+.text-action svg,
+.see-all svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .feature-banner {
