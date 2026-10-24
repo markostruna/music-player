@@ -79,6 +79,8 @@ npm start
 
 Open `http://localhost:4200`. Sign in with the bootstrap administrator, then open **Admin** to add a music folder and scan it. The folder path is a path on the server, not on the listening device. Use the Admin page to create Guest accounts. Guests can play music and choose their own theme; only administrators can change the library or accounts.
 
+The development proxy sends `/music-api` requests to the local API at `http://127.0.0.1:5080` and removes the prefix. Do not put a public server address or credentials in the checked-in proxy configuration.
+
 ## Tests And Build
 
 ```powershell

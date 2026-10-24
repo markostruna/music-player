@@ -43,6 +43,12 @@ public sealed record TrackResponse(
     string AlbumArtistImageUrl,
     bool AlbumArtistImageMissing);
 
+public sealed record PagedResponse<T>(
+    IReadOnlyList<T> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
+
 public sealed record MetadataDescriptionRequest
 {
     [Required, MaxLength(1024)]

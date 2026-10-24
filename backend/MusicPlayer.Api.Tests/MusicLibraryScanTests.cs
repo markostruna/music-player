@@ -33,7 +33,12 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         sourceDirectory = Path.Combine(testDirectory, "music");
         Directory.CreateDirectory(sourceDirectory);
         musicBrainz = new StubMusicBrainzClient();
-        library = new MusicLibraryService(database, new TestWebHostEnvironment(), musicBrainz, NullLogger<MusicLibraryService>.Instance);
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database));
     }
 
     public async Task DisposeAsync()
@@ -126,6 +131,46 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         await System.IO.File.WriteAllBytesAsync(Path.Combine(albumDirectory, "cover.png"), alternateCoverBytes);
         var alternateCover = await library.ResolveCoverAsync(rescannedTrack.Id, CancellationToken.None);
         Assert.Equal(alternateCoverBytes, alternateCover?.Data);
+    }
+
+    [Fact]
+    public async Task TrackPageFiltersAndLimitsResults()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Paged Album");
+        Directory.CreateDirectory(albumDirectory);
+        var firstTrack = Path.Combine(albumDirectory, "first.wav");
+        var secondTrack = Path.Combine(albumDirectory, "second.wav");
+        await CreateWaveFileAsync(firstTrack);
+        await CreateWaveFileAsync(secondTrack);
+        using (var audio = TagLib.File.Create(firstTrack))
+        {
+            audio.Tag.Title = "Matching Track";
+            audio.Tag.Performers = ["Page Artist"];
+            audio.Tag.Album = "Paged Album";
+            audio.Save();
+        }
+
+        using (var audio = TagLib.File.Create(secondTrack))
+        {
+            audio.Tag.Title = "Other Track";
+            audio.Tag.Performers = ["Page Artist"];
+            audio.Tag.Album = "Paged Album";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Paged Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        var result = await library.GetTracksPageAsync("matching", page: 1, pageSize: 1, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(1, result.Page);
+        Assert.Single(result.Items);
+        Assert.Equal("Matching Track", result.Items[0].Title);
     }
 
     [Fact]

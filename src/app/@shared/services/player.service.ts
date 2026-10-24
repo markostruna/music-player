@@ -8,7 +8,7 @@ export class PlayerService {
 
   readonly queue = signal<MusicTrack[]>([]);
   readonly currentIndex = signal(-1);
-  readonly currentTrack = computed(() => this.queue()[this.currentIndex()] ?? null);
+  readonly currentTrack = computed((): MusicTrack | null => this.queue()[this.currentIndex()] ?? null);
   readonly hasPrevious = computed(() => this.currentIndex() > 0);
   readonly hasNext = computed(
     () => this.currentIndex() >= 0 && this.currentIndex() < this.queue().length - 1,

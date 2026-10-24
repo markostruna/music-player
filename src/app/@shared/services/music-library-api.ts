@@ -29,6 +29,13 @@ export interface MusicTrack {
   albumArtistImageMissing: boolean;
 }
 
+export interface PagedTracks {
+  items: MusicTrack[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface MusicFolder {
   id: number;
   sourceRootId: number;
@@ -104,17 +111,32 @@ export class MusicLibraryApi {
   listTracks(): Promise<MusicTrack[]> {
     return firstValueFrom(
       this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks`, { withCredentials: true }),
-    ).then((tracks) =>
-      tracks.map((track) => ({
-        ...track,
-        streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
-        coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
-        artistImageUrl: track.artistImageUrl ? `${MUSIC_API_PREFIX}${track.artistImageUrl}` : '',
-        albumArtistImageUrl: track.albumArtistImageUrl
-          ? `${MUSIC_API_PREFIX}${track.albumArtistImageUrl}`
-          : '',
-      })),
-    );
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  searchTracks(query: string): Promise<MusicTrack[]> {
+    const params = new URLSearchParams({ query });
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks/search?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  listTrackPage(query: string, page: number, pageSize: number): Promise<PagedTracks> {
+    const params = new URLSearchParams({
+      query,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return firstValueFrom(
+      this.http.get<PagedTracks>(`${MUSIC_API_BASE}/library/tracks/page?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((result) => ({
+      ...result,
+      items: this.mapTracks(result.items),
+    }));
   }
 
   listRoots(): Promise<SourceRoot[]> {
@@ -321,5 +343,17 @@ export class MusicLibraryApi {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
     }
     return btoa(binary);
+  }
+
+  private mapTracks(tracks: MusicTrack[]): MusicTrack[] {
+    return tracks.map((track) => ({
+      ...track,
+      streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
+      coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
+      artistImageUrl: track.artistImageUrl ? `${MUSIC_API_PREFIX}${track.artistImageUrl}` : '',
+      albumArtistImageUrl: track.albumArtistImageUrl
+        ? `${MUSIC_API_PREFIX}${track.albumArtistImageUrl}`
+        : '',
+    }));
   }
 }

@@ -14,6 +14,12 @@ public interface IMusicLibraryService
         Action<int, int, string> reportProgress,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<TrackResponse>> SearchTracksAsync(string? query, CancellationToken cancellationToken);
+    Task<PagedResponse<TrackResponse>> GetTracksPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken);
     Task<ResolvedMedia?> ResolveStreamAsync(int trackId, CancellationToken cancellationToken);
     Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken);

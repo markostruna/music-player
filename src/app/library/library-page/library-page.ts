@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { formatTime } from '@shared/utils/format-time';
-import { LibraryStore, LibraryView } from '@shared/services/library-store';
+import { LIBRARY_PAGE_SIZE, LibraryStore, LibraryView } from '@shared/services/library-store';
 import { MetadataPatch, MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
@@ -56,7 +56,8 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   readonly searchQuery = this.store.searchQuery;
   readonly collectionView = this.store.collectionView;
   readonly currentPage = this.store.currentPage;
-  readonly pageSize = 100;
+  readonly pagedTracks = this.store.pageTracks;
+  readonly pageSize = LIBRARY_PAGE_SIZE;
   readonly isPlaying = this.player.isPlaying;
   readonly isLoading = this.store.isLoading;
   private readonly pageError = signal('');
@@ -66,12 +67,6 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   readonly isAdmin = this.auth.isAdmin;
   readonly selectedTrackIds = signal(new Set<number>());
   readonly hasSelection = computed(() => this.selectedTrackIds().size > 0);
-  readonly filteredTracks = computed(() => {
-    const query = this.searchQuery().trim().toLowerCase();
-    return this.tracks().filter((track) =>
-      `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query),
-    );
-  });
   readonly albums = computed(() => {
     const groups = new Map<string, AlbumTile>();
     for (const track of this.tracks()) {
@@ -135,12 +130,14 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   });
   readonly totalItems = computed(() => {
     switch (this.collectionView()) {
+      case 'tracks':
+        return this.store.totalTrackCount();
       case 'albums':
         return this.filteredAlbums().length;
       case 'artists':
         return this.filteredArtists().length;
       default:
-        return this.filteredTracks().length;
+        return 0;
     }
   });
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalItems() / this.pageSize)));
@@ -149,7 +146,7 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     this.totalItems() === 0 ? 0 : (this.pageNumber() - 1) * this.pageSize + 1,
   );
   readonly pageEnd = computed(() => Math.min(this.pageNumber() * this.pageSize, this.totalItems()));
-  readonly visibleTracks = computed(() => this.pageSlice(this.filteredTracks()));
+  readonly visibleTracks = computed(() => this.pagedTracks());
   readonly visibleAlbums = computed(() => this.pageSlice(this.filteredAlbums()));
   readonly visibleArtists = computed(() => this.pageSlice(this.filteredArtists()));
   metadata: MetadataPatch = {};
@@ -173,8 +170,13 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
 
   async loadLibrary(forceRefresh = true): Promise<void> {
     this.pageError.set('');
-    if (forceRefresh) await this.store.refresh();
-    else await this.store.ensureLoaded();
+    if (this.collectionView() === 'tracks') {
+      await this.store.loadTrackPage(this.searchQuery(), this.currentPage(), this.pageSize);
+    } else if (forceRefresh) {
+      await this.store.refresh();
+    } else {
+      await this.store.ensureLoaded();
+    }
     if (this.isAdmin() && !this.store.errorMessage()) {
       try {
         this.folders = await this.library.listFolders();
@@ -187,19 +189,35 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     this.collectionView.set(view);
     this.currentPage.set(1);
     this.selectedTrackIds.set(new Set<number>());
+    if (view === 'tracks') {
+      void this.store.loadTrackPage(this.searchQuery(), 1, this.pageSize);
+    } else {
+      void this.store.ensureLoaded();
+    }
   }
 
   setSearchQuery(query: string): void {
     this.searchQuery.set(query);
     this.currentPage.set(1);
+    if (this.collectionView() === 'tracks') {
+      void this.store.loadTrackPage(query, 1, this.pageSize);
+    }
   }
 
   previousPage(): void {
-    this.currentPage.update((page) => Math.max(1, page - 1));
+    const page = Math.max(1, this.currentPage() - 1);
+    this.currentPage.set(page);
+    if (this.collectionView() === 'tracks') {
+      void this.store.loadTrackPage(this.searchQuery(), page, this.pageSize);
+    }
   }
 
   nextPage(): void {
-    this.currentPage.update((page) => Math.min(this.totalPages(), page + 1));
+    const page = Math.min(this.totalPages(), this.currentPage() + 1);
+    this.currentPage.set(page);
+    if (this.collectionView() === 'tracks') {
+      void this.store.loadTrackPage(this.searchQuery(), page, this.pageSize);
+    }
   }
 
   playGroup(tracks: MusicTrack[]): void {
@@ -259,16 +277,25 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     this.identifyRequest.set(null);
     if (changed) await this.store.refresh();
   }
-  chooseTrack(track: MusicTrack): void {
-    const queue = this.filteredTracks();
-    this.player.play(
-      queue,
-      queue.findIndex((candidate) => candidate.id === track.id),
-    );
+  async chooseTrack(track: MusicTrack): Promise<void> {
+    try {
+      const queue = await this.library.searchTracks(this.searchQuery());
+      this.player.play(queue, queue.findIndex((candidate) => candidate.id === track.id));
+    } catch {
+      this.toast.show('The selected track could not be loaded for playback.', 'error');
+    }
   }
 
-  playFirstTrack(): void {
-    this.player.play(this.tracks(), 0);
+  async playFirstTrack(): Promise<void> {
+    try {
+      const tracks =
+        this.collectionView() === 'tracks'
+          ? await this.library.searchTracks(this.searchQuery())
+          : this.tracks();
+      this.player.play(tracks, 0);
+    } catch {
+      this.toast.show('Tracks could not be loaded for playback.', 'error');
+    }
   }
   private pageSlice<T>(items: T[]): T[] {
     const start = (this.pageNumber() - 1) * this.pageSize;

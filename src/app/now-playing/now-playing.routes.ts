@@ -1,4 +1,9 @@
 import { Routes } from '@angular/router';
-import { NowPlayingPage } from './now-playing-page';
 
-export const nowPlayingRoutes: Routes = [{ path: 'now-playing', component: NowPlayingPage }];
+export const nowPlayingRoutes: Routes = [
+  {
+    path: 'now-playing',
+    loadComponent: () =>
+      import('./now-playing-page').then((module) => module.NowPlayingPage),
+  },
+];

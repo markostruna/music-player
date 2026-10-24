@@ -12,7 +12,8 @@ public sealed class MusicLibraryService(
     MusicDbContext database,
     IWebHostEnvironment environment,
     IMusicBrainzClient musicBrainz,
-    ILogger<MusicLibraryService> logger) : IMusicLibraryService
+    ILogger<MusicLibraryService> logger,
+    MusicLibraryBrowseService browseService) : IMusicLibraryService
 {
     private const int MaximumCoverFileSize = 10 * 1024 * 1024;
 
@@ -252,49 +253,21 @@ public sealed class MusicLibraryService(
             albumImagesUpdated);
     }
 
-    public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken)
-    {
-        var tracks = await database.Tracks.AsNoTracking()
-            .Where(track => track.IsAvailable && track.SourceRoot != null && track.SourceRoot.IsEnabled)
-            .OrderBy(track => track.AlbumArtist)
-            .ThenBy(track => track.Album)
-            .ThenBy(track => track.DiscNumber)
-            .ThenBy(track => track.TrackNumber)
-            .ThenBy(track => track.Title)
-            .ToListAsync(cancellationToken);
-        var artistMetadata = await database.ArtistMetadata.AsNoTracking().ToDictionaryAsync(item => item.Key, cancellationToken);
-        var albumMetadata = await database.AlbumMetadata.AsNoTracking().ToDictionaryAsync(item => item.Key, cancellationToken);
-        return tracks.Select(track =>
-        {
-            var artistKey = GetArtistMetadataKey(track.Artist);
-            var albumArtist = string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist;
-            var albumKey = GetAlbumMetadataKey(albumArtist, track.Album);
-            artistMetadata.TryGetValue(artistKey, out var artist);
-            var albumArtistKey = GetArtistMetadataKey(albumArtist);
-            artistMetadata.TryGetValue(albumArtistKey, out var albumArtistInfo);
-            albumMetadata.TryGetValue(albumKey, out var album);
-            return ToResponse(track, artist, albumArtistInfo, album);
-        }).ToList();
-    }
+    public Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken) =>
+        browseService.GetTracksAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken)
-    {
-        var tracks = await GetTracksAsync(cancellationToken);
-        return tracks.GroupBy(track => new AlbumKey(
-                track.Album.Trim(),
-                string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist),
-            AlbumKeyComparer.Instance)
-            .Select(group => new AlbumResponse(
-                group.Key.Album,
-                group.Key.Artist,
-                group.Count(),
-                group.Sum(track => track.DurationSeconds),
-                group.First().Id,
-                group.ToArray()))
-            .OrderBy(album => album.Artist)
-            .ThenBy(album => album.Album)
-            .ToList();
-    }
+    public Task<IReadOnlyList<TrackResponse>> SearchTracksAsync(string? query, CancellationToken cancellationToken) =>
+        browseService.GetTracksAsync(query, cancellationToken);
+
+    public Task<PagedResponse<TrackResponse>> GetTracksPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken) =>
+        browseService.GetTracksPageAsync(query, page, pageSize, cancellationToken);
+
+    public Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken) =>
+        browseService.GetAlbumsAsync(cancellationToken);
 
     public async Task<ResolvedMedia?> ResolveStreamAsync(int trackId, CancellationToken cancellationToken)
     {
@@ -1444,40 +1417,6 @@ public sealed class MusicLibraryService(
         _ => "application/octet-stream",
     };
 
-    private static TrackResponse ToResponse(
-        MusicTrack track,
-        MusicArtistMetadata? artist,
-        MusicArtistMetadata? albumArtist,
-        MusicAlbumMetadata? album) => new(
-        track.Id,
-        track.SourceRootId,
-        track.FolderId,
-        track.Title,
-        track.Artist,
-        track.Album,
-        track.AlbumArtist,
-        track.Genre,
-        track.TrackNumber,
-        track.DiscNumber,
-        track.Year,
-        track.DurationSeconds,
-        $"/api/library/tracks/{track.Id}/stream",
-        album?.ImageMissing == false && !string.IsNullOrWhiteSpace(album.ImageFileName)
-            ? $"/api/library/tracks/{track.Id}/cover?v={album.UpdatedAt.ToUnixTimeMilliseconds()}"
-            : $"/api/library/tracks/{track.Id}/cover",
-        Path.GetExtension(track.RelativePath).TrimStart('.').ToLowerInvariant(),
-        album?.Description ?? "",
-        artist?.Description ?? "",
-        artist?.ImageMissing == false && !string.IsNullOrWhiteSpace(artist.ImageFileName)
-            ? $"/api/library/artists/{artist.Key}/image?v={artist.UpdatedAt.ToUnixTimeMilliseconds()}"
-            : "",
-        artist is null || artist.ImageMissing || string.IsNullOrWhiteSpace(artist.ImageFileName),
-        albumArtist?.Description ?? "",
-        albumArtist?.ImageMissing == false && !string.IsNullOrWhiteSpace(albumArtist.ImageFileName)
-            ? $"/api/library/artists/{albumArtist.Key}/image?v={albumArtist.UpdatedAt.ToUnixTimeMilliseconds()}"
-            : "",
-        albumArtist is null || albumArtist.ImageMissing || string.IsNullOrWhiteSpace(albumArtist.ImageFileName));
-
     private static string GetArtistMetadataKey(string artist) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"artist\0{artist.Trim().ToUpperInvariant()}")));
 
@@ -1497,23 +1436,10 @@ public sealed class MusicLibraryService(
         return string.IsNullOrWhiteSpace(safeName) ? "Unknown" : safeName;
     }
 
-    private readonly record struct AlbumKey(string Album, string Artist);
-
     private sealed record MetadataImageDestination(
         int SourceRootId,
         string RootPath,
         string RelativeDirectory,
         string DirectoryPath,
         bool IsArtistDirectory = false);
-
-    private sealed class AlbumKeyComparer : IEqualityComparer<AlbumKey>
-    {
-        public static AlbumKeyComparer Instance { get; } = new();
-        public bool Equals(AlbumKey x, AlbumKey y) =>
-            string.Equals(x.Album, y.Album, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(x.Artist, y.Artist, StringComparison.OrdinalIgnoreCase);
-        public int GetHashCode(AlbumKey value) => HashCode.Combine(
-            StringComparer.OrdinalIgnoreCase.GetHashCode(value.Album),
-            StringComparer.OrdinalIgnoreCase.GetHashCode(value.Artist));
-    }
 }

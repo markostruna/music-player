@@ -14,6 +14,36 @@ public static class LibraryEndpoints
                 TypedResults.Ok(await music.GetTracksAsync(cancellationToken)))
             .WithName("ListTracks")
             .WithSummary("Lists playable tracks in configured music sources.");
+        library.MapGet("/tracks/search", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
+            string? query,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (query?.Length > 256)
+            {
+                return TypedResults.BadRequest("Search text cannot exceed 256 characters.");
+            }
+
+            return TypedResults.Ok(await music.SearchTracksAsync(query, cancellationToken));
+        })
+        .WithName("SearchTracks")
+        .WithSummary("Returns all matching tracks for playback queues.");
+        library.MapGet("/tracks/page", async Task<Results<Ok<PagedResponse<TrackResponse>>, BadRequest<string>>> (
+            string? query,
+            int page,
+            int pageSize,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
+            {
+                return TypedResults.BadRequest("Page, page size, or search text is invalid.");
+            }
+
+            return TypedResults.Ok(await music.GetTracksPageAsync(query, page, pageSize, cancellationToken));
+        })
+        .WithName("ListTrackPage")
+        .WithSummary("Searches and returns one page of playable tracks.");
         library.MapGet("/albums", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
                 TypedResults.Ok(await music.GetAlbumsAsync(cancellationToken)))
             .WithName("ListAlbums")
@@ -89,13 +119,26 @@ public static class LibraryEndpoints
         roots.MapDelete("/{rootId:int}", async Task<Results<NoContent, NotFound, Conflict<string>>> (
             int rootId,
             IMusicLibraryService music,
+            LibraryOperationManager operations,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                return await music.RemoveRootAsync(rootId, cancellationToken)
-                    ? TypedResults.NoContent()
-                    : TypedResults.NotFound();
+                if (!operations.TryBeginRootRemoval(rootId))
+                {
+                    return TypedResults.Conflict("A library operation is running, so the source root cannot be removed.");
+                }
+
+                try
+                {
+                    return await music.RemoveRootAsync(rootId, cancellationToken)
+                        ? TypedResults.NoContent()
+                        : TypedResults.NotFound();
+                }
+                finally
+                {
+                    operations.EndRootRemoval(rootId);
+                }
             }
             catch (InvalidOperationException exception)
             {
@@ -118,7 +161,8 @@ public static class LibraryEndpoints
                 return TypedResults.NotFound();
             }
 
-            if (!operations.TryStart(rootId, root.Name, LibraryOperationManager.ScanOperation, out var operation))
+            var operation = operations.TryStart(rootId, root.Name, LibraryOperationManager.ScanOperation);
+            if (operation is null)
             {
                 return TypedResults.Conflict("Another library operation is already running.");
             }
@@ -141,11 +185,11 @@ public static class LibraryEndpoints
                 return TypedResults.NotFound();
             }
 
-            if (!operations.TryStart(
+            var operation = operations.TryStart(
                 rootId,
                 root.Name,
-                LibraryOperationManager.MetadataRefreshOperation,
-                out var operation))
+                LibraryOperationManager.MetadataRefreshOperation);
+            if (operation is null)
             {
                 return TypedResults.Conflict("Another library operation is already running.");
             }
