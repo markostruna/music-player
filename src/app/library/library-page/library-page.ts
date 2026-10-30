@@ -14,6 +14,7 @@ import { TracksPage } from './tracks-page/tracks-page';
   templateUrl: './library-page.html',
 })
 export class LibraryPage implements AfterViewInit, OnDestroy {
+  private readonly tabViews: LibraryView[] = ['tracks', 'albums', 'artists'];
   private readonly library = inject(MusicLibraryApi);
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
@@ -22,6 +23,11 @@ export class LibraryPage implements AfterViewInit, OnDestroy {
   readonly collectionView = this.store.collectionView;
   readonly searchQuery = this.store.searchQuery;
   readonly refreshTrigger = signal(0);
+  readonly tabTransition = signal<{
+    from: LibraryView;
+    to: LibraryView;
+    direction: 'left' | 'right';
+  } | null>(null);
 
   ngAfterViewInit(): void {
     window.scrollTo(0, this.store.scrollTop);
@@ -32,8 +38,25 @@ export class LibraryPage implements AfterViewInit, OnDestroy {
   }
 
   selectTab(view: LibraryView): void {
+    const currentView = this.collectionView();
+    if (view === currentView) return;
+    this.tabTransition.set({
+      from: currentView,
+      to: view,
+      direction:
+        this.tabViews.indexOf(view) > this.tabViews.indexOf(currentView) ? 'right' : 'left',
+    });
     this.store.collectionView.set(view);
     this.store.currentPage.set(this.store.currentPages()[view]);
+  }
+
+  finishTabTransition(view: LibraryView, event: AnimationEvent): void {
+    if (
+      event.target === event.currentTarget &&
+      this.tabTransition()?.from === view
+    ) {
+      this.tabTransition.set(null);
+    }
   }
 
   onTabKeydown(event: KeyboardEvent, view: LibraryView): void {

@@ -56,7 +56,14 @@
         </h2>
       </div>
       <div class="collection-actions">
-        <div class="collection-tabs" role="tablist" aria-label="Library pages">
+        <div
+          class="collection-tabs"
+          [class.tracks-active]="collectionView() === 'tracks'"
+          [class.albums-active]="collectionView() === 'albums'"
+          [class.artists-active]="collectionView() === 'artists'"
+          role="tablist"
+          aria-label="Library pages"
+        >
           <button
             id="library-tab-tracks"
             role="tab"
@@ -121,41 +128,94 @@
         </button>
       </div>
     </div>
-    <div
-      id="library-panel-tracks"
-      role="tabpanel"
-      aria-labelledby="library-tab-tracks"
-      [hidden]="collectionView() !== 'tracks'"
-      tabindex="0"
-    >
-      <app-library-tracks-page
-        [active]="collectionView() === 'tracks'"
-        [refreshTrigger]="refreshTrigger()"
-      />
-    </div>
-    <div
-      id="library-panel-albums"
-      role="tabpanel"
-      aria-labelledby="library-tab-albums"
-      [hidden]="collectionView() !== 'albums'"
-      tabindex="0"
-    >
-      <app-library-albums-page
-        [active]="collectionView() === 'albums'"
-        [refreshTrigger]="refreshTrigger()"
-      />
-    </div>
-    <div
-      id="library-panel-artists"
-      role="tabpanel"
-      aria-labelledby="library-tab-artists"
-      [hidden]="collectionView() !== 'artists'"
-      tabindex="0"
-    >
-      <app-library-artists-page
-        [active]="collectionView() === 'artists'"
-        [refreshTrigger]="refreshTrigger()"
-      />
+    <div class="collection-panel-container">
+      <div
+        id="library-panel-tracks"
+        class="collection-tab-panel"
+        role="tabpanel"
+        aria-labelledby="library-tab-tracks"
+        [class.active]="collectionView() === 'tracks'"
+        [class.exiting]="tabTransition()?.from === 'tracks'"
+        [class.enter-from-right]="
+          tabTransition()?.to === 'tracks' && tabTransition()?.direction === 'right'
+        "
+        [class.enter-from-left]="
+          tabTransition()?.to === 'tracks' && tabTransition()?.direction === 'left'
+        "
+        [class.exit-to-left]="
+          tabTransition()?.from === 'tracks' && tabTransition()?.direction === 'right'
+        "
+        [class.exit-to-right]="
+          tabTransition()?.from === 'tracks' && tabTransition()?.direction === 'left'
+        "
+        [attr.aria-hidden]="collectionView() !== 'tracks'"
+        [attr.inert]="collectionView() !== 'tracks' ? '' : null"
+        tabindex="0"
+        (animationend)="finishTabTransition('tracks', $event)"
+      >
+        <app-library-tracks-page
+          [active]="collectionView() === 'tracks'"
+          [refreshTrigger]="refreshTrigger()"
+        />
+      </div>
+      <div
+        id="library-panel-albums"
+        class="collection-tab-panel"
+        role="tabpanel"
+        aria-labelledby="library-tab-albums"
+        [class.active]="collectionView() === 'albums'"
+        [class.exiting]="tabTransition()?.from === 'albums'"
+        [class.enter-from-right]="
+          tabTransition()?.to === 'albums' && tabTransition()?.direction === 'right'
+        "
+        [class.enter-from-left]="
+          tabTransition()?.to === 'albums' && tabTransition()?.direction === 'left'
+        "
+        [class.exit-to-left]="
+          tabTransition()?.from === 'albums' && tabTransition()?.direction === 'right'
+        "
+        [class.exit-to-right]="
+          tabTransition()?.from === 'albums' && tabTransition()?.direction === 'left'
+        "
+        [attr.aria-hidden]="collectionView() !== 'albums'"
+        [attr.inert]="collectionView() !== 'albums' ? '' : null"
+        tabindex="0"
+        (animationend)="finishTabTransition('albums', $event)"
+      >
+        <app-library-albums-page
+          [active]="collectionView() === 'albums'"
+          [refreshTrigger]="refreshTrigger()"
+        />
+      </div>
+      <div
+        id="library-panel-artists"
+        class="collection-tab-panel"
+        role="tabpanel"
+        aria-labelledby="library-tab-artists"
+        [class.active]="collectionView() === 'artists'"
+        [class.exiting]="tabTransition()?.from === 'artists'"
+        [class.enter-from-right]="
+          tabTransition()?.to === 'artists' && tabTransition()?.direction === 'right'
+        "
+        [class.enter-from-left]="
+          tabTransition()?.to === 'artists' && tabTransition()?.direction === 'left'
+        "
+        [class.exit-to-left]="
+          tabTransition()?.from === 'artists' && tabTransition()?.direction === 'right'
+        "
+        [class.exit-to-right]="
+          tabTransition()?.from === 'artists' && tabTransition()?.direction === 'left'
+        "
+        [attr.aria-hidden]="collectionView() !== 'artists'"
+        [attr.inert]="collectionView() !== 'artists' ? '' : null"
+        tabindex="0"
+        (animationend)="finishTabTransition('artists', $event)"
+      >
+        <app-library-artists-page
+          [active]="collectionView() === 'artists'"
+          [refreshTrigger]="refreshTrigger()"
+        />
+      </div>
     </div>
   </section>
   <footer class="page-footer">

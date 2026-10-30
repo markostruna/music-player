@@ -631,12 +631,36 @@ kbd {
 }
 
 .collection-tabs {
+  position: relative;
   display: flex;
   min-width: 240px;
   border-bottom: 1px solid var(--line);
 }
 
+.collection-tabs::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 0;
+  width: 33.333%;
+  border-bottom: 2px solid var(--accent);
+  border-radius: 4px 4px 0 0;
+  background: var(--accent-soft);
+  content: '';
+  pointer-events: none;
+  transition: transform 220ms ease;
+}
+
+.collection-tabs.albums-active::before {
+  transform: translateX(100%);
+}
+
+.collection-tabs.artists-active::before {
+  transform: translateX(200%);
+}
+
 .collection-tabs button {
+  position: relative;
+  z-index: 1;
   display: flex;
   min-width: 68px;
   min-height: 38px;
@@ -663,8 +687,6 @@ kbd {
   color: var(--ink);
 }
 .collection-tabs button.active {
-  border-bottom-color: var(--accent);
-  background: var(--accent-soft);
   color: var(--accent);
 }
 .collection-tabs button:focus-visible {
@@ -672,10 +694,85 @@ kbd {
   outline-offset: -2px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .collection-tabs::before {
+    transition: none;
+  }
+}
+
 app-library-tracks-page,
 app-library-albums-page,
 app-library-artists-page {
   display: block;
+}
+
+.collection-panel-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.collection-tab-panel:not(.active):not(.exiting) {
+  display: none;
+}
+
+.collection-tab-panel.exiting {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+.collection-tab-panel.enter-from-right {
+  animation: collection-tab-enter-from-right 260ms ease both;
+}
+
+.collection-tab-panel.enter-from-left {
+  animation: collection-tab-enter-from-left 260ms ease both;
+}
+
+.collection-tab-panel.exit-to-left {
+  animation: collection-tab-exit-to-left 260ms ease both;
+}
+
+.collection-tab-panel.exit-to-right {
+  animation: collection-tab-exit-to-right 260ms ease both;
+}
+
+@keyframes collection-tab-enter-from-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes collection-tab-enter-from-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes collection-tab-exit-to-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes collection-tab-exit-to-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collection-tab-panel {
+    animation-duration: 1ms !important;
+  }
 }
 
 .track-table {
