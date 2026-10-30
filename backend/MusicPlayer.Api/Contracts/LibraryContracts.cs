@@ -49,6 +49,22 @@ public sealed record PagedResponse<T>(
     int Page,
     int PageSize);
 
+public sealed record AlbumSummaryResponse(
+    string Album,
+    string Artist,
+    int TrackCount,
+    double DurationSeconds,
+    int CoverTrackId,
+    string CoverUrl);
+
+public sealed record ArtistSummaryResponse(
+    string Artist,
+    int TrackCount,
+    int AlbumCount,
+    string CoverUrl,
+    string ArtistImageUrl,
+    bool ArtistImageMissing);
+
 public sealed record MetadataDescriptionRequest
 {
     [Required, MaxLength(1024)]

@@ -266,6 +266,26 @@ public sealed class MusicLibraryService(
         CancellationToken cancellationToken) =>
         browseService.GetTracksPageAsync(query, page, pageSize, cancellationToken);
 
+    public Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken) =>
+        browseService.GetAlbumsPageAsync(query, page, pageSize, cancellationToken);
+
+    public Task<IReadOnlyList<TrackResponse>> GetAlbumTracksAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken) =>
+        browseService.GetAlbumTracksAsync(artist, album, cancellationToken);
+
+    public Task<PagedResponse<ArtistSummaryResponse>> GetArtistsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken) =>
+        browseService.GetArtistsPageAsync(query, page, pageSize, cancellationToken);
+
     public Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken) =>
         browseService.GetAlbumsAsync(cancellationToken);
 

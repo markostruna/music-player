@@ -20,6 +20,20 @@ public interface IMusicLibraryService
         int page,
         int pageSize,
         CancellationToken cancellationToken);
+    Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<TrackResponse>> GetAlbumTracksAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken);
+    Task<PagedResponse<ArtistSummaryResponse>> GetArtistsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken);
     Task<ResolvedMedia?> ResolveStreamAsync(int trackId, CancellationToken cancellationToken);
     Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken);

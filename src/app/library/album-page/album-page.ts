@@ -135,7 +135,7 @@ export class AlbumPage implements OnInit {
       this.descriptionDraft = null;
       this.descriptionDraftKey = null;
       this.editingDescriptionKey.set(null);
-      await this.store.refresh();
+      await this.store.refreshTracks();
       this.toast.show('Album description saved.', 'success');
     } catch {
       this.toast.show('The album description could not be saved.', 'error');
@@ -182,7 +182,7 @@ export class AlbumPage implements OnInit {
     this.coverError.set('');
     try {
       await this.libraryApi.updateEntityImage(artist, album, image);
-      await this.store.refresh();
+      await this.store.refreshTracks();
       this.toast.show('Album artwork saved.', 'success');
       this.clearCoverSelection();
       this.isCoverDialogOpen.set(false);

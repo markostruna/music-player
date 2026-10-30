@@ -146,7 +146,7 @@ export class ArtistPage implements OnInit {
       this.descriptionDraft = null;
       this.descriptionDraftArtist = null;
       this.editingDescriptionArtist.set(null);
-      await this.store.refresh();
+      await this.store.refreshTracks();
       this.toast.show('Artist description saved.', 'success');
     } catch {
       this.toast.show('The artist description could not be saved.', 'error');
@@ -193,7 +193,7 @@ export class ArtistPage implements OnInit {
     this.pictureError.set('');
     try {
       await this.libraryApi.updateEntityImage(artist, null, image);
-      await this.store.refresh();
+      await this.store.refreshTracks();
       this.toast.show('Artist picture saved.', 'success');
       this.clearPictureSelection();
       this.isPictureDialogOpen.set(false);

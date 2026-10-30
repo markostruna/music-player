@@ -36,6 +36,31 @@ export interface PagedTracks {
   pageSize: number;
 }
 
+export interface AlbumSummary {
+  album: string;
+  artist: string;
+  trackCount: number;
+  durationSeconds: number;
+  coverTrackId: number;
+  coverUrl: string;
+}
+
+export interface ArtistSummary {
+  artist: string;
+  trackCount: number;
+  albumCount: number;
+  coverUrl: string;
+  artistImageUrl: string;
+  artistImageMissing: boolean;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface MusicFolder {
   id: number;
   sourceRootId: number;
@@ -136,6 +161,56 @@ export class MusicLibraryApi {
     ).then((result) => ({
       ...result,
       items: this.mapTracks(result.items),
+    }));
+  }
+
+  listAlbumPage(query: string, page: number, pageSize: number): Promise<PagedResult<AlbumSummary>> {
+    const params = new URLSearchParams({
+      query,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return firstValueFrom(
+      this.http.get<PagedResult<AlbumSummary>>(`${MUSIC_API_BASE}/library/albums/page?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((result) => ({
+      ...result,
+      items: result.items.map((album) => ({
+        ...album,
+        coverUrl: `${MUSIC_API_PREFIX}${album.coverUrl}`,
+      })),
+    }));
+  }
+
+  listAlbumTracks(artist: string, album: string): Promise<MusicTrack[]> {
+    const params = new URLSearchParams({ artist, album });
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/albums/tracks?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  listArtistPage(query: string, page: number, pageSize: number): Promise<PagedResult<ArtistSummary>> {
+    const params = new URLSearchParams({
+      query,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return firstValueFrom(
+      this.http.get<PagedResult<ArtistSummary>>(`${MUSIC_API_BASE}/library/artists/page?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((result) => ({
+      ...result,
+      items: result.items.map((artist) => ({
+        ...artist,
+        coverUrl: `${MUSIC_API_PREFIX}${artist.coverUrl}`,
+        artistImageUrl: artist.artistImageUrl
+          ? `${MUSIC_API_PREFIX}${artist.artistImageUrl}`
+          : '',
+      })),
     }));
   }
 

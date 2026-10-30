@@ -53,6 +53,162 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             pageSize);
     }
 
+    public async Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var albums = AvailableTracks().Select(track => new
+        {
+            Track = track,
+            Album = EF.Functions.Collate(track.Album.Trim(), "NOCASE"),
+            Artist = EF.Functions.Collate(
+                (track.AlbumArtist.Trim() == "" ? track.Artist : track.AlbumArtist).Trim(),
+                "NOCASE"),
+        });
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var pattern = CreateSearchPattern(query);
+            albums = albums.Where(item =>
+                EF.Functions.Like(item.Album, pattern, "\\")
+                || EF.Functions.Like(item.Artist, pattern, "\\"));
+        }
+
+        var totalCount = await albums
+            .Select(item => new { item.Album, item.Artist })
+            .Distinct()
+            .CountAsync(cancellationToken);
+        var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+        var actualPage = Math.Min(page, pageCount);
+        var albumPage = await albums
+            .GroupBy(item => new { item.Album, item.Artist })
+            .Select(group => new
+            {
+                group.Key.Album,
+                group.Key.Artist,
+                TrackCount = group.Count(),
+                DurationSeconds = group.Sum(item => item.Track.DurationSeconds),
+                CoverTrackId = group.Min(item => item.Track.Id),
+            })
+            .OrderBy(item => item.Artist)
+            .ThenBy(item => item.Album)
+            .ThenBy(item => item.CoverTrackId)
+            .Skip((actualPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var coverTrackIds = albumPage.Select(item => item.CoverTrackId).ToArray();
+        var coverTracks = coverTrackIds.Length == 0
+            ? Array.Empty<TrackResponse>()
+            : await ToTrackResponsesAsync(
+                await AvailableTracks().Where(track => coverTrackIds.Contains(track.Id)).ToListAsync(cancellationToken),
+                cancellationToken);
+        var coversByTrackId = coverTracks.ToDictionary(track => track.Id);
+        var items = albumPage.Select(item => new AlbumSummaryResponse(
+            item.Album,
+            item.Artist,
+            item.TrackCount,
+            item.DurationSeconds,
+            item.CoverTrackId,
+            coversByTrackId[item.CoverTrackId].CoverUrl)).ToArray();
+        return new PagedResponse<AlbumSummaryResponse>(items, totalCount, actualPage, pageSize);
+    }
+
+    public async Task<IReadOnlyList<TrackResponse>> GetAlbumTracksAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken)
+    {
+        var normalizedArtist = artist.Trim().ToUpper();
+        var normalizedAlbum = album.Trim().ToUpper();
+        var tracks = await AvailableTracks()
+            .Where(track =>
+                (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()).ToUpper() == normalizedArtist
+                && track.Album.Trim().ToUpper() == normalizedAlbum)
+            .OrderBy(track => track.DiscNumber)
+            .ThenBy(track => track.TrackNumber)
+            .ThenBy(track => track.Title)
+            .ThenBy(track => track.Id)
+            .ToListAsync(cancellationToken);
+        return await ToTrackResponsesAsync(tracks, cancellationToken);
+    }
+
+    public async Task<PagedResponse<ArtistSummaryResponse>> GetArtistsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var artists = AvailableTracks().Select(track => new
+        {
+            Track = track,
+            Artist = EF.Functions.Collate(
+                track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim(),
+                "NOCASE"),
+        });
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var pattern = CreateSearchPattern(query);
+            artists = artists.Where(item => EF.Functions.Like(item.Artist, pattern, "\\"));
+        }
+
+        var totalCount = await artists.Select(item => item.Artist).Distinct().CountAsync(cancellationToken);
+        var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+        var actualPage = Math.Min(page, pageCount);
+        var artistPage = await artists
+            .GroupBy(item => item.Artist)
+            .Select(group => new
+            {
+                Artist = group.Key,
+                TrackCount = group.Count(),
+                RepresentativeTrackId = group.Min(item => item.Track.Id),
+            })
+            .OrderBy(item => item.Artist)
+            .ThenBy(item => item.RepresentativeTrackId)
+            .Skip((actualPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var artistNames = artistPage.Select(item => item.Artist).ToArray();
+        var distinctAlbums = AvailableTracks()
+            .Select(track => new
+            {
+                Artist = EF.Functions.Collate(
+                    track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim(),
+                    "NOCASE"),
+                AlbumArtist = EF.Functions.Collate(
+                    (track.AlbumArtist.Trim() == "" ? track.Artist : track.AlbumArtist).Trim(),
+                    "NOCASE"),
+                Album = EF.Functions.Collate(track.Album.Trim(), "NOCASE"),
+            })
+            .Where(item => artistNames.Contains(item.Artist))
+            .Distinct();
+        var albumCounts = await distinctAlbums
+            .GroupBy(item => item.Artist)
+            .Select(group => new { Artist = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.Artist, item => item.Count, cancellationToken);
+        var representativeIds = artistPage.Select(item => item.RepresentativeTrackId).ToArray();
+        var representatives = representativeIds.Length == 0
+            ? Array.Empty<TrackResponse>()
+            : await ToTrackResponsesAsync(
+                await AvailableTracks().Where(track => representativeIds.Contains(track.Id)).ToListAsync(cancellationToken),
+                cancellationToken);
+        var representativesById = representatives.ToDictionary(track => track.Id);
+        var items = artistPage.Select(item =>
+        {
+            var representative = representativesById[item.RepresentativeTrackId];
+            return new ArtistSummaryResponse(
+                item.Artist,
+                item.TrackCount,
+                albumCounts.GetValueOrDefault(item.Artist),
+                representative.CoverUrl,
+                representative.ArtistImageUrl,
+                representative.ArtistImageMissing);
+        }).ToArray();
+        return new PagedResponse<ArtistSummaryResponse>(items, totalCount, actualPage, pageSize);
+    }
+
     public async Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken)
     {
         var tracks = await GetTracksAsync(cancellationToken);
@@ -83,13 +239,16 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             return tracks;
         }
 
-        var pattern = $"%{query.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
+        var pattern = CreateSearchPattern(query);
         return tracks.Where(track =>
             EF.Functions.Like(track.Title, pattern, "\\")
             || EF.Functions.Like(track.Artist, pattern, "\\")
             || EF.Functions.Like(track.Album, pattern, "\\")
             || EF.Functions.Like(track.AlbumArtist, pattern, "\\"));
     }
+
+    private static string CreateSearchPattern(string query) =>
+        $"%{query.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
 
     private async Task<IReadOnlyList<TrackResponse>> ToTrackResponsesAsync(
         IReadOnlyList<MusicTrack> tracks,

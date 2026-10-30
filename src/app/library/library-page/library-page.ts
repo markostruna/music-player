@@ -12,29 +12,16 @@ import { RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { formatTime } from '@shared/utils/format-time';
 import { LIBRARY_PAGE_SIZE, LibraryStore, LibraryView } from '@shared/services/library-store';
-import { MetadataPatch, MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
+import {
+  AlbumSummary,
+  MetadataPatch,
+  MusicLibraryApi,
+  MusicTrack,
+} from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
 import { IdentifyAlbumDialog, IdentifyAlbumRequest } from '../identify-album-dialog/identify-album-dialog';
 import { MusicShellState } from '../../shell/music-shell/music-shell-state';
-
-interface AlbumTile {
-  key: string;
-  title: string;
-  artist: string;
-  tracks: MusicTrack[];
-  coverUrl: string;
-}
-
-interface ArtistTile {
-  key: string;
-  name: string;
-  tracks: MusicTrack[];
-  albumCount: number;
-  coverUrl: string;
-  artistImageUrl: string;
-  artistImageMissing: boolean;
-}
 
 @Component({
   selector: 'app-library-page',
@@ -50,7 +37,7 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly toast = inject(ToastService);
 
   readonly identifyRequest = signal<IdentifyAlbumRequest | null>(null);
-  readonly albumMenu = signal<{ album: AlbumTile; left: number; top: number } | null>(null);
+  readonly albumMenu = signal<{ album: AlbumSummary; left: number; top: number } | null>(null);
 
   readonly activeSection = this.shellState.activeSection;
   readonly searchQuery = this.store.searchQuery;
@@ -62,80 +49,18 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   readonly isLoading = this.store.isLoading;
   private readonly pageError = signal('');
   readonly errorMessage = computed(() => this.store.errorMessage() || this.pageError());
-  readonly tracks = this.store.tracks;
   readonly currentTrack = this.player.currentTrack;
   readonly isAdmin = this.auth.isAdmin;
   readonly selectedTrackIds = signal(new Set<number>());
   readonly hasSelection = computed(() => this.selectedTrackIds().size > 0);
-  readonly albums = computed(() => {
-    const groups = new Map<string, AlbumTile>();
-    for (const track of this.tracks()) {
-      const artist = track.albumArtist.trim() || track.artist;
-      const key = `${artist.toLowerCase()}\u0000${track.album.toLowerCase()}`;
-      const group = groups.get(key);
-      if (group) {
-        group.tracks.push(track);
-      } else {
-        groups.set(key, {
-          key,
-          title: track.album,
-          artist,
-          tracks: [track],
-          coverUrl: track.coverUrl,
-        });
-      }
-    }
-    return [...groups.values()].sort(
-      (first, second) =>
-        first.artist.localeCompare(second.artist) || first.title.localeCompare(second.title),
-    );
-  });
-  readonly filteredAlbums = computed(() => {
-    const query = this.searchQuery().trim().toLowerCase();
-    return this.albums().filter((album) =>
-      `${album.title} ${album.artist}`.toLowerCase().includes(query),
-    );
-  });
-  readonly artists = computed(() => {
-    const groups = new Map<string, ArtistTile & { albumKeys: Set<string> }>();
-    for (const track of this.tracks()) {
-      const name = track.artist.trim() || 'Unknown artist';
-      const key = name.toLowerCase();
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          key,
-          name,
-          tracks: [],
-          albumCount: 0,
-          coverUrl: track.coverUrl,
-          artistImageUrl: track.artistImageUrl,
-          artistImageMissing: track.artistImageMissing,
-          albumKeys: new Set<string>(),
-        };
-        groups.set(key, group);
-      }
-      group.tracks.push(track);
-      group.albumKeys.add(
-        `${track.albumArtist.trim() || track.artist}\u0000${track.album}`.toLowerCase(),
-      );
-    }
-    return [...groups.values()]
-      .map(({ albumKeys, ...artist }) => ({ ...artist, albumCount: albumKeys.size }))
-      .sort((first, second) => first.name.localeCompare(second.name));
-  });
-  readonly filteredArtists = computed(() => {
-    const query = this.searchQuery().trim().toLowerCase();
-    return this.artists().filter((artist) => artist.name.toLowerCase().includes(query));
-  });
   readonly totalItems = computed(() => {
     switch (this.collectionView()) {
       case 'tracks':
         return this.store.totalTrackCount();
       case 'albums':
-        return this.filteredAlbums().length;
+        return this.store.totalAlbumCount();
       case 'artists':
-        return this.filteredArtists().length;
+        return this.store.totalArtistCount();
       default:
         return 0;
     }
@@ -147,8 +72,8 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   );
   readonly pageEnd = computed(() => Math.min(this.pageNumber() * this.pageSize, this.totalItems()));
   readonly visibleTracks = computed(() => this.pagedTracks());
-  readonly visibleAlbums = computed(() => this.pageSlice(this.filteredAlbums()));
-  readonly visibleArtists = computed(() => this.pageSlice(this.filteredArtists()));
+  readonly visibleAlbums = this.store.pageAlbums;
+  readonly visibleArtists = this.store.pageArtists;
   metadata: MetadataPatch = {};
   destinationFolderId: number | null = null;
   folders: Awaited<ReturnType<MusicLibraryApi['listFolders']>> = [];
@@ -157,7 +82,7 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
   readonly formatTime = formatTime;
 
   ngOnInit(): void {
-    void this.loadLibrary(false);
+    void this.loadLibrary();
   }
 
   ngAfterViewInit(): void {
@@ -168,14 +93,18 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     this.store.scrollTop = window.scrollY;
   }
 
-  async loadLibrary(forceRefresh = true): Promise<void> {
+  async loadLibrary(): Promise<void> {
     this.pageError.set('');
-    if (this.collectionView() === 'tracks') {
+    const view = this.collectionView();
+    if (view === 'tracks') {
       await this.store.loadTrackPage(this.searchQuery(), this.currentPage(), this.pageSize);
-    } else if (forceRefresh) {
-      await this.store.refresh();
     } else {
-      await this.store.ensureLoaded();
+      await this.store.loadCollectionPage(
+        view,
+        this.searchQuery(),
+        this.currentPage(),
+        this.pageSize,
+      );
     }
     if (this.isAdmin() && !this.store.errorMessage()) {
       try {
@@ -192,31 +121,40 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     if (view === 'tracks') {
       void this.store.loadTrackPage(this.searchQuery(), 1, this.pageSize);
     } else {
-      void this.store.ensureLoaded();
+      void this.store.loadCollectionPage(view, this.searchQuery(), 1, this.pageSize);
     }
   }
 
   setSearchQuery(query: string): void {
     this.searchQuery.set(query);
     this.currentPage.set(1);
-    if (this.collectionView() === 'tracks') {
+    const view = this.collectionView();
+    if (view === 'tracks') {
       void this.store.loadTrackPage(query, 1, this.pageSize);
+    } else {
+      void this.store.loadCollectionPage(view, query, 1, this.pageSize);
     }
   }
 
   previousPage(): void {
     const page = Math.max(1, this.currentPage() - 1);
     this.currentPage.set(page);
-    if (this.collectionView() === 'tracks') {
+    const view = this.collectionView();
+    if (view === 'tracks') {
       void this.store.loadTrackPage(this.searchQuery(), page, this.pageSize);
+    } else {
+      void this.store.loadCollectionPage(view, this.searchQuery(), page, this.pageSize);
     }
   }
 
   nextPage(): void {
     const page = Math.min(this.totalPages(), this.currentPage() + 1);
     this.currentPage.set(page);
-    if (this.collectionView() === 'tracks') {
+    const view = this.collectionView();
+    if (view === 'tracks') {
       void this.store.loadTrackPage(this.searchQuery(), page, this.pageSize);
+    } else {
+      void this.store.loadCollectionPage(view, this.searchQuery(), page, this.pageSize);
     }
   }
 
@@ -224,10 +162,10 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     this.player.play(tracks, 0);
   }
 
-  openAlbumMenu(album: AlbumTile, event: Event): void {
+  openAlbumMenu(album: AlbumSummary, event: Event): void {
     event.preventDefault();
     event.stopPropagation();
-    if (this.albumMenu()?.album.key === album.key) {
+    if (this.albumMenu()?.album.coverTrackId === album.coverTrackId) {
       this.albumMenu.set(null);
       return;
     }
@@ -248,29 +186,42 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
     this.albumMenu.set(null);
   }
 
-  playAlbumFromMenu(): void {
-    const menu = this.albumMenu();
-    this.closeAlbumMenu();
-    if (menu) this.player.play(menu.album.tracks, 0);
-  }
-
-  enqueueAlbumFromMenu(): void {
+  async playAlbumFromMenu(): Promise<void> {
     const menu = this.albumMenu();
     this.closeAlbumMenu();
     if (!menu) return;
-    this.player.enqueue(menu.album.tracks);
-    this.toast.show(`Added ${menu.album.title} to the queue.`, 'success');
+    try {
+      this.player.play(await this.library.listAlbumTracks(menu.album.artist, menu.album.album), 0);
+    } catch {
+      this.toast.show('The album tracks could not be loaded.', 'error');
+    }
   }
 
-  identifyAlbumFromMenu(): void {
+  async enqueueAlbumFromMenu(): Promise<void> {
     const menu = this.albumMenu();
     this.closeAlbumMenu();
     if (!menu) return;
-    this.identifyRequest.set({
-      title: menu.album.title,
-      artist: menu.album.artist,
-      tracks: menu.album.tracks,
-    });
+    try {
+      this.player.enqueue(await this.library.listAlbumTracks(menu.album.artist, menu.album.album));
+      this.toast.show(`Added ${menu.album.album} to the queue.`, 'success');
+    } catch {
+      this.toast.show('The album tracks could not be loaded.', 'error');
+    }
+  }
+
+  async identifyAlbumFromMenu(): Promise<void> {
+    const menu = this.albumMenu();
+    this.closeAlbumMenu();
+    if (!menu) return;
+    try {
+      this.identifyRequest.set({
+        title: menu.album.album,
+        artist: menu.album.artist,
+        tracks: await this.library.listAlbumTracks(menu.album.artist, menu.album.album),
+      });
+    } catch {
+      this.toast.show('The album tracks could not be loaded.', 'error');
+    }
   }
 
   async closeIdentify(changed: boolean): Promise<void> {
@@ -291,17 +242,12 @@ export class LibraryPage implements OnInit, AfterViewInit, OnDestroy {
       const tracks =
         this.collectionView() === 'tracks'
           ? await this.library.searchTracks(this.searchQuery())
-          : this.tracks();
+          : await this.library.searchTracks('');
       this.player.play(tracks, 0);
     } catch {
       this.toast.show('Tracks could not be loaded for playback.', 'error');
     }
   }
-  private pageSlice<T>(items: T[]): T[] {
-    const start = (this.pageNumber() - 1) * this.pageSize;
-    return items.slice(start, start + this.pageSize);
-  }
-
   toggleSelection(trackId: number, event: Event): void {
     const selected = new Set(this.selectedTrackIds());
     if ((event.target as HTMLInputElement).checked) selected.add(trackId);

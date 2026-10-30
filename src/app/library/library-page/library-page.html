@@ -250,26 +250,26 @@
     } @else if (collectionView() === 'albums') {
       @if (visibleAlbums().length) {
         <div class="collection-grid">
-          @for (album of visibleAlbums(); track album.key) {
+          @for (album of visibleAlbums(); track album.coverTrackId) {
             <a
               class="collection-tile"
-              [routerLink]="['/library/album', album.tracks[0].id]"
-              [attr.aria-label]="'View album ' + album.title + ' by ' + album.artist"
-              [title]="'View album: ' + album.title"
+              [routerLink]="['/library/album', album.coverTrackId]"
+              [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
+              [title]="'View album: ' + album.album"
             >
               <span class="tile-art"
                 ><span class="tile-placeholder" aria-hidden="true">♫</span
                 ><img
                   [src]="album.coverUrl"
-                  [alt]="album.title + ' artwork'"
+                  [alt]="album.album + ' artwork'"
                   (error)="$any($event.target).style.visibility = 'hidden'"
                 /><button
                   class="tile-play tile-menu-button"
                   type="button"
                   aria-haspopup="menu"
-                  [attr.aria-expanded]="albumMenu()?.album?.key === album.key"
-                  [attr.aria-label]="'Actions for ' + album.title"
-                  [class.menu-open]="albumMenu()?.album?.key === album.key"
+                  [attr.aria-expanded]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
+                  [attr.aria-label]="'Actions for ' + album.album"
+                  [class.menu-open]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
                   (click)="openAlbumMenu(album, $event)"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -278,11 +278,11 @@
                     <circle cx="19" cy="12" r="2" />
                   </svg></button
               ></span>
-              <span class="tile-title">{{ album.title }}</span>
+              <span class="tile-title">{{ album.album }}</span>
               <span class="tile-detail">{{ album.artist }}</span>
               <span class="tile-meta"
-                >{{ album.tracks.length }}
-                {{ album.tracks.length === 1 ? 'track' : 'tracks' }}</span
+                >{{ album.trackCount }}
+                {{ album.trackCount === 1 ? 'track' : 'tracks' }}</span
               >
             </a>
           }
@@ -317,29 +317,29 @@
     } @else {
       @if (visibleArtists().length) {
         <div class="collection-grid">
-          @for (artist of visibleArtists(); track artist.key) {
+          @for (artist of visibleArtists(); track artist.artist) {
             <a
               class="collection-tile"
-              [routerLink]="['/library/artist', artist.name]"
-              [attr.aria-label]="'View artist ' + artist.name"
-              [title]="'View artist: ' + artist.name"
+              [routerLink]="['/library/artist', artist.artist]"
+              [attr.aria-label]="'View artist ' + artist.artist"
+              [title]="'View artist: ' + artist.artist"
             >
               <span class="tile-art artist-art"
                 ><span class="tile-placeholder" aria-hidden="true">♫</span
                 ><img
                   [src]="artist.artistImageUrl || artist.coverUrl"
-                  [alt]="artist.name + ' photo'"
+                  [alt]="artist.artist + ' photo'"
                   (error)="$any($event.target).style.visibility = 'hidden'"
                 /><span class="tile-play" aria-hidden="true"
                   ><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7V5Z" /></svg></span
               ></span
               >
-              <span class="tile-title">{{ artist.name }}</span>
+              <span class="tile-title">{{ artist.artist }}</span>
               <span class="tile-detail"
                 >{{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}</span
               >
               <span class="tile-meta"
-                >{{ artist.tracks.length }} {{ artist.tracks.length === 1 ? 'track' : 'tracks'
+                >{{ artist.trackCount }} {{ artist.trackCount === 1 ? 'track' : 'tracks'
                 }}{{ artist.artistImageMissing ? ' · Photo missing' : '' }}</span
               >
             </a>

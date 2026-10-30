@@ -44,6 +44,53 @@ public static class LibraryEndpoints
         })
         .WithName("ListTrackPage")
         .WithSummary("Searches and returns one page of playable tracks.");
+        library.MapGet("/albums/page", async Task<Results<Ok<PagedResponse<AlbumSummaryResponse>>, BadRequest<string>>> (
+            string? query,
+            int page,
+            int pageSize,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
+            {
+                return TypedResults.BadRequest("Page, page size, or search text is invalid.");
+            }
+
+            return TypedResults.Ok(await music.GetAlbumsPageAsync(query, page, pageSize, cancellationToken));
+        })
+        .WithName("ListAlbumPage")
+        .WithSummary("Searches and returns one page of album summaries.");
+        library.MapGet("/albums/tracks", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
+            string artist,
+            string album,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (artist.Length > 1024 || album.Length > 1024)
+            {
+                return TypedResults.BadRequest("Album artist and title cannot exceed 1024 characters.");
+            }
+
+            return TypedResults.Ok(await music.GetAlbumTracksAsync(artist, album, cancellationToken));
+        })
+        .WithName("ListAlbumTracks")
+        .WithSummary("Lists tracks for one album.");
+        library.MapGet("/artists/page", async Task<Results<Ok<PagedResponse<ArtistSummaryResponse>>, BadRequest<string>>> (
+            string? query,
+            int page,
+            int pageSize,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
+            {
+                return TypedResults.BadRequest("Page, page size, or search text is invalid.");
+            }
+
+            return TypedResults.Ok(await music.GetArtistsPageAsync(query, page, pageSize, cancellationToken));
+        })
+        .WithName("ListArtistPage")
+        .WithSummary("Searches and returns one page of artist summaries.");
         library.MapGet("/albums", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
                 TypedResults.Ok(await music.GetAlbumsAsync(cancellationToken)))
             .WithName("ListAlbums")

@@ -140,8 +140,12 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Directory.CreateDirectory(albumDirectory);
         var firstTrack = Path.Combine(albumDirectory, "first.wav");
         var secondTrack = Path.Combine(albumDirectory, "second.wav");
+        var secondAlbumDirectory = Path.Combine(sourceDirectory, "Second Album");
+        Directory.CreateDirectory(secondAlbumDirectory);
+        var thirdTrack = Path.Combine(secondAlbumDirectory, "third.wav");
         await CreateWaveFileAsync(firstTrack);
         await CreateWaveFileAsync(secondTrack);
+        await CreateWaveFileAsync(thirdTrack);
         using (var audio = TagLib.File.Create(firstTrack))
         {
             audio.Tag.Title = "Matching Track";
@@ -158,6 +162,14 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             audio.Save();
         }
 
+        using (var audio = TagLib.File.Create(thirdTrack))
+        {
+            audio.Tag.Title = "Third Track";
+            audio.Tag.Performers = ["Second Artist"];
+            audio.Tag.Album = "Second Album";
+            audio.Save();
+        }
+
         var root = await library.AddRootAsync(new CreateSourceRootRequest
         {
             Name = "Paged Music",
@@ -166,11 +178,31 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         await library.ScanAsync(root.Id, CancellationToken.None);
 
         var result = await library.GetTracksPageAsync("matching", page: 1, pageSize: 1, CancellationToken.None);
+        var albums = await library.GetAlbumsPageAsync("Paged", page: 1, pageSize: 1, CancellationToken.None);
+        var artists = await library.GetArtistsPageAsync("Page", page: 1, pageSize: 1, CancellationToken.None);
+        var albumTracks = await library.GetAlbumTracksAsync("Page Artist", "Paged Album", CancellationToken.None);
+        var firstAlbumPage = await library.GetAlbumsPageAsync(null, page: 1, pageSize: 1, CancellationToken.None);
+        var secondAlbumPage = await library.GetAlbumsPageAsync(null, page: 2, pageSize: 1, CancellationToken.None);
+        var firstArtistPage = await library.GetArtistsPageAsync(null, page: 1, pageSize: 1, CancellationToken.None);
+        var secondArtistPage = await library.GetArtistsPageAsync(null, page: 2, pageSize: 1, CancellationToken.None);
 
         Assert.Equal(1, result.TotalCount);
         Assert.Equal(1, result.Page);
         Assert.Single(result.Items);
         Assert.Equal("Matching Track", result.Items[0].Title);
+        Assert.Equal(1, albums.TotalCount);
+        Assert.Equal(2, albums.Items.Single().TrackCount);
+        Assert.Equal("Paged Album", albums.Items.Single().Album);
+        Assert.Equal(1, artists.TotalCount);
+        Assert.Equal(2, artists.Items.Single().TrackCount);
+        Assert.Equal(1, artists.Items.Single().AlbumCount);
+        Assert.Equal(2, albumTracks.Count);
+        Assert.Equal(2, firstAlbumPage.TotalCount);
+        Assert.Equal("Paged Album", firstAlbumPage.Items.Single().Album);
+        Assert.Equal("Second Album", secondAlbumPage.Items.Single().Album);
+        Assert.Equal(2, firstArtistPage.TotalCount);
+        Assert.Equal("Page Artist", firstArtistPage.Items.Single().Artist);
+        Assert.Equal("Second Artist", secondArtistPage.Items.Single().Artist);
     }
 
     [Fact]
