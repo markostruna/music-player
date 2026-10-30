@@ -56,28 +56,40 @@
         </h2>
       </div>
       <div class="collection-actions">
-        <div class="view-switch" role="group" aria-label="Library view">
+        <div class="collection-tabs" role="tablist" aria-label="Library pages">
           <button
-            type="button"
+            id="library-tab-tracks"
+            role="tab"
+            [attr.aria-selected]="collectionView() === 'tracks'"
+            [attr.aria-controls]="'library-panel-tracks'"
+            [tabIndex]="collectionView() === 'tracks' ? 0 : -1"
             [class.active]="collectionView() === 'tracks'"
-            [attr.aria-pressed]="collectionView() === 'tracks'"
-            (click)="setCollectionView('tracks')"
+            (click)="selectTab('tracks')"
+            (keydown)="onTabKeydown($event, 'tracks')"
           >
             Tracks
           </button>
           <button
-            type="button"
+            id="library-tab-albums"
+            role="tab"
+            [attr.aria-selected]="collectionView() === 'albums'"
+            [attr.aria-controls]="'library-panel-albums'"
+            [tabIndex]="collectionView() === 'albums' ? 0 : -1"
             [class.active]="collectionView() === 'albums'"
-            [attr.aria-pressed]="collectionView() === 'albums'"
-            (click)="setCollectionView('albums')"
+            (click)="selectTab('albums')"
+            (keydown)="onTabKeydown($event, 'albums')"
           >
             Albums
           </button>
           <button
-            type="button"
+            id="library-tab-artists"
+            role="tab"
+            [attr.aria-selected]="collectionView() === 'artists'"
+            [attr.aria-controls]="'library-panel-artists'"
+            [tabIndex]="collectionView() === 'artists' ? 0 : -1"
             [class.active]="collectionView() === 'artists'"
-            [attr.aria-pressed]="collectionView() === 'artists'"
-            (click)="setCollectionView('artists')"
+            (click)="selectTab('artists')"
+            (keydown)="onTabKeydown($event, 'artists')"
           >
             Artists
           </button>
@@ -85,7 +97,7 @@
         <button
           class="see-all"
           type="button"
-          (click)="loadLibrary()"
+          (click)="refreshLibrary()"
           aria-label="Refresh library"
           title="Refresh library"
         >
@@ -109,283 +121,44 @@
         </button>
       </div>
     </div>
-    @if (collectionView() === 'tracks' && isAdmin() && hasSelection()) {
-      <div class="admin-toolbar">
-        <span>{{ selectedTrackIds().size }} selected</span>
-        <form class="metadata-editor" (ngSubmit)="saveMetadata()">
-          <input aria-label="Title" placeholder="Title" name="title" [(ngModel)]="metadata.title" />
-          <input
-            aria-label="Artist"
-            placeholder="Artist"
-            name="artist"
-            [(ngModel)]="metadata.artist"
-          />
-          <input aria-label="Album" placeholder="Album" name="album" [(ngModel)]="metadata.album" />
-          <input
-            aria-label="Album artist"
-            placeholder="Album artist"
-            name="albumArtist"
-            [(ngModel)]="metadata.albumArtist"
-          />
-          <input
-            aria-label="Track number"
-            placeholder="Track #"
-            name="trackNumber"
-            type="number"
-            min="1"
-            [(ngModel)]="metadata.trackNumber"
-          />
-          <input
-            aria-label="Disc number"
-            placeholder="Disc #"
-            name="discNumber"
-            type="number"
-            min="1"
-            [(ngModel)]="metadata.discNumber"
-          />
-          <input
-            aria-label="Year"
-            placeholder="Year"
-            name="year"
-            type="number"
-            min="1"
-            [(ngModel)]="metadata.year"
-          />
-          <input aria-label="Genre" placeholder="Genre" name="genre" [(ngModel)]="metadata.genre" />
-          <button class="small-action" type="submit">Save tags</button>
-        </form>
-        <input
-          #coverInput
-          class="visually-hidden"
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
-          (change)="updateCover($event)"
-        />
-        <button class="small-action" type="button" (click)="coverInput.click()">
-          Change cover
-        </button>
-        <select
-          aria-label="Destination folder"
-          [value]="destinationFolderId ?? ''"
-          (change)="setDestinationFolder($event)"
-        >
-          <option value="">Move to folder…</option>
-          @for (folder of folders; track folder.id) {
-            <option [value]="folder.id">
-              {{ folder.name }}{{ folder.relativePath ? ' / ' + folder.relativePath : '' }}
-            </option>
-          }
-        </select>
-        <button
-          class="small-action"
-          type="button"
-          [disabled]="!destinationFolderId"
-          (click)="moveSelected()"
-        >
-          Move
-        </button>
-      </div>
-      @if (operationMessage) {
-        <p class="operation-message" role="status">{{ operationMessage }}</p>
-      }
-    }
-    @if (isLoading()) {
-      <p class="empty-state">Loading your music…</p>
-    } @else if (errorMessage()) {
-      <p class="empty-state" role="alert">{{ errorMessage() }}</p>
-    } @else if (collectionView() === 'tracks') {
-      <div class="track-table">
-        <div class="track-head">
-          <span></span><span>#</span><span>TITLE</span><span>ALBUM</span><span>TIME</span
-          ><span></span>
-        </div>
-        @for (track of visibleTracks(); track track.id; let index = $index) {
-          <div
-            class="track-row"
-            [class.now-playing]="currentTrack()?.id === track.id && isPlaying()"
-          >
-            <label class="selection-cell">
-              @if (isAdmin()) {
-                <input
-                  type="checkbox"
-                  [checked]="selectedTrackIds().has(track.id)"
-                  [attr.aria-label]="'Select ' + track.title"
-                  (change)="toggleSelection(track.id, $event)"
-                />
-              }
-            </label>
-            <span class="track-number">{{
-              currentTrack()?.id === track.id && isPlaying()
-                ? '♫'
-                : (pageNumber() - 1) * pageSize + index + 1
-            }}</span>
-            <button class="track-title-cell track-select" (click)="chooseTrack(track)">
-              <img
-                [src]="track.coverUrl"
-                [alt]="track.album + ' artwork'"
-                (error)="$any($event.target).style.visibility = 'hidden'"
-              /><span
-                ><strong>{{ track.title }}</strong
-                ><small>{{ track.artist }}</small></span
-              >
-            </button>
-            <span class="track-album">{{ track.album }}</span
-            ><span class="track-duration">{{ formatTime(track.durationSeconds) }}</span>
-            <button class="row-play" aria-label="Play track" (click)="chooseTrack(track)">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m8 5 12 7-12 7V5Z" />
-              </svg>
-            </button>
-          </div>
-        } @empty {
-          <p class="empty-state">
-            {{
-              searchQuery()
-                ? 'No tracks match that search.'
-                : 'No tracks yet. An administrator can add a music folder and scan it.'
-            }}
-          </p>
-        }
-      </div>
-    } @else if (collectionView() === 'albums') {
-      @if (visibleAlbums().length) {
-        <div class="collection-grid">
-          @for (album of visibleAlbums(); track album.coverTrackId) {
-            <a
-              class="collection-tile"
-              [routerLink]="['/library/album', album.coverTrackId]"
-              [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
-              [title]="'View album: ' + album.album"
-            >
-              <span class="tile-art"
-                ><span class="tile-placeholder" aria-hidden="true">♫</span
-                ><img
-                  [src]="album.coverUrl"
-                  [alt]="album.album + ' artwork'"
-                  (error)="$any($event.target).style.visibility = 'hidden'"
-                /><button
-                  class="tile-play tile-menu-button"
-                  type="button"
-                  aria-haspopup="menu"
-                  [attr.aria-expanded]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
-                  [attr.aria-label]="'Actions for ' + album.album"
-                  [class.menu-open]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
-                  (click)="openAlbumMenu(album, $event)"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="5" cy="12" r="2" />
-                    <circle cx="12" cy="12" r="2" />
-                    <circle cx="19" cy="12" r="2" />
-                  </svg></button
-              ></span>
-              <span class="tile-title">{{ album.album }}</span>
-              <span class="tile-detail">{{ album.artist }}</span>
-              <span class="tile-meta"
-                >{{ album.trackCount }}
-                {{ album.trackCount === 1 ? 'track' : 'tracks' }}</span
-              >
-            </a>
-          }
-        </div>
-        @if (albumMenu(); as menu) {
-          <div
-            class="album-menu-backdrop"
-            (click)="closeAlbumMenu()"
-            (keydown.escape)="closeAlbumMenu()"
-          ></div>
-          <div
-            class="album-menu"
-            role="menu"
-            [style.left.px]="menu.left"
-            [style.top.px]="menu.top"
-            (keydown.escape)="closeAlbumMenu()"
-          >
-            <button type="button" role="menuitem" (click)="playAlbumFromMenu()">Play</button>
-            <button type="button" role="menuitem" (click)="enqueueAlbumFromMenu()">Enqueue</button>
-            @if (isAdmin()) {
-              <button type="button" role="menuitem" (click)="identifyAlbumFromMenu()">
-                Identify
-              </button>
-            }
-          </div>
-        }
-      } @else {
-        <p class="empty-state">
-          {{ searchQuery() ? 'No albums match that search.' : 'No albums in your library yet.' }}
-        </p>
-      }
-    } @else {
-      @if (visibleArtists().length) {
-        <div class="collection-grid">
-          @for (artist of visibleArtists(); track artist.artist) {
-            <a
-              class="collection-tile"
-              [routerLink]="['/library/artist', artist.artist]"
-              [attr.aria-label]="'View artist ' + artist.artist"
-              [title]="'View artist: ' + artist.artist"
-            >
-              <span class="tile-art artist-art"
-                ><span class="tile-placeholder" aria-hidden="true">♫</span
-                ><img
-                  [src]="artist.artistImageUrl || artist.coverUrl"
-                  [alt]="artist.artist + ' photo'"
-                  (error)="$any($event.target).style.visibility = 'hidden'"
-                /><span class="tile-play" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7V5Z" /></svg></span
-              ></span
-              >
-              <span class="tile-title">{{ artist.artist }}</span>
-              <span class="tile-detail"
-                >{{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}</span
-              >
-              <span class="tile-meta"
-                >{{ artist.trackCount }} {{ artist.trackCount === 1 ? 'track' : 'tracks'
-                }}{{ artist.artistImageMissing ? ' · Photo missing' : '' }}</span
-              >
-            </a>
-          }
-        </div>
-      } @else {
-        <p class="empty-state">
-          {{ searchQuery() ? 'No artists match that search.' : 'No artists in your library yet.' }}
-        </p>
-      }
-    }
-    @if (!isLoading() && !errorMessage() && totalItems() > 0) {
-      <nav class="library-pagination" aria-label="Library pagination">
-        <span>Showing {{ pageStart() }}–{{ pageEnd() }} of {{ totalItems() }}</span>
-        <div class="pagination-controls">
-          <button
-            type="button"
-            aria-label="Previous page"
-            title="Previous page"
-            [disabled]="pageNumber() === 1"
-            (click)="previousPage()"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </button>
-          <span>Page {{ pageNumber() }} of {{ totalPages() }}</span>
-          <button
-            type="button"
-            aria-label="Next page"
-            title="Next page"
-            [disabled]="pageNumber() === totalPages()"
-            (click)="nextPage()"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m9 18 6-6-6-6" />
-            </svg>
-          </button>
-        </div>
-      </nav>
-    }
+    <div
+      id="library-panel-tracks"
+      role="tabpanel"
+      aria-labelledby="library-tab-tracks"
+      [hidden]="collectionView() !== 'tracks'"
+      tabindex="0"
+    >
+      <app-library-tracks-page
+        [active]="collectionView() === 'tracks'"
+        [refreshTrigger]="refreshTrigger()"
+      />
+    </div>
+    <div
+      id="library-panel-albums"
+      role="tabpanel"
+      aria-labelledby="library-tab-albums"
+      [hidden]="collectionView() !== 'albums'"
+      tabindex="0"
+    >
+      <app-library-albums-page
+        [active]="collectionView() === 'albums'"
+        [refreshTrigger]="refreshTrigger()"
+      />
+    </div>
+    <div
+      id="library-panel-artists"
+      role="tabpanel"
+      aria-labelledby="library-tab-artists"
+      [hidden]="collectionView() !== 'artists'"
+      tabindex="0"
+    >
+      <app-library-artists-page
+        [active]="collectionView() === 'artists'"
+        [refreshTrigger]="refreshTrigger()"
+      />
+    </div>
   </section>
   <footer class="page-footer">
     <span>YOUR MUSIC, YOUR MOMENT.</span><span>MADE FOR THE IN-BETWEEN</span>
   </footer>
 </div>
-@if (identifyRequest(); as request) {
-  <app-identify-album-dialog [album]="request" (closed)="closeIdentify($event)" />
-}

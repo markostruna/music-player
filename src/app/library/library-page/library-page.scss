@@ -630,33 +630,52 @@ kbd {
   gap: 18px;
 }
 
-.view-switch {
+.collection-tabs {
   display: flex;
-  padding: 3px;
-  border: 1px solid #e2e6de;
-  border-radius: 5px;
-  background: #fff;
+  min-width: 240px;
+  border-bottom: 1px solid var(--line);
 }
 
-.view-switch button {
-  min-width: 58px;
-  min-height: 29px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 3px;
+.collection-tabs button {
+  display: flex;
+  min-width: 68px;
+  min-height: 38px;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: -1px;
+  padding: 0 12px;
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
   background: transparent;
-  color: #68716a;
+  color: var(--muted);
   cursor: pointer;
   font-size: 10px;
   font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
 }
 
-.view-switch button:hover {
-  background: #f0f2eb;
+.collection-tabs button:hover {
+  color: var(--ink);
 }
-.view-switch button.active {
-  background: var(--forest);
-  color: #fff;
+.collection-tabs button.active {
+  border-bottom-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.collection-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+app-library-tracks-page,
+app-library-albums-page,
+app-library-artists-page {
+  display: block;
 }
 
 .track-table {
@@ -1185,10 +1204,10 @@ kbd {
     flex-direction: column-reverse;
     gap: 5px;
   }
-  .view-switch button {
+  .collection-tabs button {
     min-width: 49px;
-    min-height: 27px;
-    padding: 0 7px;
+    min-height: 34px;
+    padding: 0 6px;
     font-size: 9px;
   }
   .collection-grid {

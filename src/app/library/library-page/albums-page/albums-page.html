@@ -1,0 +1,100 @@
+@if (isLoading()) {
+  <p class="empty-state">Loading your music…</p>
+} @else if (errorMessage()) {
+  <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+} @else if (visibleAlbums().length) {
+  <div class="collection-grid">
+    @for (album of visibleAlbums(); track album.coverTrackId) {
+      <a
+        class="collection-tile"
+        [routerLink]="['/library/album', album.coverTrackId]"
+        [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
+        [title]="'View album: ' + album.album"
+      >
+        <span class="tile-art">
+          <span class="tile-placeholder" aria-hidden="true">♫</span>
+          <img
+            [src]="album.coverUrl"
+            [alt]="album.album + ' artwork'"
+            (error)="$any($event.target).style.visibility = 'hidden'"
+          />
+          <button
+            class="tile-play tile-menu-button"
+            type="button"
+            aria-haspopup="menu"
+            [attr.aria-expanded]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
+            [attr.aria-label]="'Actions for ' + album.album"
+            [class.menu-open]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
+            (click)="openAlbumMenu(album, $event)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg>
+          </button>
+        </span>
+        <span class="tile-title">{{ album.album }}</span>
+        <span class="tile-detail">{{ album.artist }}</span>
+        <span class="tile-meta">
+          {{ album.trackCount }} {{ album.trackCount === 1 ? 'track' : 'tracks' }}
+        </span>
+      </a>
+    }
+  </div>
+  @if (albumMenu(); as menu) {
+    <div
+      class="album-menu-backdrop"
+      (click)="closeAlbumMenu()"
+      (keydown.escape)="closeAlbumMenu()"
+    ></div>
+    <div
+      class="album-menu"
+      role="menu"
+      [style.left.px]="menu.left"
+      [style.top.px]="menu.top"
+      (keydown.escape)="closeAlbumMenu()"
+    >
+      <button type="button" role="menuitem" (click)="playAlbumFromMenu()">Play</button>
+      <button type="button" role="menuitem" (click)="enqueueAlbumFromMenu()">Enqueue</button>
+      @if (isAdmin()) {
+        <button type="button" role="menuitem" (click)="identifyAlbumFromMenu()">Identify</button>
+      }
+    </div>
+  }
+} @else {
+  <p class="empty-state">
+    {{ searchQuery() ? 'No albums match that search.' : 'No albums in your library yet.' }}
+  </p>
+}
+
+@if (!isLoading() && !errorMessage() && totalItems() > 0) {
+  <nav class="library-pagination" aria-label="Library pagination">
+    <span>Showing {{ pageStart() }}–{{ pageEnd() }} of {{ totalItems() }}</span>
+    <div class="pagination-controls">
+      <button
+        type="button"
+        aria-label="Previous page"
+        title="Previous page"
+        [disabled]="pageNumber() === 1"
+        (click)="previousPage()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+      </button>
+      <span>Page {{ pageNumber() }} of {{ totalPages() }}</span>
+      <button
+        type="button"
+        aria-label="Next page"
+        title="Next page"
+        [disabled]="pageNumber() === totalPages()"
+        (click)="nextPage()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+      </button>
+    </div>
+  </nav>
+}
+
+@if (identifyRequest(); as request) {
+  <app-identify-album-dialog [album]="request" (closed)="closeIdentify($event)" />
+}
