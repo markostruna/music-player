@@ -52,10 +52,16 @@ export class MusicShell {
     this.navigationEnd();
     return this.route.firstChild?.snapshot.routeConfig?.path === 'library';
   });
+  readonly isHomePage = computed(() => {
+    this.navigationEnd();
+    return this.route.firstChild?.snapshot.routeConfig?.path === 'home';
+  });
   readonly pageTitle = computed(() => {
     this.navigationEnd();
     const childRoute = this.route.firstChild;
     switch (childRoute?.snapshot.routeConfig?.path) {
+      case 'home':
+        return 'Home';
       case 'library':
         return this.activeSection();
       case 'admin':

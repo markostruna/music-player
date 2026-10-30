@@ -11,6 +11,10 @@ export const shellRoutes: Routes = [
     component: MusicShell,
     canActivateChild: [requireAuth],
     children: [
+      {
+        path: 'home',
+        loadComponent: () => import('../home/home-page').then((module) => module.HomePage),
+      },
       ...libraryRoutes,
       ...nowPlayingRoutes,
       ...adminRoutes,

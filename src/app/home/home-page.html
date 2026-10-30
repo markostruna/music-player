@@ -1,0 +1,135 @@
+<div class="content-scroll home-page">
+  <section class="feature-banner home-banner">
+    <img
+      src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=85"
+      alt="A crowd under warm lights at a live show"
+    />
+    <div class="feature-shade"></div>
+    <div class="feature-content">
+      <span class="feature-tag">WELCOME TO AFTERHOURS</span>
+      <h1>Find your<br />own frequency.</h1>
+      <p>Your music, ready whenever you are.</p>
+      <a class="feature-play" routerLink="/library">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7V5Z" /></svg>
+        Explore your library
+      </a>
+    </div>
+    <div class="feature-index"><span>01</span><span class="index-line"></span><span>03</span></div>
+  </section>
+
+  @if (isLoading()) {
+    <p class="empty-state">Loading your collection…</p>
+  } @else if (errorMessage()) {
+    <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+  } @else {
+    <section class="home-category" aria-labelledby="home-albums-heading">
+      <div class="home-category-heading">
+        <div>
+          <span class="eyebrow">PICK UP WHEREVER YOU LIKE</span>
+          <h2 id="home-albums-heading">Albums</h2>
+        </div>
+        <a class="see-all" routerLink="/library" (click)="selectLibraryTab('albums')">
+          See all
+        </a>
+      </div>
+      @if (albums().length) {
+        <div class="home-collection-grid">
+          @for (album of albums(); track album.coverTrackId) {
+            <a
+              class="collection-tile"
+              [routerLink]="['/library/album', album.coverTrackId]"
+              [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
+            >
+              <span class="tile-art">
+                <span class="tile-placeholder" aria-hidden="true">♫</span>
+                <img
+                  [src]="album.coverUrl"
+                  [alt]="album.album + ' artwork'"
+                  (error)="$any($event.target).style.visibility = 'hidden'"
+                />
+              </span>
+              <span class="tile-title">{{ album.album }}</span>
+              <span class="tile-detail">{{ album.artist }}</span>
+            </a>
+          }
+        </div>
+      } @else {
+        <p class="empty-state">No albums in your library yet.</p>
+      }
+    </section>
+
+    <section class="home-category" aria-labelledby="home-artists-heading">
+      <div class="home-category-heading">
+        <div>
+          <span class="eyebrow">THE PEOPLE BEHIND THE MUSIC</span>
+          <h2 id="home-artists-heading">Artists</h2>
+        </div>
+        <a class="see-all" routerLink="/library" (click)="selectLibraryTab('artists')">
+          See all
+        </a>
+      </div>
+      @if (artists().length) {
+        <div class="home-collection-grid">
+          @for (artist of artists(); track artist.artist) {
+            <a
+              class="collection-tile"
+              [routerLink]="['/library/artist', artist.artist]"
+              [attr.aria-label]="'View artist ' + artist.artist"
+            >
+              <span class="tile-art artist-art">
+                <span class="tile-placeholder" aria-hidden="true">♫</span>
+                <img
+                  [src]="artist.artistImageUrl || artist.coverUrl"
+                  [alt]="artist.artist + ' photo'"
+                  (error)="$any($event.target).style.visibility = 'hidden'"
+                />
+              </span>
+              <span class="tile-title">{{ artist.artist }}</span>
+              <span class="tile-detail">
+                {{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}
+              </span>
+            </a>
+          }
+        </div>
+      } @else {
+        <p class="empty-state">No artists in your library yet.</p>
+      }
+    </section>
+
+    <section class="home-category" aria-labelledby="home-tracks-heading">
+      <div class="home-category-heading">
+        <div>
+          <span class="eyebrow">A FEW TRACKS TO GET YOU STARTED</span>
+          <h2 id="home-tracks-heading">Tracks</h2>
+        </div>
+        <a class="see-all" routerLink="/library" (click)="selectLibraryTab('tracks')">
+          See all
+        </a>
+      </div>
+      @if (tracks().length) {
+        <div class="home-track-grid">
+          @for (track of tracks(); track track.id) {
+            <button class="home-track-tile" type="button" (click)="playTrack(track)">
+              <span class="home-track-art">
+                <img
+                  [src]="track.coverUrl"
+                  [alt]="track.album + ' artwork'"
+                  (error)="$any($event.target).style.visibility = 'hidden'"
+                />
+              </span>
+              <span class="home-track-copy">
+                <strong>{{ track.title }}</strong>
+                <small>{{ track.artist }} · {{ track.album }}</small>
+              </span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m8 5 12 7-12 7V5Z" />
+              </svg>
+            </button>
+          }
+        </div>
+      } @else {
+        <p class="empty-state">No tracks in your library yet.</p>
+      }
+    </section>
+  }
+</div>

@@ -1,0 +1,146 @@
+:host {
+  display: block;
+}
+
+.home-page {
+  padding-top: 24px;
+}
+
+.home-banner {
+  margin-bottom: 30px;
+}
+
+.home-banner h1 {
+  margin: 11px 0 6px;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(27px, 3vw, 38px);
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.home-banner .feature-play {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.home-category {
+  margin-top: 30px;
+}
+
+.home-category-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+
+.home-category-heading h2 {
+  margin: 5px 0 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.home-category-heading .see-all {
+  text-decoration: none;
+}
+
+.home-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+  gap: 18px 14px;
+}
+
+.home-track-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 8px 14px;
+}
+
+.home-track-tile {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-track-tile:hover {
+  background: var(--surface-hover);
+}
+
+.home-track-art {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--accent-soft);
+}
+
+.home-track-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-track-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.home-track-copy strong,
+.home-track-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-track-copy strong {
+  font-size: 11px;
+}
+
+.home-track-copy small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.home-track-tile > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: var(--accent);
+}
+
+@media (max-width: 680px) {
+  .home-page {
+    padding-top: 18px;
+  }
+
+  .home-banner {
+    margin-bottom: 24px;
+  }
+
+  .home-category {
+    margin-top: 24px;
+  }
+
+  .home-collection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+}

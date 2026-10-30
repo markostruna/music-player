@@ -23,7 +23,7 @@ export class LoginPage {
     this.errorMessage.set('');
     try {
       await this.auth.signIn(this.email, this.password);
-      await this.router.navigateByUrl('/library');
+      await this.router.navigateByUrl('/home');
     } catch {
       this.errorMessage.set('That email and password combination was not recognized.');
     } finally {
