@@ -4,6 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "start:prod-api": "ng serve --proxy-config proxy.prod.conf.json",
     "build": "ng build --base-href /music-player/",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
