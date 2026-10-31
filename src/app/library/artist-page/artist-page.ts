@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Location } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -11,6 +11,7 @@ import {
 } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
+import { AlbumActions, AlbumRef } from '../album-actions/album-actions';
 import { MetadataRefreshDialog } from '../metadata-refresh-dialog/metadata-refresh-dialog';
 import { distinctUntilChanged, map } from 'rxjs';
 
@@ -22,6 +23,8 @@ import { distinctUntilChanged, map } from 'rxjs';
 export class ArtistPage {
   private readonly auth = inject(AuthState);
   private readonly store = inject(LibraryStore);
+  readonly albumActions = inject(AlbumActions);
+  private lastChangeCount = this.albumActions.changeCount();
   private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
   private readonly toast = inject(ToastService);
@@ -119,6 +122,13 @@ export class ArtistPage {
   });
 
   constructor() {
+    effect(() => {
+      const changeCount = this.albumActions.changeCount();
+      if (changeCount === this.lastChangeCount) return;
+      this.lastChangeCount = changeCount;
+      const name = untracked(() => this.params()?.get('name'));
+      if (name) untracked(() => void this.loadArtist(name));
+    });
     this.route.paramMap
       .pipe(
         map((params) => params.get('name') ?? ''),
@@ -157,6 +167,11 @@ export class ArtistPage {
     } finally {
       if (requestId === this.artistRequestId) this.isLoading.set(false);
     }
+  }
+
+  albumRef(album: { title: string; tracks: MusicTrack[] }): AlbumRef {
+    const track = album.tracks[0];
+    return { artist: track.albumArtist.trim() || track.artist.trim(), title: album.title };
   }
 
   descriptionValue(artist: string, description: string): string {

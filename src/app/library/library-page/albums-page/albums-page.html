@@ -22,10 +22,10 @@
             class="tile-play tile-menu-button"
             type="button"
             aria-haspopup="menu"
-            [attr.aria-expanded]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
+            [attr.aria-expanded]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
             [attr.aria-label]="'Actions for ' + album.album"
-            [class.menu-open]="albumMenu()?.album?.coverTrackId === album.coverTrackId"
-            (click)="openAlbumMenu(album, $event)"
+            [class.menu-open]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
+            (click)="albumActions.openMenu({ artist: album.artist, title: album.album }, $event)"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="5" cy="12" r="2" />
@@ -41,26 +41,6 @@
       </a>
     }
   </div>
-  @if (albumMenu(); as menu) {
-    <div
-      class="album-menu-backdrop"
-      (click)="closeAlbumMenu()"
-      (keydown.escape)="closeAlbumMenu()"
-    ></div>
-    <div
-      class="album-menu"
-      role="menu"
-      [style.left.px]="menu.left"
-      [style.top.px]="menu.top"
-      (keydown.escape)="closeAlbumMenu()"
-    >
-      <button type="button" role="menuitem" (click)="playAlbumFromMenu()">Play</button>
-      <button type="button" role="menuitem" (click)="enqueueAlbumFromMenu()">Enqueue</button>
-      @if (isAdmin()) {
-        <button type="button" role="menuitem" (click)="identifyAlbumFromMenu()">Identify</button>
-      }
-    </div>
-  }
 } @else {
   <p class="empty-state">
     {{ searchQuery() ? 'No albums match that search.' : 'No albums in your library yet.' }}
@@ -75,8 +55,4 @@
   <button class="load-more" type="button" [disabled]="isLoading()" (click)="loadMore()">
     {{ isLoading() ? 'Loading…' : 'Load more' }}
   </button>
-}
-
-@if (identifyRequest(); as request) {
-  <app-identify-album-dialog [album]="request" (closed)="closeIdentify($event)" />
 }

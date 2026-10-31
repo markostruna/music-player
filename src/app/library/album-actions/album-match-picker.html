@@ -1,0 +1,85 @@
+<label class="field">
+  <span>Provider</span>
+  <select [ngModel]="providerId()" (ngModelChange)="changeProvider($event)" [disabled]="busy()">
+    @for (provider of providers(); track provider.id) {
+      <option [value]="provider.id" [disabled]="!provider.isConfigured">
+        {{ provider.name }}{{ provider.isConfigured ? '' : ' (not configured)' }}
+      </option>
+    }
+  </select>
+</label>
+
+@if (error()) {
+  <p class="dialog-error" role="alert">{{ error() }}</p>
+}
+
+@if (!providerReady()) {
+  <p class="hint">
+    This provider needs credentials in the server configuration (Discogs:Token, or
+    Spotify:ClientId and Spotify:ClientSecret).
+  </p>
+} @else if (mode() === 'custom') {
+  <form class="search-form" (ngSubmit)="search()">
+    <label class="field"
+      ><span>Artist</span><input name="artist" [(ngModel)]="customArtist" maxlength="512"
+    /></label>
+    <label class="field"
+      ><span>Album title</span><input name="album" [(ngModel)]="customAlbum" maxlength="512"
+    /></label>
+    <label class="field"
+      ><span>Release year</span
+      ><input name="year" type="number" min="1000" max="3000" [(ngModel)]="customYear"
+    /></label>
+    <div class="actions">
+      <button type="button" class="secondary" (click)="backToSuggestions()">
+        Back to suggestions
+      </button>
+      <button type="submit" [disabled]="busy()">Search</button>
+    </div>
+  </form>
+} @else {
+  <h3>{{ mode() === 'results' ? 'Search results' : 'Suggested matches' }}</h3>
+  @if (!matches().length && !busy()) {
+    <p class="hint">No matches found.</p>
+  }
+  <ul class="match-list">
+    @for (match of matches(); track match.provider + match.id) {
+      <li>
+        <label [class.selected]="selected()?.id === match.id">
+          <input
+            type="radio"
+            name="match"
+            [checked]="selected()?.id === match.id"
+            (change)="selected.set(match)"
+          />
+          @if (match.coverUrl) {
+            <img [src]="match.coverUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+          } @else {
+            <span class="no-cover"></span>
+          }
+          <span class="match-text">
+            <strong>{{ match.title }}</strong>
+            <small>
+              {{ match.artist }}{{ match.year ? ' · ' + match.year : ''
+              }}{{ match.trackCount ? ' · ' + match.trackCount + ' tracks' : ''
+              }}{{ match.detail ? ' · ' + match.detail : '' }}
+            </small>
+          </span>
+        </label>
+      </li>
+    }
+  </ul>
+  <div class="actions">
+    @if (mode() === 'results') {
+      <button type="button" class="secondary" (click)="startCustom()">Return to search</button>
+    } @else {
+      <button type="button" class="secondary" (click)="startCustom()">Custom search…</button>
+    }
+    <button type="button" [disabled]="!selected() || busy() || disabled()" (click)="pick()">
+      {{ actionLabel() }}
+    </button>
+  </div>
+}
+@if (busy()) {
+  <p class="hint" aria-live="polite">Working…</p>
+}

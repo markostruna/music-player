@@ -202,7 +202,20 @@
                   [src]="album.coverUrl"
                   [alt]="album.title + ' artwork'"
                   (error)="$any($event.target).style.visibility = 'hidden'"
-                /><span class="tile-play" aria-hidden="true">▶</span></span
+                /><button
+                  class="tile-play tile-menu-button"
+                  type="button"
+                  aria-haspopup="menu"
+                  [attr.aria-expanded]="albumActions.isMenuOpen(albumRef(album))"
+                  [attr.aria-label]="'Actions for ' + album.title"
+                  [class.menu-open]="albumActions.isMenuOpen(albumRef(album))"
+                  (click)="albumActions.openMenu(albumRef(album), $event)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="5" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="19" cy="12" r="2" />
+                  </svg> </button></span
               >
               <span class="tile-title">{{ album.title }}</span>
               <span class="tile-detail"

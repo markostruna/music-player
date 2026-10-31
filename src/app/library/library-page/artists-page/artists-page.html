@@ -18,18 +18,31 @@
             [alt]="artist.artist + ' photo'"
             (error)="$any($event.target).style.visibility = 'hidden'"
           />
-          <span class="tile-play" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="m8 5 12 7-12 7V5Z" /></svg>
-          </span>
+          @if (isAdmin()) {
+            <button
+              class="tile-play tile-menu-button"
+              type="button"
+              aria-haspopup="menu"
+              [attr.aria-expanded]="albumActions.isArtistMenuOpen(artist.artist)"
+              [attr.aria-label]="'Actions for ' + artist.artist"
+              [class.menu-open]="albumActions.isArtistMenuOpen(artist.artist)"
+              (click)="albumActions.openArtistMenu(artist.artist, $event)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="5" cy="12" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="19" cy="12" r="2" />
+              </svg>
+            </button>
+          }
         </span>
         <span class="tile-title">{{ artist.artist }}</span>
         <span class="tile-detail">
           {{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}
         </span>
-        <span class="tile-meta">
-          {{ artist.trackCount }} {{ artist.trackCount === 1 ? 'track' : 'tracks'
-          }}{{ artist.artistImageMissing ? ' · Photo missing' : '' }}
-        </span>
+        @if (artist.artistImageMissing) {
+          <span class="tile-meta">Photo missing</span>
+        }
       </a>
     }
   </div>

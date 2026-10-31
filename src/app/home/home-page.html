@@ -47,6 +47,21 @@
                   [alt]="album.album + ' artwork'"
                   (error)="$any($event.target).style.visibility = 'hidden'"
                 />
+                <button
+                  class="tile-play tile-menu-button"
+                  type="button"
+                  aria-haspopup="menu"
+                  [attr.aria-expanded]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
+                  [attr.aria-label]="'Actions for ' + album.album"
+                  [class.menu-open]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
+                  (click)="albumActions.openMenu({ artist: album.artist, title: album.album }, $event)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="5" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="19" cy="12" r="2" />
+                  </svg>
+                </button>
               </span>
               <span class="tile-title">{{ album.album }}</span>
               <span class="tile-detail">{{ album.artist }}</span>
@@ -83,6 +98,23 @@
                   [alt]="artist.artist + ' photo'"
                   (error)="$any($event.target).style.visibility = 'hidden'"
                 />
+                @if (isAdmin()) {
+                  <button
+                    class="tile-play tile-menu-button"
+                    type="button"
+                    aria-haspopup="menu"
+                    [attr.aria-expanded]="albumActions.isArtistMenuOpen(artist.artist)"
+                    [attr.aria-label]="'Actions for ' + artist.artist"
+                    [class.menu-open]="albumActions.isArtistMenuOpen(artist.artist)"
+                    (click)="albumActions.openArtistMenu(artist.artist, $event)"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="5" cy="12" r="2" />
+                      <circle cx="12" cy="12" r="2" />
+                      <circle cx="19" cy="12" r="2" />
+                    </svg>
+                  </button>
+                }
               </span>
               <span class="tile-title">{{ artist.artist }}</span>
               <span class="tile-detail">

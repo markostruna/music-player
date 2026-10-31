@@ -1,0 +1,105 @@
+<div class="dialog-backdrop" (click)="close()"></div>
+<div
+  class="dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="artist-cover-title"
+  (keydown.escape)="close()"
+>
+  <header class="dialog-header">
+    <div>
+      <h2 id="artist-cover-title">Change artist cover</h2>
+      <p>{{ artist() }}</p>
+    </div>
+    <button type="button" class="icon-button" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  @if (error()) {
+    <p class="dialog-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="dialog-body">
+    <h3>Search providers for artist covers</h3>
+    <div class="inline">
+      <label class="field">
+        <span>Provider</span>
+        <select
+          [ngModel]="providerId()"
+          (ngModelChange)="changeProvider($event)"
+          [disabled]="busy()"
+        >
+          @for (provider of providers(); track provider.id) {
+            <option [value]="provider.id">{{ provider.name }}</option>
+          }
+        </select>
+      </label>
+      <button type="button" class="secondary" [disabled]="busy() || !providerId()" (click)="search()">
+        Search
+      </button>
+    </div>
+
+    @if (!candidates().length && !busy()) {
+      <p class="hint">No artist matches found.</p>
+    }
+    @if (candidates().length) {
+      <div class="cover-grid">
+        @for (candidate of candidates(); track candidate.provider + candidate.id) {
+          <button
+            type="button"
+            class="cover-option"
+            [class.selected]="selectedCandidate()?.id === candidate.id"
+            [disabled]="busy()"
+            (click)="selectCandidate(candidate)"
+          >
+            @if (candidateImage(candidate); as imageUrl) {
+              <img [src]="imageUrl" [alt]="candidate.name + ' picture'" loading="lazy" />
+            } @else {
+              <span class="no-cover" aria-hidden="true"></span>
+            }
+            <span>{{ candidate.name }}</span>
+            @if (candidate.detail) {
+              <small>{{ candidate.detail }}</small>
+            }
+          </button>
+        }
+      </div>
+    }
+
+    <div class="custom-cover">
+      <label class="field">
+        <span>Upload image</span>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          (change)="chooseUpload($event)"
+        />
+      </label>
+      <div class="field">
+        <span>Image address</span>
+        <div class="inline">
+          <input [(ngModel)]="customUrl" placeholder="https://…" />
+          <button type="button" class="secondary" [disabled]="busy()" (click)="previewUrl()">
+            Preview
+          </button>
+        </div>
+      </div>
+    </div>
+
+    @if (previewSrc()) {
+      <figure class="cover-preview">
+        <img [src]="previewSrc()" alt="Selected artist cover preview" />
+        <figcaption>Preview</figcaption>
+      </figure>
+    }
+
+    <div class="actions">
+      <button type="button" class="secondary" [disabled]="busy()" (click)="close()">Cancel</button>
+      <button type="button" [disabled]="!previewSrc() || busy()" (click)="save()">
+        Use this cover
+      </button>
+    </div>
+    @if (busy()) {
+      <p class="hint" aria-live="polite">Working…</p>
+    }
+  </div>
+</div>

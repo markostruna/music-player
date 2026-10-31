@@ -17,12 +17,13 @@ import { PlayerService } from '@shared/services/player.service';
 import { ShellHeader } from '../header/shell-header';
 import { MusicShellState } from './music-shell-state';
 import { SideMenu } from '../side-menu/side-menu';
+import { AlbumActionsHost } from '../../library/album-actions/album-actions-host';
 import { ToastMessageComponent } from '@shared/components/toast-message/toast-message';
 import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 
 @Component({
   selector: 'app-music-shell',
-  imports: [RouterOutlet, SideMenu, ShellHeader, ToastMessageComponent],
+  imports: [RouterOutlet, SideMenu, ShellHeader, ToastMessageComponent, AlbumActionsHost],
   templateUrl: './music-shell.html',
 })
 export class MusicShell {

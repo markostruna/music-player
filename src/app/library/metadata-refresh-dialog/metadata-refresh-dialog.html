@@ -26,12 +26,13 @@
     <label class="metadata-provider-picker">
       <span>Provider</span>
       <select
-        [value]="providerId()"
         [disabled]="isSearching() || isSaving()"
         (change)="changeProvider($any($event.target).value)"
       >
         @for (provider of providers(); track provider.id) {
-          <option [value]="provider.id">{{ provider.name }}</option>
+          <option [value]="provider.id" [selected]="provider.id === providerId()">
+            {{ provider.name }}
+          </option>
         }
       </select>
     </label>

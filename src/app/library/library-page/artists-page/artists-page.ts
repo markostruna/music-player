@@ -1,6 +1,8 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AuthState } from '@shared/services/auth-state';
 import { LIBRARY_PAGE_SIZE, LibraryStore } from '@shared/services/library-store';
+import { AlbumActions } from '../../album-actions/album-actions';
 
 @Component({
   selector: 'app-library-artists-page',
@@ -9,6 +11,8 @@ import { LIBRARY_PAGE_SIZE, LibraryStore } from '@shared/services/library-store'
 })
 export class ArtistsPage {
   private readonly store = inject(LibraryStore);
+  readonly albumActions = inject(AlbumActions);
+  readonly isAdmin = inject(AuthState).isAdmin;
 
   readonly active = input(false);
   readonly refreshTrigger = input(0);
@@ -23,8 +27,15 @@ export class ArtistsPage {
   private loaded = false;
   private lastRefreshTrigger = 0;
   private lastSearchQuery = '';
+  private lastChangeCount = this.albumActions.changeCount();
 
   constructor() {
+    effect(() => {
+      const changeCount = this.albumActions.changeCount();
+      if (changeCount === this.lastChangeCount) return;
+      this.lastChangeCount = changeCount;
+      if (untracked(() => this.active() && this.loaded)) void untracked(() => this.loadPage());
+    });
     effect(() => {
       const active = this.active();
       const refreshTrigger = this.refreshTrigger();

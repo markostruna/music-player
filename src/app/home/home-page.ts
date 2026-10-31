@@ -1,5 +1,7 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AlbumActions } from '../library/album-actions/album-actions';
+import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore, LibraryView } from '@shared/services/library-store';
 import {
   AlbumSummary,
@@ -21,12 +23,24 @@ export class HomePage implements OnInit {
   private readonly library = inject(MusicLibraryApi);
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
+  readonly albumActions = inject(AlbumActions);
+  readonly isAdmin = inject(AuthState).isAdmin;
+  private lastChangeCount = this.albumActions.changeCount();
 
   readonly albums = signal<AlbumSummary[]>([]);
   readonly artists = signal<ArtistSummary[]>([]);
   readonly tracks = signal<MusicTrack[]>([]);
   readonly isLoading = signal(true);
   readonly errorMessage = signal('');
+
+  constructor() {
+    effect(() => {
+      const changeCount = this.albumActions.changeCount();
+      if (changeCount === this.lastChangeCount) return;
+      this.lastChangeCount = changeCount;
+      untracked(() => void this.loadHomeCollections());
+    });
+  }
 
   ngOnInit(): void {
     void this.loadHomeCollections();
