@@ -12,9 +12,9 @@
     </div>
     <label class="settings-theme-picker">
       <span>Theme</span>
-      <select [value]="user()?.theme ?? 'Light'" (change)="changeTheme($event)">
+      <select (change)="changeTheme($event)">
         @for (theme of themeOptions; track theme) {
-          <option [value]="theme">{{ theme }}</option>
+          <option [value]="theme" [selected]="theme === (user()?.theme ?? 'Light')">{{ theme }}</option>
         }
       </select>
     </label>
@@ -36,12 +36,13 @@
       <label class="settings-theme-picker">
         <span>Provider</span>
         <select
-          [value]="defaultProviderId()"
           [disabled]="isSavingDefaultProvider() || providers().length === 0"
           (change)="changeDefaultProvider($event)"
         >
           @for (provider of providers(); track provider.id) {
-            <option [value]="provider.id">{{ provider.name }}</option>
+            <option [value]="provider.id" [selected]="provider.id === defaultProviderId()">
+              {{ provider.name }}
+            </option>
           }
         </select>
       </label>
