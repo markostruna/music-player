@@ -62,7 +62,24 @@ public interface IMusicLibraryService
     Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken);
     Task<CoverImage?> ResolveArtistImageAsync(string key, CancellationToken cancellationToken);
     Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(string artist, CancellationToken cancellationToken);
+    Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(
+        string artist,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken);
     Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(string artist, string album, CancellationToken cancellationToken);
+    Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(
+        string artist,
+        string album,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken);
+    Task<MetadataRefreshPreviewResponse> PreviewAlbumMetadataAsync(
+        string artist,
+        string album,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken);
     Task UpdateMetadataDescriptionAsync(MetadataDescriptionRequest request, bool album, CancellationToken cancellationToken);
     Task UpdateMetadataImageAsync(MetadataImageRequest request, bool album, CancellationToken cancellationToken);
     Task<BatchMutationResponse> UpdateMetadataAsync(int[] trackIds, MusicMetadataPatch changes, CancellationToken cancellationToken);

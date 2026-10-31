@@ -1,12 +1,15 @@
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Services;
+using MusicPlayer.Api.Services.Identification;
 
 namespace MusicPlayer.Api.Tests;
 
@@ -16,6 +19,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     private MusicDbContext database = null!;
     private MusicLibraryService library = null!;
     private StubMusicBrainzClient musicBrainz = null!;
+    private ProviderSettingsService providerSettings = null!;
     private string testDirectory = null!;
     private string sourceDirectory = null!;
 
@@ -33,12 +37,18 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         sourceDirectory = Path.Combine(testDirectory, "music");
         Directory.CreateDirectory(sourceDirectory);
         musicBrainz = new StubMusicBrainzClient();
+        providerSettings = new ProviderSettingsService(
+            database,
+            new EphemeralDataProtectionProvider(),
+            new ConfigurationBuilder().AddInMemoryCollection().Build());
         library = new MusicLibraryService(
             database,
             new TestWebHostEnvironment(),
             musicBrainz,
             NullLogger<MusicLibraryService>.Instance,
-            new MusicLibraryBrowseService(database));
+            new MusicLibraryBrowseService(database),
+            [],
+            providerSettings);
     }
 
     public async Task DisposeAsync()
@@ -437,6 +447,104 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AlbumMetadataRefreshUsesTheConfiguredProviderToResolveAlbumNames()
+    {
+        var provider = new StubAlbumProvider();
+        await providerSettings.UpdateAsync(
+            "discogs",
+            new Dictionary<string, string?> { ["token"] = "test-token" },
+            CancellationToken.None);
+        await providerSettings.UpdateDefaultAlbumProviderAsync("discogs", CancellationToken.None);
+        musicBrainz.AlbumResult = new MusicBrainzResult("resolved-mbid", "Resolved description.", null, null);
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database),
+            [provider],
+            providerSettings);
+
+        var result = await library.RefreshAlbumMetadataAsync(
+            "Tagged Artist",
+            "Tagged Album",
+            CancellationToken.None);
+
+        Assert.True(result.Found);
+        Assert.Equal(1, provider.SearchCount);
+        Assert.Equal("Matched Artist", musicBrainz.LastAlbumArtist);
+        Assert.Equal("Matched Album", musicBrainz.LastAlbumTitle);
+    }
+
+    [Fact]
+    public async Task SelectedAlbumCandidateCanBePreviewedBeforeItIsSaved()
+    {
+        var provider = new StubAlbumProvider();
+        await providerSettings.UpdateAsync(
+            "discogs",
+            new Dictionary<string, string?> { ["token"] = "test-token" },
+            CancellationToken.None);
+        musicBrainz.AlbumResult = new MusicBrainzResult("resolved-mbid", "Candidate description.", null, null);
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database),
+            [provider],
+            providerSettings);
+
+        var preview = await library.PreviewAlbumMetadataAsync(
+            "Tagged Artist",
+            "Tagged Album",
+            "discogs",
+            "match-id",
+            CancellationToken.None);
+
+        Assert.True(preview.Found);
+        Assert.Equal("Candidate description.", preview.Description);
+        Assert.Empty(await database.AlbumMetadata.ToListAsync());
+
+        var saved = await library.RefreshAlbumMetadataAsync(
+            "Tagged Artist",
+            "Tagged Album",
+            "discogs",
+            "match-id",
+            CancellationToken.None);
+
+        Assert.True(saved.Found);
+        Assert.Equal("Candidate description.", (await database.AlbumMetadata.SingleAsync()).Description);
+        Assert.Equal(2, provider.GetCount);
+    }
+
+    [Fact]
+    public async Task ArtistRefreshSavesTheExplicitlySelectedProviderCandidate()
+    {
+        var provider = new StubArtistProvider();
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database),
+            [],
+            null,
+            null,
+            [provider]);
+
+        var result = await library.RefreshArtistMetadataAsync(
+            "Tagged Artist",
+            "discogs",
+            "artist-id",
+            CancellationToken.None);
+
+        Assert.True(result.Found);
+        Assert.Equal("Selected artist profile.", result.Description);
+        Assert.Equal("Selected artist profile.", (await database.ArtistMetadata.SingleAsync()).Description);
+        Assert.Equal(0, musicBrainz.ArtistLookups);
+    }
+
+    [Fact]
     public async Task MusicBrainzImagesAreSavedBesideAlbumAndArtistMusic()
     {
         const string artistName = "Refresh Artist";
@@ -542,5 +650,57 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         public string EnvironmentName { get; set; } = "Testing";
         public string ContentRootPath { get; set; } = Path.GetTempPath();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class StubAlbumProvider : IAlbumProvider
+    {
+        public string Id => "discogs";
+        public string Name => "Discogs";
+        public bool IsConfigured => true;
+        public int SearchCount { get; private set; }
+        public int GetCount { get; private set; }
+
+        private AlbumMatchResponse Match =>
+            new(Id, "match-id", "Matched Artist", "Matched Album", 2024, 10, null, null);
+
+        public Task<IReadOnlyList<AlbumMatchResponse>> SearchAsync(
+            string? artist,
+            string? album,
+            int? year,
+            CancellationToken cancellationToken)
+        {
+            SearchCount++;
+            return Task.FromResult<IReadOnlyList<AlbumMatchResponse>>([Match]);
+        }
+
+        public Task<AlbumMatchDetailResponse?> GetAsync(string id, CancellationToken cancellationToken)
+        {
+            GetCount++;
+            return Task.FromResult<AlbumMatchDetailResponse?>(
+                new AlbumMatchDetailResponse(Match, "Rock", null, []));
+        }
+    }
+
+    private sealed class StubArtistProvider : IArtistProvider
+    {
+        public string Id => "discogs";
+        public string Name => "Discogs";
+        public bool IsConfigured => true;
+
+        public Task<IReadOnlyList<ArtistMatchResponse>> SearchArtistsAsync(
+            string artist,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<ArtistMatchResponse>>(
+                [new ArtistMatchResponse(Id, "artist-id", "Selected Artist", null, null)]);
+
+        public Task<ArtistProviderDetail?> GetArtistAsync(string id, CancellationToken cancellationToken) =>
+            Task.FromResult<ArtistProviderDetail?>(
+                new ArtistProviderDetail(
+                    new ArtistMatchResponse(Id, id, "Selected Artist", null, null),
+                    "Selected artist profile.",
+                    null,
+                    null,
+                    null,
+                    null));
     }
 }

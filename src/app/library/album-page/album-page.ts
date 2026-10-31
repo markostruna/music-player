@@ -4,14 +4,19 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { formatTime } from '@shared/utils/format-time';
 import { LibraryStore } from '@shared/services/library-store';
-import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
+import {
+  MetadataRefreshResult,
+  MusicLibraryApi,
+  MusicTrack,
+} from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
+import { MetadataRefreshDialog } from '../metadata-refresh-dialog/metadata-refresh-dialog';
 import { distinctUntilChanged, map } from 'rxjs';
 
 @Component({
   selector: 'app-album-page',
-  imports: [RouterLink],
+  imports: [MetadataRefreshDialog, RouterLink],
   templateUrl: './album-page.html',
 })
 export class AlbumPage {
@@ -27,7 +32,7 @@ export class AlbumPage {
   private albumRequestId = 0;
 
   readonly isAdmin = this.auth.isAdmin;
-  readonly isRefreshingInformation = signal(false);
+  readonly isMetadataDialogOpen = signal(false);
   readonly editingDescriptionKey = signal<string | null>(null);
   readonly isCoverDialogOpen = signal(false);
   readonly coverPreviewUrl = signal('');
@@ -226,35 +231,33 @@ export class AlbumPage {
     this.selectedCover.set(null);
   }
 
-  async refreshInformation(artist: string, album: string): Promise<void> {
-    this.isRefreshingInformation.set(true);
-    try {
-      const result = await this.libraryApi.refreshInformation(artist, album);
-      if (!result.found) {
-        this.toast.show(
-          'No matching album record was found. Existing information was left unchanged.',
-          'error',
-        );
-        return;
-      }
-      this.descriptionDraft = null;
-      this.descriptionDraftKey = null;
-      this.editingDescriptionKey.set(null);
-      this.refreshedInformation.set({
-        key: `${artist.toLowerCase()}\0${album.toLowerCase()}`,
-        description: result.description,
-        imageUrl: result.imageUrl,
-        musicBrainzId: result.musicBrainzId,
-        updatedAt: result.updatedAt,
-      });
-      this.toast.show(
-        `Album information refreshed from MusicBrainz (${result.musicBrainzId}) at ${new Date(result.updatedAt).toLocaleString()}.`,
-        'success',
-      );
-    } catch {
-      this.toast.show('Album information could not be refreshed. Please try again later.', 'error');
-    } finally {
-      this.isRefreshingInformation.set(false);
-    }
+  refreshInformation(): void {
+    this.isMetadataDialogOpen.set(true);
+  }
+
+  closeMetadataDialog(): void {
+    this.isMetadataDialogOpen.set(false);
+  }
+
+  saveRefreshedInformation(
+    artist: string,
+    album: string,
+    selection: { result: MetadataRefreshResult; providerId: string },
+  ): void {
+    const { result, providerId } = selection;
+    this.descriptionDraft = null;
+    this.descriptionDraftKey = null;
+    this.editingDescriptionKey.set(null);
+    this.refreshedInformation.set({
+      key: `${artist.toLowerCase()}\0${album.toLowerCase()}`,
+      description: result.description,
+      imageUrl: result.imageUrl,
+      musicBrainzId: result.musicBrainzId,
+      updatedAt: result.updatedAt,
+    });
+    this.toast.show(
+      `Album information refreshed from ${providerId} at ${new Date(result.updatedAt).toLocaleString()}.`,
+      'success',
+    );
   }
 }

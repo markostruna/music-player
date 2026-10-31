@@ -17,6 +17,27 @@ public interface IAlbumProvider
     Task<AlbumMatchDetailResponse?> GetAsync(string id, CancellationToken cancellationToken);
 }
 
+public interface IArtistProvider
+{
+    string Id { get; }
+    string Name { get; }
+    bool IsConfigured { get; }
+
+    Task<IReadOnlyList<ArtistMatchResponse>> SearchArtistsAsync(
+        string artist,
+        CancellationToken cancellationToken);
+
+    Task<ArtistProviderDetail?> GetArtistAsync(string id, CancellationToken cancellationToken);
+}
+
+public sealed record ArtistProviderDetail(
+    ArtistMatchResponse Match,
+    string Description,
+    string? ImageUrl,
+    byte[]? Image,
+    string? ImageContentType,
+    string? ImageProvider);
+
 /// <summary>Raised when an identification provider cannot be reached or rejects a request.</summary>
 public sealed class AlbumProviderException(string message, Exception? inner = null) : Exception(message, inner);
 

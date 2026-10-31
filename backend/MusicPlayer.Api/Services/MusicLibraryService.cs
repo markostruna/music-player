@@ -4,6 +4,9 @@ using System.Security.Cryptography;
 using System.Text;
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
+using IArtistProvider = MusicPlayer.Api.Services.Identification.IArtistProvider;
+using IAlbumProvider = MusicPlayer.Api.Services.Identification.IAlbumProvider;
+using SafeImageFetcher = MusicPlayer.Api.Services.Identification.SafeImageFetcher;
 using TagLib;
 
 namespace MusicPlayer.Api.Services;
@@ -13,7 +16,11 @@ public sealed class MusicLibraryService(
     IWebHostEnvironment environment,
     IMusicBrainzClient musicBrainz,
     ILogger<MusicLibraryService> logger,
-    MusicLibraryBrowseService browseService) : IMusicLibraryService
+    MusicLibraryBrowseService browseService,
+    IEnumerable<IAlbumProvider>? albumProviders = null,
+    IProviderSettingsService? providerSettings = null,
+    SafeImageFetcher? safeImageFetcher = null,
+    IEnumerable<IArtistProvider>? artistProviders = null) : IMusicLibraryService
 {
     private const int MaximumCoverFileSize = 10 * 1024 * 1024;
 
@@ -428,13 +435,11 @@ public sealed class MusicLibraryService(
         }
 
         using var audio = TagLib.File.Create(media.FullPath);
-        var picture = audio.Tag.Pictures.FirstOrDefault(item => item.Type == PictureType.FrontCover) ?? audio.Tag.Pictures.FirstOrDefault();
-        if (picture is null || picture.Data.Count == 0)
-        {
-            return null;
-        }
-
-        return new CoverImage(picture.Data.Data, picture.MimeType);
+        var picture = audio.Tag.Pictures.FirstOrDefault(item => item.Type == PictureType.FrontCover)
+            ?? audio.Tag.Pictures.FirstOrDefault();
+        return picture is null || picture.Data.Count == 0
+            ? null
+            : new CoverImage(picture.Data.Data, picture.MimeType);
     }
 
     public async Task<CoverImage?> ResolveArtistImageAsync(string key, CancellationToken cancellationToken)
@@ -451,6 +456,87 @@ public sealed class MusicLibraryService(
     {
         var name = artist.Trim();
         var result = await musicBrainz.FindArtistAsync(name, cancellationToken);
+        return await SaveArtistMetadataAsync(name, result, cancellationToken);
+    }
+
+    public async Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(
+        string artist,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken)
+    {
+        var name = artist.Trim();
+        var provider = artistProviders?.FirstOrDefault(item =>
+            item.Id.Equals(providerId, StringComparison.OrdinalIgnoreCase) && item.IsConfigured)
+            ?? throw new ArgumentException("The selected artist provider is unknown or not configured.");
+        var detail = await provider.GetArtistAsync(candidateId, cancellationToken);
+        if (detail is null)
+        {
+            var existing = await database.ArtistMetadata.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.Key == GetArtistMetadataKey(name), cancellationToken);
+            return existing is null
+                ? new MetadataRefreshResponse(false, "", "", null, true, DateTimeOffset.UtcNow)
+                : new MetadataRefreshResponse(
+                    false,
+                    existing.MusicBrainzId,
+                    existing.Description,
+                    GetArtistImageUrl(existing),
+                    existing.ImageMissing || string.IsNullOrWhiteSpace(existing.ImageFileName),
+                    existing.UpdatedAt);
+        }
+
+        var image = detail.Image;
+        var imageContentType = detail.ImageContentType;
+        var description = detail.Description;
+        MusicBrainzResult? linkedMetadata = null;
+        if (string.IsNullOrWhiteSpace(description)
+            && !provider.Id.Equals("musicbrainz", StringComparison.OrdinalIgnoreCase))
+        {
+            linkedMetadata = await musicBrainz.FindArtistAsync(detail.Match.Name, cancellationToken);
+            if (linkedMetadata is not null)
+            {
+                description = linkedMetadata.Description;
+            }
+        }
+
+        var imageProvider = detail.ImageProvider;
+        if (image is null && !string.IsNullOrWhiteSpace(detail.ImageUrl) && safeImageFetcher is not null)
+        {
+            try
+            {
+                var fetched = await safeImageFetcher.FetchAsync(detail.ImageUrl, cancellationToken);
+                image = fetched.Data;
+                imageContentType = fetched.ContentType;
+                imageProvider = provider.Name;
+            }
+            catch (ArgumentException exception)
+            {
+                logger.LogWarning(exception, "Could not retrieve artist artwork from {Provider} for {Artist}.",
+                    provider.Name, name);
+            }
+        }
+
+        if (image is null && linkedMetadata?.Image is not null)
+        {
+            image = linkedMetadata.Image;
+            imageContentType = linkedMetadata.ImageContentType;
+            imageProvider = linkedMetadata.ImageProvider;
+        }
+
+        var result = new MusicBrainzResult(
+            provider.Id.Equals("musicbrainz", StringComparison.OrdinalIgnoreCase) ? detail.Match.Id : "",
+            description,
+            image,
+            imageContentType,
+            imageProvider);
+        return await SaveArtistMetadataAsync(name, result, cancellationToken);
+    }
+
+    private async Task<MetadataRefreshResponse> SaveArtistMetadataAsync(
+        string name,
+        MusicBrainzResult? result,
+        CancellationToken cancellationToken)
+    {
         var key = GetArtistMetadataKey(name);
         var metadata = await database.ArtistMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
         if (result is null)
@@ -494,11 +580,16 @@ public sealed class MusicLibraryService(
             }
             else
             {
+                var imageSource = result.ImageProvider is "Discogs" or "Spotify"
+                    ? result.ImageProvider
+                    : "MusicBrainz";
                 var imageFileName = await SaveLookupImageAsync(
                     result.Image,
                     result.ImageContentType,
                     destination,
-                    destination.IsArtistDirectory ? "ArtistCover-MusicBrainz" : $"ArtistCover-{SanitizeFileName(name)}-MusicBrainz",
+                    destination.IsArtistDirectory
+                        ? $"ArtistCover-{imageSource}"
+                        : $"ArtistCover-{SanitizeFileName(name)}-{imageSource}",
                     cancellationToken);
                 if (imageFileName is not null)
                 {
@@ -526,11 +617,69 @@ public sealed class MusicLibraryService(
             imageProvider);
     }
 
-    public async Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(string artist, string album, CancellationToken cancellationToken)
+    public Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken) =>
+        RefreshAlbumMetadataInternalAsync(artist, album, null, null, cancellationToken);
+
+    public Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(
+        string artist,
+        string album,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(providerId) || string.IsNullOrWhiteSpace(candidateId))
+        {
+            throw new ArgumentException("Provider and candidate are required.");
+        }
+
+        return RefreshAlbumMetadataInternalAsync(artist, album, providerId, candidateId, cancellationToken);
+    }
+
+    public async Task<MetadataRefreshPreviewResponse> PreviewAlbumMetadataAsync(
+        string artist,
+        string album,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken)
+    {
+        var result = await FindAlbumMetadataFromCandidateAsync(
+            artist.Trim(),
+            album.Trim(),
+            providerId,
+            candidateId,
+            cancellationToken);
+        return result is null
+            ? new MetadataRefreshPreviewResponse(false, "", "", null, null)
+            : new MetadataRefreshPreviewResponse(
+                true,
+                result.MusicBrainzId,
+                result.Description,
+                result.Image is not null && result.ImageContentType is not null
+                    ? $"data:{result.ImageContentType};base64,{Convert.ToBase64String(result.Image)}"
+                    : null,
+                result.ImageProvider);
+    }
+
+    private async Task<MetadataRefreshResponse> RefreshAlbumMetadataInternalAsync(
+        string artist,
+        string album,
+        string? selectedProviderId,
+        string? candidateId,
+        CancellationToken cancellationToken)
     {
         var artistName = artist.Trim();
         var albumName = album.Trim();
-        var result = await musicBrainz.FindAlbumAsync(artistName, albumName, cancellationToken);
+        var result = selectedProviderId is null
+            ? await FindAlbumMetadataAsync(artistName, albumName, cancellationToken)
+            : await FindAlbumMetadataFromCandidateAsync(
+                artistName,
+                albumName,
+                selectedProviderId,
+                candidateId!,
+                cancellationToken);
         var key = GetAlbumMetadataKey(artistName, albumName);
         var metadata = await database.AlbumMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
         if (result is null)
@@ -602,6 +751,86 @@ public sealed class MusicLibraryService(
             metadata.UpdatedAt,
             imageUpdated,
             imageProvider);
+    }
+
+    private async Task<MusicBrainzResult?> FindAlbumMetadataAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken)
+    {
+        if (providerSettings is null || albumProviders is null)
+        {
+            return await musicBrainz.FindAlbumAsync(artist, album, cancellationToken);
+        }
+
+        var providerId = await providerSettings.GetDefaultAlbumProviderAsync(cancellationToken);
+        if (providerId.Equals("musicbrainz", StringComparison.OrdinalIgnoreCase))
+        {
+            return await musicBrainz.FindAlbumAsync(artist, album, cancellationToken);
+        }
+
+        var provider = albumProviders.FirstOrDefault(item =>
+            item.Id.Equals(providerId, StringComparison.OrdinalIgnoreCase) && item.IsConfigured)
+            ?? throw new InvalidOperationException($"The configured default provider '{providerId}' is unavailable.");
+        var matches = await provider.SearchAsync(artist, album, null, cancellationToken);
+        var match = matches
+            .OrderByDescending(item => item.Title.Equals(album, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(item => item.Artist.Equals(artist, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault();
+        return match is null
+            ? null
+            : await FindAlbumMetadataFromMatchAsync(provider, match, artist, album, cancellationToken);
+    }
+
+    private async Task<MusicBrainzResult?> FindAlbumMetadataFromCandidateAsync(
+        string artist,
+        string album,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken)
+    {
+        var provider = albumProviders?.FirstOrDefault(item =>
+            item.Id.Equals(providerId, StringComparison.OrdinalIgnoreCase) && item.IsConfigured)
+            ?? throw new ArgumentException("The selected album provider is unknown or not configured.");
+        var detail = await provider.GetAsync(candidateId, cancellationToken);
+        return detail is null
+            ? null
+            : await FindAlbumMetadataFromMatchAsync(provider, detail.Match, artist, album, cancellationToken);
+    }
+
+    private async Task<MusicBrainzResult> FindAlbumMetadataFromMatchAsync(
+        IAlbumProvider provider,
+        AlbumMatchResponse match,
+        string artist,
+        string album,
+        CancellationToken cancellationToken)
+    {
+        var canonicalArtist = string.IsNullOrWhiteSpace(match.Artist) ? artist : match.Artist;
+        var canonicalAlbum = string.IsNullOrWhiteSpace(match.Title) ? album : match.Title;
+        var metadata = await musicBrainz.FindAlbumAsync(canonicalArtist, canonicalAlbum, cancellationToken);
+        if (metadata?.Image is not null || string.IsNullOrWhiteSpace(match.CoverUrl) || safeImageFetcher is null)
+        {
+            return metadata ?? new MusicBrainzResult("", "", null, null);
+        }
+
+        try
+        {
+            var image = await safeImageFetcher.FetchAsync(match.CoverUrl, cancellationToken);
+            return metadata is null
+                ? new MusicBrainzResult("", "", image.Data, image.ContentType, provider.Name)
+                : metadata with
+                {
+                    Image = image.Data,
+                    ImageContentType = image.ContentType,
+                    ImageProvider = provider.Name,
+                };
+        }
+        catch (ArgumentException exception)
+        {
+            logger.LogWarning(exception, "Could not retrieve album artwork from {Provider} for {Album} by {Artist}.",
+                provider.Name, album, artist);
+            return metadata ?? new MusicBrainzResult("", "", null, null);
+        }
     }
 
     public async Task UpdateMetadataDescriptionAsync(

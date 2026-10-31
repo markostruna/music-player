@@ -10,6 +10,22 @@ export interface IdentifyProvider {
   isConfigured: boolean;
 }
 
+export interface ArtistMatch {
+  provider: string;
+  id: string;
+  name: string;
+  detail: string | null;
+  imageUrl: string | null;
+}
+
+export interface ArtistMatchDetail {
+  match: ArtistMatch;
+  description: string;
+  imageUrl: string | null;
+  imageDataUrl: string | null;
+  imageProvider: string | null;
+}
+
 export interface AlbumMatch {
   provider: string;
   id: string;
@@ -79,6 +95,19 @@ export class AlbumIdentifyApi {
   listProviders(): Promise<IdentifyProvider[]> {
     return firstValueFrom(
       this.http.get<IdentifyProvider[]>(`${this.base}/providers`, { withCredentials: true }),
+    );
+  }
+
+  async searchArtists(provider: string, artist: string): Promise<ArtistMatch[]> {
+    return this.post<ArtistMatch[]>('artists/search', { provider, artist });
+  }
+
+  getArtistMatch(provider: string, id: string): Promise<ArtistMatchDetail> {
+    return firstValueFrom(
+      this.http.get<ArtistMatchDetail>(
+        `${this.base}/artists/matches/${encodeURIComponent(provider)}/${encodeURIComponent(id)}`,
+        { withCredentials: true },
+      ),
     );
   }
 

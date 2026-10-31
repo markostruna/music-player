@@ -9,6 +9,7 @@ import {
   CoverCandidate,
   IdentifyProvider,
 } from '@shared/services/album-identify-api';
+import { ProviderSettingsApi } from '@shared/services/provider-settings-api';
 import { MusicLibraryApi, MusicTrack, SourceRoot } from '@shared/services/music-library-api';
 
 type Step = 'match' | 'review' | 'cover' | 'move' | 'done';
@@ -44,6 +45,7 @@ const STEPS: { id: Step; label: string }[] = [
 })
 export class IdentifyAlbumDialog implements OnInit {
   private readonly api = inject(AlbumIdentifyApi);
+  private readonly providerSettingsApi = inject(ProviderSettingsApi);
   private readonly library = inject(MusicLibraryApi);
 
   readonly album = input.required<IdentifyAlbumRequest>();
@@ -90,11 +92,13 @@ export class IdentifyAlbumDialog implements OnInit {
 
   async ngOnInit(): Promise<void> {
     await this.run(async () => {
-      const providers = await this.api.listProviders();
+      const [providers, defaultProvider] = await Promise.all([
+        this.api.listProviders(),
+        this.providerSettingsApi.getDefaultAlbumProvider(),
+      ]);
       this.providers.set(providers);
-      const saved = localStorage.getItem('identify-provider');
       const preferred =
-        providers.find((provider) => provider.id === saved && provider.isConfigured) ??
+        providers.find((provider) => provider.id === defaultProvider.providerId && provider.isConfigured) ??
         providers.find((provider) => provider.isConfigured);
       this.providerId.set(preferred?.id ?? providers[0]?.id ?? '');
       this.customArtist = this.album().artist;
@@ -109,7 +113,6 @@ export class IdentifyAlbumDialog implements OnInit {
 
   async changeProvider(id: string): Promise<void> {
     this.providerId.set(id);
-    localStorage.setItem('identify-provider', id);
     this.matches.set([]);
     this.selectedMatch.set(null);
     if (this.matchMode() === 'suggestions') await this.run(() => this.loadSuggestions());

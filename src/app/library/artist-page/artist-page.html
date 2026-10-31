@@ -54,12 +54,20 @@
           <button
             class="album-play-button secondary-action"
             type="button"
-            [disabled]="isRefreshingInformation()"
-            (click)="refreshInformation(artist.name)"
+            [disabled]="isMetadataDialogOpen()"
+            (click)="refreshInformation()"
           >
-            {{ isRefreshingInformation() ? 'Refreshing…' : 'Refresh information' }}
+            Refresh information
           </button>
         </div>
+      }
+
+      @if (isMetadataDialogOpen()) {
+        <app-metadata-refresh-dialog
+          [artist]="artist.name"
+          (saved)="saveRefreshedInformation(artist.name, $event)"
+          (closed)="closeMetadataDialog()"
+        />
       }
 
       <section class="metadata-description" aria-labelledby="artist-description-heading">

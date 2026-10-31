@@ -19,10 +19,11 @@ public sealed class MusicBrainzClientTests
             var uri = request.RequestUri!;
             if (uri.Host == "musicbrainz.org" && uri.AbsolutePath.EndsWith("/artist/", StringComparison.Ordinal))
             {
-                return JsonResponse("""{"artists":[{"id":"test-artist-mbid"}]}""");
+                return JsonResponse("""{"artists":[{"id":"11111111-1111-4111-8111-111111111111","name":"Test Artist"}]}""");
             }
 
-            if (uri.Host == "musicbrainz.org" && uri.AbsolutePath.EndsWith("/artist/test-artist-mbid", StringComparison.Ordinal))
+            if (uri.Host == "musicbrainz.org"
+                && uri.AbsolutePath.EndsWith("/artist/11111111-1111-4111-8111-111111111111", StringComparison.Ordinal))
             {
                 return JsonResponse("""{"relations":[]}""");
             }
@@ -54,7 +55,7 @@ public sealed class MusicBrainzClientTests
         var result = await client.FindArtistAsync("Test Artist", CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("test-artist-mbid", result.MusicBrainzId);
+        Assert.Equal("11111111-1111-4111-8111-111111111111", result.MusicBrainzId);
         Assert.Equal(imageBytes, result.Image);
         Assert.Equal("image/png", result.ImageContentType);
         Assert.Equal("Fanart.tv", result.ImageProvider);

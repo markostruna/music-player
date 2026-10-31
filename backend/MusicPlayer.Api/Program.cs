@@ -42,6 +42,10 @@ builder.Services.AddHttpClient<SpotifyAlbumProvider>(client => client.Timeout = 
 builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<MusicBrainzAlbumProvider>());
 builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<DiscogsAlbumProvider>());
 builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<SpotifyAlbumProvider>());
+builder.Services.AddTransient<IArtistProvider>(provider =>
+    (IArtistProvider)provider.GetRequiredService<IMusicBrainzClient>());
+builder.Services.AddTransient<IArtistProvider>(provider => provider.GetRequiredService<DiscogsAlbumProvider>());
+builder.Services.AddTransient<IArtistProvider>(provider => provider.GetRequiredService<SpotifyAlbumProvider>());
 builder.Services.AddSingleton<SafeImageFetcher>();
 builder.Services.AddHttpClient<IAlbumIdentificationService, AlbumIdentificationService>(client =>
     client.Timeout = TimeSpan.FromSeconds(15));

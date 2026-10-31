@@ -18,6 +18,33 @@ public static class ProviderSettingsEndpoints
             .WithName("GetProviderSettings")
             .WithSummary("Lists provider settings without returning stored credentials.");
 
+        providers.MapGet("/default-album-provider", async (
+            IProviderSettingsService settings,
+            CancellationToken cancellationToken) =>
+                TypedResults.Ok(new DefaultAlbumProviderResponse(
+                    await settings.GetDefaultAlbumProviderAsync(cancellationToken))))
+            .WithName("GetDefaultAlbumProvider")
+            .WithSummary("Gets the configured default album identification provider.");
+
+        providers.MapPut("/default-album-provider", async Task<Results<Ok<DefaultAlbumProviderResponse>, BadRequest<string>>> (
+            UpdateDefaultAlbumProviderRequest request,
+            IProviderSettingsService settings,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var providerId = await settings.UpdateDefaultAlbumProviderAsync(request.ProviderId, cancellationToken);
+                return TypedResults.Ok(new DefaultAlbumProviderResponse(providerId));
+            }
+            catch (ArgumentException exception)
+            {
+                return TypedResults.BadRequest(exception.Message);
+            }
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("UpdateDefaultAlbumProvider")
+        .WithSummary("Updates the default album identification provider.");
+
         providers.MapPut("/{providerId}", async Task<Results<Ok<IReadOnlyList<ProviderSettingsItem>>, BadRequest<string>, NotFound<string>>> (
             string providerId,
             UpdateProviderSettingsRequest request,

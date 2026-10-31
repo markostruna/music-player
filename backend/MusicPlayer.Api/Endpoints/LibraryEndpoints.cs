@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Services;
+using MusicPlayer.Api.Services.Identification;
 
 namespace MusicPlayer.Api.Endpoints;
 
@@ -417,7 +418,7 @@ public static class LibraryEndpoints
         .WithTags("Metadata management")
         .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
         adminMetadata.MapPost("/artists/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
-        MetadataDescriptionRequest request,
+        MetadataRefreshRequest request,
         IMusicLibraryService music,
         CancellationToken cancellationToken) =>
         {
@@ -426,13 +427,27 @@ public static class LibraryEndpoints
             return TypedResults.BadRequest("Artist is required.");
         }
 
-        return TypedResults.Ok(await music.RefreshArtistMetadataAsync(request.Artist, cancellationToken));
+        if (string.IsNullOrWhiteSpace(request.CandidateId))
+        {
+            return TypedResults.Ok(await music.RefreshArtistMetadataAsync(request.Artist, cancellationToken));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ProviderId))
+        {
+            return TypedResults.BadRequest("Provider and candidate are required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshArtistMetadataAsync(
+            request.Artist,
+            request.ProviderId,
+            request.CandidateId,
+            cancellationToken));
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("RefreshArtistMetadata")
         .WithSummary("Refreshes one artist's description and image from linked metadata providers.");
         adminMetadata.MapPost("/albums/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
-        MetadataDescriptionRequest request,
+        MetadataRefreshRequest request,
         IMusicLibraryService music,
         CancellationToken cancellationToken) =>
         {
@@ -441,11 +456,60 @@ public static class LibraryEndpoints
             return TypedResults.BadRequest("Artist and album are required.");
         }
 
-        return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(request.Artist, request.Album, cancellationToken));
+        if (string.IsNullOrWhiteSpace(request.CandidateId))
+        {
+            return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(request.Artist, request.Album, cancellationToken));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ProviderId))
+        {
+            return TypedResults.BadRequest("Provider and candidate are required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(
+            request.Artist,
+            request.Album,
+            request.ProviderId,
+            request.CandidateId,
+            cancellationToken));
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("RefreshAlbumMetadata")
         .WithSummary("Refreshes one album's description and artwork from linked metadata providers.");
+        adminMetadata.MapPost("/albums/preview", async Task<Results<Ok<MetadataRefreshPreviewResponse>, BadRequest<string>, ProblemHttpResult>> (
+            MetadataRefreshRequest request,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Artist)
+                || string.IsNullOrWhiteSpace(request.Album)
+                || string.IsNullOrWhiteSpace(request.ProviderId)
+                || string.IsNullOrWhiteSpace(request.CandidateId))
+            {
+                return TypedResults.BadRequest("Artist, album, provider, and candidate are required.");
+            }
+
+            try
+            {
+                return TypedResults.Ok(await music.PreviewAlbumMetadataAsync(
+                    request.Artist,
+                    request.Album,
+                    request.ProviderId,
+                    request.CandidateId,
+                    cancellationToken));
+            }
+            catch (AlbumProviderException exception)
+            {
+                return TypedResults.Problem(exception.Message, statusCode: StatusCodes.Status502BadGateway);
+            }
+            catch (ArgumentException exception)
+            {
+                return TypedResults.BadRequest(exception.Message);
+            }
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("PreviewAlbumMetadataCandidate")
+        .WithSummary("Previews metadata for a selected album provider candidate without saving it.");
         adminMetadata.MapPut("/artists/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
         {
             await music.UpdateMetadataDescriptionAsync(request, album: false, cancellationToken);

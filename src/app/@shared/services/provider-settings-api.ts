@@ -19,6 +19,10 @@ export interface ProviderSettingsItem {
   credentials: ProviderCredentialStatus[];
 }
 
+export interface DefaultAlbumProvider {
+  providerId: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ProviderSettingsApi {
   private readonly http = inject(HttpClient);
@@ -29,6 +33,28 @@ export class ProviderSettingsApi {
       this.http.get<ProviderSettingsItem[]>(`${MUSIC_API_BASE}/admin/providers`, {
         withCredentials: true,
       }),
+    );
+  }
+
+  getDefaultAlbumProvider(): Promise<DefaultAlbumProvider> {
+    return firstValueFrom(
+      this.http.get<DefaultAlbumProvider>(`${MUSIC_API_BASE}/admin/providers/default-album-provider`, {
+        withCredentials: true,
+      }),
+    );
+  }
+
+  async updateDefaultAlbumProvider(providerId: string): Promise<DefaultAlbumProvider> {
+    const token = await this.auth.getCsrfToken();
+    return firstValueFrom(
+      this.http.put<DefaultAlbumProvider>(
+        `${MUSIC_API_BASE}/admin/providers/default-album-provider`,
+        { providerId },
+        {
+          headers: { 'X-CSRF-TOKEN': token },
+          withCredentials: true,
+        },
+      ),
     );
   }
 

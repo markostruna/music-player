@@ -128,6 +128,14 @@ export interface MetadataRefreshResult {
   imageProvider: string | null;
 }
 
+export interface MetadataRefreshPreview {
+  found: boolean;
+  musicBrainzId: string;
+  description: string;
+  imageDataUrl: string | null;
+  imageProvider: string | null;
+}
+
 export interface MutationResult {
   trackId: number;
   succeeded: boolean;
@@ -407,12 +415,17 @@ export class MusicLibraryApi {
     );
   }
 
-  async refreshInformation(artist: string, album: string | null): Promise<MetadataRefreshResult> {
+  async refreshInformation(
+    artist: string,
+    album: string | null,
+    providerId?: string,
+    candidateId?: string,
+  ): Promise<MetadataRefreshResult> {
     const path = album === null ? 'artists' : 'albums';
     const result = await firstValueFrom(
       this.http.post<MetadataRefreshResult>(
         `${MUSIC_API_BASE}/admin/metadata/${path}/refresh`,
-        { artist, album: album ?? '' },
+        { artist, album: album ?? '', providerId: providerId ?? '', candidateId: candidateId ?? '' },
         await this.writeOptions(),
       ),
     );
@@ -420,6 +433,21 @@ export class MusicLibraryApi {
       ...result,
       imageUrl: result.imageUrl ? `${MUSIC_API_PREFIX}${result.imageUrl}` : null,
     };
+  }
+
+  async previewAlbumMetadata(
+    artist: string,
+    album: string,
+    providerId: string,
+    candidateId: string,
+  ): Promise<MetadataRefreshPreview> {
+    return firstValueFrom(
+      this.http.post<MetadataRefreshPreview>(
+        `${MUSIC_API_BASE}/admin/metadata/albums/preview`,
+        { artist, album, providerId, candidateId },
+        await this.writeOptions(),
+      ),
+    );
   }
 
   async updateEntityImage(artist: string, album: string | null, image: File): Promise<void> {

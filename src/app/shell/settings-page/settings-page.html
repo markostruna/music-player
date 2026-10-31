@@ -23,8 +23,30 @@
   @if (errorMessage()) {
     <p class="settings-error" role="alert">{{ errorMessage() }}</p>
   }
+  @if (statusMessage()) {
+    <p class="settings-status" role="status">{{ statusMessage() }}</p>
+  }
 
   @if (isAdmin()) {
+    <section class="settings-card" aria-labelledby="default-provider-title">
+      <div>
+        <h2 id="default-provider-title">Default metadata provider</h2>
+        <p>Used when refreshing album metadata and when identifying an album.</p>
+      </div>
+      <label class="settings-theme-picker">
+        <span>Provider</span>
+        <select
+          [value]="defaultProviderId()"
+          [disabled]="isSavingDefaultProvider() || providers().length === 0"
+          (change)="changeDefaultProvider($event)"
+        >
+          @for (provider of providers(); track provider.id) {
+            <option [value]="provider.id">{{ provider.name }}</option>
+          }
+        </select>
+      </label>
+    </section>
+
     <section class="settings-card" aria-labelledby="provider-settings-title">
       <div>
         <h2 id="provider-settings-title">Provider integrations</h2>

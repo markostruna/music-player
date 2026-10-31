@@ -8,6 +8,8 @@ namespace MusicPlayer.Api.Services;
 public interface IProviderSettingsService
 {
     Task<IReadOnlyList<ProviderSettingsItem>> GetAsync(CancellationToken cancellationToken);
+    Task<string> GetDefaultAlbumProviderAsync(CancellationToken cancellationToken);
+    Task<string> UpdateDefaultAlbumProviderAsync(string providerId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ProviderSettingsItem>> UpdateAsync(
         string providerId,
         IReadOnlyDictionary<string, string?> credentials,
@@ -21,6 +23,8 @@ public sealed class ProviderSettingsService(
     IConfiguration configuration) : IProviderSettingsService
 {
     private const int MaximumCredentialLength = 4096;
+    private const string DefaultAlbumProviderKey = "settings:default-album-provider";
+    private const string FallbackAlbumProviderId = "musicbrainz";
     private readonly IDataProtector protector = protectionProvider.CreateProtector("Afterhours.ProviderCredentials.v1");
     private readonly IConfigurationRoot configurationRoot = configuration as IConfigurationRoot
         ?? throw new InvalidOperationException("The provider settings service requires a mutable configuration root.");
@@ -48,6 +52,60 @@ public sealed class ProviderSettingsService(
         var storedCredentials = await database.ProviderCredentials.AsNoTracking()
             .ToDictionaryAsync(credential => credential.Key, credential => credential.ProtectedValue, cancellationToken);
         return Providers.Select(provider => ToResponse(provider, storedCredentials)).ToArray();
+    }
+
+    public async Task<string> GetDefaultAlbumProviderAsync(CancellationToken cancellationToken)
+    {
+        var storedValue = await database.ProviderCredentials.AsNoTracking()
+            .Where(item => item.Key == DefaultAlbumProviderKey)
+            .Select(item => item.ProtectedValue)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (storedValue is null)
+        {
+            return FallbackAlbumProviderId;
+        }
+
+        var providerId = protector.Unprotect(storedValue);
+        var provider = (await GetAsync(cancellationToken))
+            .SingleOrDefault(item => item.Id.Equals(providerId, StringComparison.OrdinalIgnoreCase));
+        return IsAlbumIdentificationProvider(providerId) && provider?.IsConfigured == true
+            ? providerId
+            : FallbackAlbumProviderId;
+    }
+
+    public async Task<string> UpdateDefaultAlbumProviderAsync(
+        string providerId,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAlbumIdentificationProvider(providerId))
+        {
+            throw new ArgumentException("Choose a supported album identification provider.");
+        }
+
+        var provider = (await GetAsync(cancellationToken))
+            .Single(item => item.Id.Equals(providerId, StringComparison.OrdinalIgnoreCase));
+        if (!provider.IsConfigured)
+        {
+            throw new ArgumentException($"{provider.Name} is not configured.");
+        }
+
+        var setting = await database.ProviderCredentials.FindAsync([DefaultAlbumProviderKey], cancellationToken);
+        var protectedValue = protector.Protect(provider.Id);
+        if (setting is null)
+        {
+            database.ProviderCredentials.Add(new ProviderCredential
+            {
+                Key = DefaultAlbumProviderKey,
+                ProtectedValue = protectedValue,
+            });
+        }
+        else
+        {
+            setting.ProtectedValue = protectedValue;
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+        return provider.Id;
     }
 
     public async Task<IReadOnlyList<ProviderSettingsItem>> UpdateAsync(
@@ -91,6 +149,7 @@ public sealed class ProviderSettingsService(
             configurationRoot[definition.ConfigurationPath] = value;
         }
 
+        await ResetDefaultProviderIfUnavailableAsync(cancellationToken);
         return await GetAsync(cancellationToken);
     }
 
@@ -99,10 +158,38 @@ public sealed class ProviderSettingsService(
         var storedCredentials = await database.ProviderCredentials.AsNoTracking().ToListAsync(cancellationToken);
         foreach (var credential in storedCredentials)
         {
+            if (credential.Key == DefaultAlbumProviderKey)
+            {
+                continue;
+            }
+
             var (_, definition) = FindCredential(credential.Key);
             configurationRoot[definition.ConfigurationPath] = protector.Unprotect(credential.ProtectedValue);
         }
     }
+
+    private async Task ResetDefaultProviderIfUnavailableAsync(CancellationToken cancellationToken)
+    {
+        var setting = await database.ProviderCredentials.FindAsync([DefaultAlbumProviderKey], cancellationToken);
+        if (setting is null)
+        {
+            return;
+        }
+
+        var selectedProviderId = protector.Unprotect(setting.ProtectedValue);
+        var selectedProvider = (await GetAsync(cancellationToken))
+            .SingleOrDefault(item => item.Id.Equals(selectedProviderId, StringComparison.OrdinalIgnoreCase));
+        if (!IsAlbumIdentificationProvider(selectedProviderId) || selectedProvider?.IsConfigured != true)
+        {
+            setting.ProtectedValue = protector.Protect(FallbackAlbumProviderId);
+            await database.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private static bool IsAlbumIdentificationProvider(string providerId) =>
+        providerId.Equals("musicbrainz", StringComparison.OrdinalIgnoreCase)
+        || providerId.Equals("discogs", StringComparison.OrdinalIgnoreCase)
+        || providerId.Equals("spotify", StringComparison.OrdinalIgnoreCase);
 
     private ProviderSettingsItem ToResponse(
         ProviderDefinition provider,

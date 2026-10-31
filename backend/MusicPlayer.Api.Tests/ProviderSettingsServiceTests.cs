@@ -51,4 +51,41 @@ public sealed class ProviderSettingsServiceTests
         Assert.False((await service.GetAsync(CancellationToken.None)).Single(provider => provider.Id == "discogs").IsConfigured);
         Assert.Equal("", configuration["Discogs:Token"]);
     }
+
+    [Fact]
+    public async Task DefaultAlbumProviderPersistsAndFallsBackWhenItsCredentialsAreRemoved()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<MusicDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        await using var database = new MusicDbContext(options);
+        await database.Database.EnsureCreatedAsync();
+        var protectionProvider = new EphemeralDataProtectionProvider();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var service = new ProviderSettingsService(database, protectionProvider, configuration);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UpdateDefaultAlbumProviderAsync("discogs", CancellationToken.None));
+
+        await service.UpdateAsync(
+            "discogs",
+            new Dictionary<string, string?> { ["token"] = "private-token" },
+            CancellationToken.None);
+        Assert.Equal(
+            "discogs",
+            await service.UpdateDefaultAlbumProviderAsync("discogs", CancellationToken.None));
+
+        var restartedService = new ProviderSettingsService(database, protectionProvider, configuration);
+        Assert.Equal("discogs", await restartedService.GetDefaultAlbumProviderAsync(CancellationToken.None));
+        await restartedService.LoadOverridesAsync(CancellationToken.None);
+
+        await service.UpdateAsync(
+            "discogs",
+            new Dictionary<string, string?> { ["token"] = "" },
+            CancellationToken.None);
+
+        Assert.Equal("musicbrainz", await service.GetDefaultAlbumProviderAsync(CancellationToken.None));
+    }
 }

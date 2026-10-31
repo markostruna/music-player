@@ -59,11 +59,18 @@ export class AdminPage implements OnInit {
 
   async addRoot(): Promise<void> {
     try {
-      await this.api.addRoot(this.rootName, this.rootPath);
+      const root = await this.api.addRoot(this.rootName, this.rootPath);
       this.rootName = '';
       this.rootPath = '';
-      this.statusMessage.set('Music folder added. Start a scan to import its tracks.');
       await this.reload();
+      try {
+        await this.operations.startScan(root.id);
+        this.statusMessage.set('Music folder added. Its initial scan has started.');
+      } catch {
+        this.statusMessage.set(
+          'Music folder added, but its initial scan could not start. Use Scan to try again.',
+        );
+      }
     } catch {
       this.errorMessage.set(
         'That folder could not be added. Check that it exists and is not already configured.',

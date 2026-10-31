@@ -6,7 +6,7 @@ using MusicPlayer.Api.Contracts;
 
 namespace MusicPlayer.Api.Services.Identification;
 
-public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configuration) : IAlbumProvider
+public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configuration) : IAlbumProvider, IArtistProvider
 {
     private static readonly SemaphoreSlim TokenGate = new(1, 1);
     private static string? accessToken;
@@ -71,6 +71,74 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
             : "";
         var match = ToMatch(album, tracks.Count);
         return match is null ? null : new AlbumMatchDetailResponse(match, genre, null, tracks);
+    }
+
+    public async Task<IReadOnlyList<ArtistMatchResponse>> SearchArtistsAsync(
+        string artist,
+        CancellationToken cancellationToken)
+    {
+        using var document = await GetJsonAsync(
+            $"search?type=artist&limit=10&q={Uri.EscapeDataString(artist)}",
+            cancellationToken);
+        var items = document?.RootElement.GetPropertyOrNull("artists")?.GetPropertyOrNull("items");
+        if (items is not { ValueKind: JsonValueKind.Array })
+        {
+            return [];
+        }
+
+        return items.Value.EnumerateArray()
+            .Select(ToArtistMatch)
+            .Where(item => item is not null)
+            .Select(item => item!)
+            .ToArray();
+    }
+
+    public async Task<ArtistProviderDetail?> GetArtistAsync(string id, CancellationToken cancellationToken)
+    {
+        if (id.Length is 0 or > 64 || !id.All(char.IsAsciiLetterOrDigit))
+        {
+            return null;
+        }
+
+        using var document = await GetJsonAsync($"artists/{id}", cancellationToken);
+        if (document is null)
+        {
+            return null;
+        }
+
+        var artist = document.RootElement;
+        var match = ToArtistMatch(artist);
+        if (match is null)
+        {
+            return null;
+        }
+
+        return new ArtistProviderDetail(
+            match,
+            "",
+            match.ImageUrl,
+            null,
+            null,
+            match.ImageUrl is null ? null : Name);
+    }
+
+    private ArtistMatchResponse? ToArtistMatch(JsonElement artist)
+    {
+        var id = artist.GetStringOrNull("id");
+        var name = artist.GetStringOrNull("name");
+        if (id is null || name is null)
+        {
+            return null;
+        }
+
+        var imageUrl = artist.GetPropertyOrNull("images") is { ValueKind: JsonValueKind.Array } images
+            ? images.EnumerateArray().Select(item => item.GetStringOrNull("url"))
+                .FirstOrDefault(url => !string.IsNullOrWhiteSpace(url))
+            : null;
+        var genres = artist.GetPropertyOrNull("genres") is { ValueKind: JsonValueKind.Array } values
+            ? values.EnumerateArray().Select(item => item.GetString()).Where(value => !string.IsNullOrWhiteSpace(value))
+            : [];
+        return new ArtistMatchResponse(Id, id, name, string.Join(", ", genres), imageUrl);
     }
 
     private AlbumMatchResponse? ToMatch(JsonElement album, int? trackCount)

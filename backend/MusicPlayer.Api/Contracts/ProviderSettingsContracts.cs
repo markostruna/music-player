@@ -16,3 +16,11 @@ public sealed record UpdateProviderSettingsRequest
     [Required]
     public required Dictionary<string, string?> Credentials { get; init; }
 }
+
+public sealed record DefaultAlbumProviderResponse(string ProviderId);
+
+public sealed record UpdateDefaultAlbumProviderRequest
+{
+    [Required, MaxLength(40)]
+    public required string ProviderId { get; init; }
+}

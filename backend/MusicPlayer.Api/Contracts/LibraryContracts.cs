@@ -89,6 +89,28 @@ public sealed record MetadataDescriptionRequest
     public string Description { get; init; } = "";
 }
 
+public sealed record MetadataRefreshRequest
+{
+    [Required, MaxLength(1024)]
+    public required string Artist { get; init; }
+
+    [MaxLength(1024)]
+    public string Album { get; init; } = "";
+
+    [MaxLength(40)]
+    public string ProviderId { get; init; } = "";
+
+    [MaxLength(128)]
+    public string CandidateId { get; init; } = "";
+}
+
+public sealed record MetadataRefreshPreviewResponse(
+    bool Found,
+    string MusicBrainzId,
+    string Description,
+    string? ImageDataUrl,
+    string? ImageProvider);
+
 public sealed record MetadataImageRequest
 {
     [Required, MaxLength(1024)]

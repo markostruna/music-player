@@ -6,7 +6,7 @@ using MusicPlayer.Api.Contracts;
 
 namespace MusicPlayer.Api.Services.Identification;
 
-public sealed partial class DiscogsAlbumProvider(HttpClient http, IConfiguration configuration) : IAlbumProvider
+public sealed partial class DiscogsAlbumProvider(HttpClient http, IConfiguration configuration) : IAlbumProvider, IArtistProvider
 {
     private string? Token => configuration["Discogs:Token"];
 
@@ -98,6 +98,72 @@ public sealed partial class DiscogsAlbumProvider(HttpClient http, IConfiguration
             CoverUrl: cover,
             Detail: release.GetStringOrNull("country"));
         return new AlbumMatchDetailResponse(match, genres ?? "", null, tracks);
+    }
+
+    public async Task<IReadOnlyList<ArtistMatchResponse>> SearchArtistsAsync(
+        string artist,
+        CancellationToken cancellationToken)
+    {
+        var query = $"database/search?type=artist&per_page=12&q={Uri.EscapeDataString(artist)}";
+        using var document = await GetJsonAsync(query, cancellationToken);
+        var results = document?.RootElement.GetPropertyOrNull("results");
+        if (results is not { ValueKind: JsonValueKind.Array })
+        {
+            return [];
+        }
+
+        return results.Value.EnumerateArray()
+            .Select(item =>
+            {
+                var id = item.GetPropertyOrNull("id");
+                var name = item.GetStringOrNull("title");
+                if (id is not { ValueKind: JsonValueKind.Number } || string.IsNullOrWhiteSpace(name))
+                {
+                    return null;
+                }
+
+                return new ArtistMatchResponse(
+                    Id,
+                    id.Value.GetInt64().ToString(CultureInfo.InvariantCulture),
+                    name,
+                    item.GetStringOrNull("country"),
+                    ProviderText.Nullable(item.GetStringOrNull("thumb")));
+            })
+            .Where(item => item is not null)
+            .Select(item => item!)
+            .ToArray();
+    }
+
+    public async Task<ArtistProviderDetail?> GetArtistAsync(string id, CancellationToken cancellationToken)
+    {
+        if (!long.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var artistId))
+        {
+            return null;
+        }
+
+        using var document = await GetJsonAsync($"artists/{artistId}", cancellationToken);
+        if (document is null)
+        {
+            return null;
+        }
+
+        var artist = document.RootElement;
+        var name = artist.GetStringOrNull("name") ?? "";
+        var images = artist.GetPropertyOrNull("images");
+        var primaryImage = images is { ValueKind: JsonValueKind.Array }
+            ? images.Value.EnumerateArray()
+                .OrderBy(item => item.GetStringOrNull("type") == "primary" ? 0 : 1)
+                .Select(item => ProviderText.Nullable(item.GetStringOrNull("uri")))
+                .FirstOrDefault(url => url is not null)
+            : null;
+        var profile = artist.GetStringOrNull("profile") ?? "";
+        var match = new ArtistMatchResponse(
+            Id,
+            id,
+            name,
+            ProviderText.Nullable(artist.GetStringOrNull("realname")),
+            primaryImage);
+        return new ArtistProviderDetail(match, profile, primaryImage, null, null, primaryImage is null ? null : Name);
     }
 
     private async Task<JsonDocument?> GetJsonAsync(string path, CancellationToken cancellationToken)
