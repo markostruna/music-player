@@ -14,15 +14,16 @@ import { ToastService } from '@shared/services/toast-service';
 import { MusicShellState } from '../../shell/music-shell/music-shell-state';
 import { AlbumsPage } from './albums-page/albums-page';
 import { ArtistsPage } from './artists-page/artists-page';
+import { FoldersPage } from './folders-page/folders-page';
 import { TracksPage } from './tracks-page/tracks-page';
 
 @Component({
   selector: 'app-library-page',
-  imports: [TracksPage, AlbumsPage, ArtistsPage],
+  imports: [TracksPage, AlbumsPage, ArtistsPage, FoldersPage],
   templateUrl: './library-page.html',
 })
 export class LibraryPage implements AfterViewInit, OnDestroy {
-  private readonly tabViews: LibraryView[] = ['tracks', 'albums', 'artists'];
+  private readonly tabViews: LibraryView[] = ['albums', 'artists', 'tracks', 'folders'];
   private readonly library = inject(MusicLibraryApi);
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
@@ -78,7 +79,7 @@ export class LibraryPage implements AfterViewInit, OnDestroy {
   }
 
   onTabKeydown(event: KeyboardEvent, view: LibraryView): void {
-    const views: LibraryView[] = ['tracks', 'albums', 'artists'];
+    const views: LibraryView[] = ['albums', 'artists', 'tracks', 'folders'];
     const currentIndex = views.indexOf(view);
     let nextIndex: number;
     switch (event.key) {

@@ -6,6 +6,7 @@ import {
   MetadataPatch,
   MusicLibraryApi,
   MusicTrack,
+  TrackFolderScope,
 } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
@@ -26,6 +27,8 @@ export class TracksPage {
 
   readonly active = input(false);
   readonly refreshTrigger = input(0);
+  readonly folderSourceRootId = input<number | null>(null);
+  readonly folderPath = input<string | null>(null);
   readonly searchQuery = this.store.searchQuery;
   readonly currentPage = signal(1);
   readonly pageTracks = this.store.pageTracks;
@@ -50,21 +53,27 @@ export class TracksPage {
   private readonly pageError = signal('');
   metadata: MetadataPatch = {};
   destinationFolderId: number | null = null;
-  folders: Awaited<ReturnType<MusicLibraryApi['listFolders']>> = [];
+  folders: Awaited<ReturnType<MusicLibraryApi['listTrackMoveFolders']>> = [];
   operationMessage = '';
   private loaded = false;
   private lastRefreshTrigger = 0;
   private lastSearchQuery = '';
+  private lastFolderSourceRootId: number | null = null;
+  private lastFolderPath: string | null = null;
 
   constructor() {
     effect(() => {
       const active = this.active();
       const refreshTrigger = this.refreshTrigger();
       const query = this.searchQuery();
+      const folderSourceRootId = this.folderSourceRootId();
+      const folderPath = this.folderPath();
       if (refreshTrigger !== this.lastRefreshTrigger) {
         this.lastRefreshTrigger = refreshTrigger;
         if (active && this.loaded) {
           this.lastSearchQuery = query;
+          this.lastFolderSourceRootId = folderSourceRootId;
+          this.lastFolderPath = folderPath;
           this.currentPage.set(this.store.currentPages().tracks);
           void this.loadLibrary();
         }
@@ -73,10 +82,19 @@ export class TracksPage {
       if (active && !this.loaded) {
         this.loaded = true;
         this.lastSearchQuery = query;
+        this.lastFolderSourceRootId = folderSourceRootId;
+        this.lastFolderPath = folderPath;
         this.selectedTrackIds.set(new Set<number>());
         void this.loadLibrary();
-      } else if (active && query !== this.lastSearchQuery) {
+      } else if (
+        active &&
+        (query !== this.lastSearchQuery ||
+          folderSourceRootId !== this.lastFolderSourceRootId ||
+          folderPath !== this.lastFolderPath)
+      ) {
         this.lastSearchQuery = query;
+        this.lastFolderSourceRootId = folderSourceRootId;
+        this.lastFolderPath = folderPath;
         this.currentPage.set(1);
         void this.loadLibrary();
       }
@@ -85,11 +103,16 @@ export class TracksPage {
 
   async loadLibrary(): Promise<void> {
     this.pageError.set('');
-    await this.store.loadTrackPage(this.searchQuery(), this.currentPage(), this.pageSize);
+    await this.store.loadTrackPage(
+      this.searchQuery(),
+      this.currentPage(),
+      this.pageSize,
+      this.folderScope(),
+    );
     this.currentPage.set(this.store.currentPages().tracks);
     if (this.isAdmin() && !this.store.errorMessage()) {
       try {
-        this.folders = await this.library.listFolders();
+        this.folders = await this.library.listTrackMoveFolders();
       } catch {
         this.pageError.set('The music folders could not be loaded.');
       }
@@ -107,17 +130,23 @@ export class TracksPage {
   }
 
   private async loadTrackPage(page: number): Promise<void> {
-    await this.store.loadTrackPage(this.searchQuery(), page, this.pageSize);
+    await this.store.loadTrackPage(this.searchQuery(), page, this.pageSize, this.folderScope());
     this.currentPage.set(this.store.currentPages().tracks);
   }
 
   async chooseTrack(track: MusicTrack): Promise<void> {
     try {
-      const queue = await this.library.searchTracks(this.searchQuery());
+      const queue = await this.library.searchTracks(this.searchQuery(), this.folderScope());
       this.player.play(queue, queue.findIndex((candidate) => candidate.id === track.id));
     } catch {
       this.toast.show('The selected track could not be loaded for playback.', 'error');
     }
+  }
+
+  private folderScope(): TrackFolderScope | null {
+    const sourceRootId = this.folderSourceRootId();
+    const path = this.folderPath();
+    return sourceRootId === null || path === null ? null : { sourceRootId, path };
   }
 
   toggleSelection(trackId: number, event: Event): void {

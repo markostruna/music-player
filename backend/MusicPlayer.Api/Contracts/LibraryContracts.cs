@@ -18,11 +18,23 @@ public sealed record SourceRootResponse(int Id, string Name, string Path, int Tr
 /// <summary>A browsable directory inside a configured source.</summary>
 public sealed record MusicFolderResponse(int Id, int SourceRootId, string Name, string RelativePath);
 
+public sealed record MusicFolderBrowseEntryResponse(int SourceRootId, string Name, string RelativePath);
+
+public sealed record MusicFolderFileResponse(string Name, string RelativePath);
+
+public sealed record MusicFolderContentsResponse(
+    int SourceRootId,
+    string RootName,
+    string RelativePath,
+    IReadOnlyList<MusicFolderBrowseEntryResponse> Folders,
+    IReadOnlyList<MusicFolderFileResponse> Files);
+
 /// <summary>A catalog entry available for browsing and playback.</summary>
 public sealed record TrackResponse(
     int Id,
     int SourceRootId,
     int FolderId,
+    string RelativePath,
     string Title,
     string Artist,
     string Album,

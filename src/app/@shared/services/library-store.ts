@@ -4,9 +4,10 @@ import {
   ArtistSummary,
   MusicLibraryApi,
   MusicTrack,
+  TrackFolderScope,
 } from './music-library-api';
 
-export type LibraryView = 'tracks' | 'albums' | 'artists';
+export type LibraryView = 'tracks' | 'albums' | 'artists' | 'folders';
 export const LIBRARY_PAGE_SIZE = 100;
 
 // Keeps the loaded library and browsing state so returning to the library page does not reload it.
@@ -20,6 +21,7 @@ export class LibraryStore {
     tracks: 0,
     albums: 0,
     artists: 0,
+    folders: 0,
   };
 
   readonly tracks = signal<MusicTrack[]>([]);
@@ -33,16 +35,19 @@ export class LibraryStore {
     tracks: false,
     albums: false,
     artists: false,
+    folders: false,
   });
   readonly pageErrors = signal<Record<LibraryView, string>>({
     tracks: '',
     albums: '',
     artists: '',
+    folders: '',
   });
   readonly currentPages = signal<Record<LibraryView, number>>({
     tracks: 1,
     albums: 1,
     artists: 1,
+    folders: 1,
   });
   readonly isLoading = signal(true);
   readonly errorMessage = signal('');
@@ -59,6 +64,7 @@ export class LibraryStore {
 
   refresh(): Promise<void> {
     const view = this.collectionView();
+    if (view === 'folders') return Promise.resolve();
     if (view === 'tracks') {
       return this.loadTrackPage(this.searchQuery(), this.currentPage(), LIBRARY_PAGE_SIZE);
     }
@@ -77,7 +83,7 @@ export class LibraryStore {
   }
 
   async loadCollectionPage(
-    view: Exclude<LibraryView, 'tracks'>,
+    view: Exclude<LibraryView, 'tracks' | 'folders'>,
     query: string,
     page: number,
     pageSize: number,
@@ -117,7 +123,12 @@ export class LibraryStore {
     }
   }
 
-  async loadTrackPage(query: string, page: number, pageSize: number): Promise<void> {
+  async loadTrackPage(
+    query: string,
+    page: number,
+    pageSize: number,
+    folderScope?: TrackFolderScope | null,
+  ): Promise<void> {
     const requestId = ++this.pageRequestIds.tracks;
     const latestRequestId = ++this.pageRequestId;
     this.pageLoading.update((loading) => ({ ...loading, tracks: true }));
@@ -125,7 +136,7 @@ export class LibraryStore {
     this.isLoading.set(true);
     this.errorMessage.set('');
     try {
-      const result = await this.api.listTrackPage(query, page, pageSize);
+      const result = await this.api.listTrackPage(query, page, pageSize, false, folderScope);
       if (requestId !== this.pageRequestIds.tracks) return;
       this.pageTracks.set(result.items);
       this.totalTrackCount.set(result.totalCount);
@@ -175,9 +186,9 @@ export class LibraryStore {
     this.totalAlbumCount.set(0);
     this.pageArtists.set([]);
     this.totalArtistCount.set(0);
-    this.pageLoading.set({ tracks: false, albums: false, artists: false });
-    this.pageErrors.set({ tracks: '', albums: '', artists: '' });
-    this.currentPages.set({ tracks: 1, albums: 1, artists: 1 });
+    this.pageLoading.set({ tracks: false, albums: false, artists: false, folders: false });
+    this.pageErrors.set({ tracks: '', albums: '', artists: '', folders: '' });
+    this.currentPages.set({ tracks: 1, albums: 1, artists: 1, folders: 1 });
     this.searchQuery.set('');
     this.currentPage.set(1);
     this.collectionView.set('albums');

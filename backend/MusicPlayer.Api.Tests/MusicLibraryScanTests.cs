@@ -178,6 +178,23 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         await library.ScanAsync(root.Id, CancellationToken.None);
 
         var result = await library.GetTracksPageAsync("matching", page: 1, pageSize: 1, CancellationToken.None);
+        var folderPage = await library.GetTracksPageAsync(
+            null,
+            page: 1,
+            pageSize: 10,
+            CancellationToken.None,
+            folderId: result.Items.Single().FolderId);
+        var folderTracks = await library.SearchTracksAsync(
+            null,
+            CancellationToken.None,
+            result.Items.Single().FolderId);
+        var pathTracks = await library.GetTracksPageAsync(
+            null,
+            page: 1,
+            pageSize: 10,
+            CancellationToken.None,
+            sourceRootId: result.Items.Single().SourceRootId,
+            folderPath: "Paged Album");
         var albums = await library.GetAlbumsPageAsync("Paged", page: 1, pageSize: 1, CancellationToken.None);
         var artists = await library.GetArtistsPageAsync("Page", page: 1, pageSize: 1, CancellationToken.None);
         var artistTracks = await library.GetArtistTracksAsync("Page Artist", CancellationToken.None);
@@ -197,6 +214,10 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal(1, result.Page);
         Assert.Single(result.Items);
         Assert.Equal("Matching Track", result.Items[0].Title);
+        Assert.Equal(2, folderPage.TotalCount);
+        Assert.Equal(2, folderTracks.Count);
+        Assert.All(folderTracks, track => Assert.Equal(result.Items[0].FolderId, track.FolderId));
+        Assert.Equal(2, pathTracks.TotalCount);
         Assert.Equal(1, albums.TotalCount);
         Assert.Equal(2, albums.Items.Single().TrackCount);
         Assert.Equal("Paged Album", albums.Items.Single().Album);
@@ -216,6 +237,38 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal(3, randomTracks.Items.Count);
         Assert.Equal(2, randomAlbums.Items.Count);
         Assert.Equal(2, randomArtists.Items.Count);
+    }
+
+    [Fact]
+    public async Task FolderBrowserListsPhysicalDirectoriesAndFilesBeforeScanning()
+    {
+        var artistDirectory = Path.Combine(sourceDirectory, "Artist");
+        var albumDirectory = Path.Combine(artistDirectory, "Album");
+        Directory.CreateDirectory(albumDirectory);
+        await System.IO.File.WriteAllTextAsync(Path.Combine(sourceDirectory, "readme.txt"), "music library");
+        await System.IO.File.WriteAllTextAsync(Path.Combine(albumDirectory, "track.mp3"), "unscanned track");
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Browse Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+
+        var folderRoots = await library.GetLibraryFolderRootsAsync(CancellationToken.None);
+        var rootContents = await library.BrowseLibraryFolderAsync(root.Id, "", CancellationToken.None);
+        var artistContents = await library.BrowseLibraryFolderAsync(root.Id, "Artist", CancellationToken.None);
+        var albumContents = await library.BrowseLibraryFolderAsync(root.Id, "Artist/Album", CancellationToken.None);
+
+        Assert.Equal("Browse Music", Assert.Single(folderRoots).Name);
+        Assert.NotNull(rootContents);
+        Assert.Equal("Artist", Assert.Single(rootContents.Folders).Name);
+        Assert.Equal("readme.txt", Assert.Single(rootContents.Files).Name);
+        Assert.NotNull(artistContents);
+        Assert.Equal("Album", Assert.Single(artistContents.Folders).Name);
+        Assert.NotNull(albumContents);
+        Assert.Equal("track.mp3", Assert.Single(albumContents.Files).Name);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            library.BrowseLibraryFolderAsync(root.Id, "../outside", CancellationToken.None));
     }
 
     [Fact]

@@ -1,0 +1,222 @@
+.folder-browser {
+  display: grid;
+  gap: 18px;
+}
+
+.folder-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.folder-heading h3 {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.folder-back,
+.folder-breadcrumbs button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.folder-back:hover,
+.folder-breadcrumbs button:not(:disabled):hover {
+  color: var(--ink);
+}
+
+.folder-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.folder-breadcrumbs button:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+  cursor: default;
+  font-weight: 700;
+}
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.folder-files {
+  display: grid;
+  gap: 8px;
+}
+
+.folder-files h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 3px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.folder-files h4 span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.folder-file {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 11px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.file-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.file-icon.image-file {
+  background: #eee8f8;
+  color: #70559d;
+}
+
+.file-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.file-details {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.file-details strong,
+.file-details small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-details strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.file-details small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.file-play {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.file-play:hover,
+.file-play:focus-visible {
+  filter: brightness(0.94);
+}
+
+.file-play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.file-play svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.folder-tile {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.folder-tile:hover,
+.folder-tile:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.folder-tile:focus-visible,
+.folder-back:focus-visible,
+.folder-breadcrumbs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.folder-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  grid-row: span 2;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.folder-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.folder-name,
+.folder-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-name {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.folder-path {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}

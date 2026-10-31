@@ -1,0 +1,156 @@
+<section class="folder-browser" aria-label="Music folders">
+  <div class="folder-heading">
+    <div>
+      <span class="eyebrow">BROWSE YOUR MUSIC</span>
+      <h3>{{ selectedFolder()?.name ?? 'All folders' }}</h3>
+    </div>
+    @if (selectedFolder()) {
+      <button class="folder-back" type="button" (click)="navigateToAllFolders()">
+        All folders
+      </button>
+    }
+  </div>
+
+  @if (breadcrumbs().length > 0) {
+    <nav class="folder-breadcrumbs" aria-label="Folder path">
+      @for (
+        folder of breadcrumbs();
+        track folder.sourceRootId + ':' + folder.relativePath;
+        let last = $last
+      ) {
+        <button type="button" [disabled]="last" (click)="navigateTo(folder)">
+          {{ folder.name }}
+        </button>
+        @if (!last) {
+          <span aria-hidden="true">/</span>
+        }
+      }
+    </nav>
+  }
+
+  @if (isLoading()) {
+    <p class="empty-state">Loading music folders…</p>
+  } @else if (errorMessage()) {
+    <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+  } @else if (!selectedFolder() && roots().length === 0) {
+    <p class="empty-state">No music folders yet. An administrator can add a music folder.</p>
+  } @else if (!selectedFolder()) {
+    <div class="folder-grid">
+      @for (folder of roots(); track folder.sourceRootId) {
+        <button class="folder-tile" type="button" (click)="navigateTo(folder)">
+          <span class="folder-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3.5 6.5h6l2 2h9v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-11Z"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linejoin="round"
+              />
+              <path d="M3.5 9h17" stroke="currentColor" stroke-width="1.7" />
+            </svg>
+          </span>
+          <span class="folder-name">{{ folder.name }}</span>
+          <span class="folder-path">Music folder</span>
+        </button>
+      }
+    </div>
+  } @else if (contents()) {
+    <div class="folder-grid">
+      @for (folder of contents()!.folders; track folder.sourceRootId + ':' + folder.relativePath) {
+        <button class="folder-tile" type="button" (click)="navigateTo(folder)">
+          <span class="folder-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3.5 6.5h6l2 2h9v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-11Z"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linejoin="round"
+              />
+              <path d="M3.5 9h17" stroke="currentColor" stroke-width="1.7" />
+            </svg>
+          </span>
+          <span class="folder-name">{{ folder.name }}</span>
+          <span class="folder-path">{{ folder.relativePath }}</span>
+        </button>
+      } @empty {
+        <p class="empty-state">No subfolders in this folder.</p>
+      }
+    </div>
+
+    <section class="folder-files" aria-label="Files in this folder">
+      <h4>
+        Files <span>{{ contents()!.files.length }}</span>
+      </h4>
+      @if (tracksErrorMessage()) {
+        <p class="empty-state" role="alert">{{ tracksErrorMessage() }}</p>
+      }
+      @for (file of files(); track file.relativePath) {
+        <div class="folder-file">
+          <span class="file-icon" [class.image-file]="file.type === 'image'" aria-hidden="true">
+            @if (file.type === 'image') {
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect
+                  x="3.5"
+                  y="4.5"
+                  width="17"
+                  height="15"
+                  rx="2"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                />
+                <circle cx="9" cy="9" r="1.5" fill="currentColor" />
+                <path
+                  d="m5 17 4.5-4.5 3 3 2-2L19 18"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            } @else if (file.type === 'music') {
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 18V5l12-2v13" fill="none" stroke="currentColor" stroke-width="1.7" />
+                <circle cx="6" cy="18" r="3" fill="currentColor" />
+                <circle cx="18" cy="16" r="3" fill="currentColor" />
+              </svg>
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M6 3.5h8l4 4v13H6v-17Z"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linejoin="round"
+                />
+                <path d="M14 3.5v5h5M9 13h6m-6 3h6" stroke="currentColor" stroke-width="1.7" />
+              </svg>
+            }
+          </span>
+          <span class="file-details">
+            <strong>{{ file.track?.title ?? file.name }}</strong>
+            @if (file.track) {
+              <small>{{ file.name }} · {{ file.track.artist }} · {{ file.track.album }}</small>
+            } @else if (file.type === 'music') {
+              <small>Not scanned into the library</small>
+            } @else {
+              <small>{{ file.relativePath }}</small>
+            }
+          </span>
+          @if (file.track) {
+            <button
+              class="file-play"
+              type="button"
+              [attr.aria-label]="'Play ' + file.track.title"
+              (click)="playTrack(file.track)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m8 5 12 7-12 7V5Z" />
+              </svg>
+            </button>
+          }
+        </div>
+      } @empty {
+        <p class="empty-state">No files in this folder.</p>
+      }
+    </section>
+  }
+</section>

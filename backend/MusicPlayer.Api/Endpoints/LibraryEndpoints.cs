@@ -16,15 +16,27 @@ public static class LibraryEndpoints
             .WithSummary("Lists playable tracks in configured music sources.");
         library.MapGet("/tracks/search", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
             string? query,
+            int? folderId,
+            int? sourceRootId,
+            string? folderPath,
             IMusicLibraryService music,
             CancellationToken cancellationToken) =>
         {
-            if (query?.Length > 256)
+            if (query?.Length > 256 ||
+                folderId < 1 ||
+                sourceRootId < 1 ||
+                folderPath?.Length > 2048 ||
+                sourceRootId.HasValue != (folderPath is not null))
             {
-                return TypedResults.BadRequest("Search text cannot exceed 256 characters.");
+                return TypedResults.BadRequest("Search text or folder filter is invalid.");
             }
 
-            return TypedResults.Ok(await music.SearchTracksAsync(query, cancellationToken));
+            return TypedResults.Ok(await music.SearchTracksAsync(
+                query,
+                cancellationToken,
+                folderId,
+                sourceRootId,
+                folderPath));
         })
         .WithName("SearchTracks")
         .WithSummary("Returns all matching tracks for playback queues.");
@@ -34,14 +46,31 @@ public static class LibraryEndpoints
             int pageSize,
             IMusicLibraryService music,
             CancellationToken cancellationToken,
-            bool random = false) =>
+            bool random = false,
+            int? folderId = null,
+            int? sourceRootId = null,
+            string? folderPath = null) =>
         {
-            if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
+            if (page < 1 ||
+                pageSize is < 1 or > 200 ||
+                query?.Length > 256 ||
+                folderId < 1 ||
+                sourceRootId < 1 ||
+                folderPath?.Length > 2048 ||
+                sourceRootId.HasValue != (folderPath is not null))
             {
-                return TypedResults.BadRequest("Page, page size, or search text is invalid.");
+                return TypedResults.BadRequest("Page, page size, search text, or folder filter is invalid.");
             }
 
-            return TypedResults.Ok(await music.GetTracksPageAsync(query, page, pageSize, cancellationToken, random));
+            return TypedResults.Ok(await music.GetTracksPageAsync(
+                query,
+                page,
+                pageSize,
+                cancellationToken,
+                random,
+                folderId,
+                sourceRootId,
+                folderPath));
         })
         .WithName("ListTrackPage")
         .WithSummary("Searches and returns one page of playable tracks.");
@@ -115,6 +144,43 @@ public static class LibraryEndpoints
         })
         .WithName("ListArtistTracks")
         .WithSummary("Lists tracks for one artist.");
+        library.MapGet("/folders", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
+                TypedResults.Ok(await music.GetLibraryFolderRootsAsync(cancellationToken)))
+            .WithName("ListLibraryFolders")
+            .WithSummary("Lists configured music folders for browsing.");
+        library.MapGet("/folders/{sourceRootId:int}", async Task<Results<
+            Ok<MusicFolderContentsResponse>,
+            NotFound,
+            BadRequest<string>,
+            Conflict<string>>> (
+            int sourceRootId,
+            string? path,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (sourceRootId < 1 || path?.Length > 2048)
+            {
+                return TypedResults.BadRequest("The source folder or relative path is invalid.");
+            }
+
+            try
+            {
+                var contents = await music.BrowseLibraryFolderAsync(sourceRootId, path, cancellationToken);
+                return contents is null
+                    ? TypedResults.NotFound()
+                    : TypedResults.Ok(contents);
+            }
+            catch (ArgumentException exception)
+            {
+                return TypedResults.BadRequest(exception.Message);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return TypedResults.Conflict(exception.Message);
+            }
+        })
+        .WithName("BrowseLibraryFolder")
+        .WithSummary("Lists physical subfolders and files in a configured music folder.");
         library.MapGet("/albums", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
                 TypedResults.Ok(await music.GetAlbumsAsync(cancellationToken)))
             .WithName("ListAlbums")

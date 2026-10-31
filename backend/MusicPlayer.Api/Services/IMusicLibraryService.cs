@@ -8,19 +8,33 @@ public interface IMusicLibraryService
     Task<SourceRootResponse> AddRootAsync(CreateSourceRootRequest request, CancellationToken cancellationToken);
     Task<bool> RemoveRootAsync(int rootId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MusicFolderResponse>> GetFoldersAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<MusicFolderBrowseEntryResponse>> GetLibraryFolderRootsAsync(
+        CancellationToken cancellationToken);
+    Task<MusicFolderContentsResponse?> BrowseLibraryFolderAsync(
+        int sourceRootId,
+        string? relativePath,
+        CancellationToken cancellationToken);
     Task<ScanResponse> ScanAsync(int rootId, CancellationToken cancellationToken);
     Task<RootMetadataRefreshResponse> RefreshRootMetadataAsync(
         int rootId,
         Action<int, int, string> reportProgress,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken);
-    Task<IReadOnlyList<TrackResponse>> SearchTracksAsync(string? query, CancellationToken cancellationToken);
+    Task<IReadOnlyList<TrackResponse>> SearchTracksAsync(
+        string? query,
+        CancellationToken cancellationToken,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null);
     Task<PagedResponse<TrackResponse>> GetTracksPageAsync(
         string? query,
         int page,
         int pageSize,
         CancellationToken cancellationToken,
-        bool random = false);
+        bool random = false,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null);
     Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
         string? query,
         int page,

@@ -11,9 +11,15 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
     public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken)
         => await GetTracksAsync(null, cancellationToken);
 
-    public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(string? query, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(
+        string? query,
+        CancellationToken cancellationToken,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null)
     {
-        var tracksQuery = ApplySearch(AvailableTracks(), query);
+        var tracksQuery = ApplyFolderFilter(AvailableTracks(), folderId, sourceRootId, folderPath);
+        tracksQuery = ApplySearch(tracksQuery, query);
         var tracks = await tracksQuery
             .OrderBy(track => track.AlbumArtist)
             .ThenBy(track => track.Album)
@@ -29,9 +35,13 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         int page,
         int pageSize,
         CancellationToken cancellationToken,
-        bool random = false)
+        bool random = false,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null)
     {
-        var tracksQuery = ApplySearch(AvailableTracks(), query);
+        var tracksQuery = ApplyFolderFilter(AvailableTracks(), folderId, sourceRootId, folderPath);
+        tracksQuery = ApplySearch(tracksQuery, query);
 
         var totalCount = await tracksQuery.CountAsync(cancellationToken);
         var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
@@ -278,6 +288,24 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         database.Tracks.AsNoTracking()
             .Where(track => track.IsAvailable && track.SourceRoot != null && track.SourceRoot.IsEnabled);
 
+    private static IQueryable<MusicTrack> ApplyFolderFilter(
+        IQueryable<MusicTrack> tracks,
+        int? folderId,
+        int? sourceRootId,
+        string? folderPath)
+    {
+        if (folderId.HasValue) tracks = tracks.Where(track => track.FolderId == folderId.Value);
+        if (sourceRootId.HasValue && folderPath is not null)
+        {
+            tracks = tracks.Where(track =>
+                track.SourceRootId == sourceRootId.Value &&
+                track.Folder != null &&
+                track.Folder.RelativePath == folderPath);
+        }
+
+        return tracks;
+    }
+
     private static IQueryable<MusicTrack> ApplySearch(IQueryable<MusicTrack> tracks, string? query)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -343,6 +371,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         track.Id,
         track.SourceRootId,
         track.FolderId,
+        track.RelativePath,
         track.Title,
         track.Artist,
         track.Album,

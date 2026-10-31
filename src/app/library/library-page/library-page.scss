@@ -641,7 +641,7 @@ kbd {
   position: absolute;
   z-index: 0;
   inset: 0 0 0;
-  width: 33.333%;
+  width: 25%;
   border-bottom: 2px solid var(--accent);
   border-radius: 4px 4px 0 0;
   background: var(--accent-soft);
@@ -651,11 +651,19 @@ kbd {
 }
 
 .collection-tabs.albums-active::before {
-  transform: translateX(100%);
+  transform: translateX(0);
 }
 
 .collection-tabs.artists-active::before {
+  transform: translateX(100%);
+}
+
+.collection-tabs.tracks-active::before {
   transform: translateX(200%);
+}
+
+.collection-tabs.folders-active::before {
+  transform: translateX(300%);
 }
 
 .collection-tabs button {
@@ -702,7 +710,8 @@ kbd {
 
 app-library-tracks-page,
 app-library-albums-page,
-app-library-artists-page {
+app-library-artists-page,
+app-library-folders-page {
   display: block;
 }
 

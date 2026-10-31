@@ -85,6 +85,64 @@ public sealed class MusicLibraryService(
             .Select(folder => new MusicFolderResponse(folder.Id, folder.SourceRootId, folder.Name, folder.RelativePath))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<MusicFolderBrowseEntryResponse>> GetLibraryFolderRootsAsync(
+        CancellationToken cancellationToken) =>
+        await database.SourceRoots.AsNoTracking()
+            .Where(root => root.IsEnabled)
+            .OrderBy(root => root.Name)
+            .Select(root => new MusicFolderBrowseEntryResponse(root.Id, root.Name, string.Empty))
+            .ToListAsync(cancellationToken);
+
+    public async Task<MusicFolderContentsResponse?> BrowseLibraryFolderAsync(
+        int sourceRootId,
+        string? relativePath,
+        CancellationToken cancellationToken)
+    {
+        var root = await database.SourceRoots.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == sourceRootId && item.IsEnabled, cancellationToken);
+        if (root is null) return null;
+
+        var normalizedRelativePath = NormalizeBrowsePath(relativePath);
+        var rootPath = Path.GetFullPath(root.Path);
+        var folderPath = ResolvePath(rootPath, normalizedRelativePath);
+        if (!Directory.Exists(folderPath) || !IsSafePathWithoutLinks(rootPath, folderPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var folders = Directory.EnumerateDirectories(folderPath)
+                .Select(path => (Path: path, Attributes: System.IO.File.GetAttributes(path)))
+                .Where(entry => (entry.Attributes & FileAttributes.ReparsePoint) == 0)
+                .Select(entry => new MusicFolderBrowseEntryResponse(
+                    sourceRootId,
+                    Path.GetFileName(entry.Path),
+                    NormalizeRelativePath(Path.GetRelativePath(rootPath, entry.Path))))
+                .OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var files = Directory.EnumerateFiles(folderPath)
+                .Select(path => (Path: path, Attributes: System.IO.File.GetAttributes(path)))
+                .Where(entry => (entry.Attributes & FileAttributes.ReparsePoint) == 0)
+                .Select(entry => new MusicFolderFileResponse(
+                    Path.GetFileName(entry.Path),
+                    NormalizeRelativePath(Path.GetRelativePath(rootPath, entry.Path))))
+                .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return new MusicFolderContentsResponse(
+                sourceRootId,
+                root.Name,
+                normalizedRelativePath,
+                folders,
+                files);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException("The selected music folder could not be read.", exception);
+        }
+    }
+
     public async Task<ScanResponse> ScanAsync(int rootId, CancellationToken cancellationToken)
     {
         var root = await database.SourceRoots.SingleOrDefaultAsync(item => item.Id == rootId && item.IsEnabled, cancellationToken)
@@ -256,16 +314,32 @@ public sealed class MusicLibraryService(
     public Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken) =>
         browseService.GetTracksAsync(cancellationToken);
 
-    public Task<IReadOnlyList<TrackResponse>> SearchTracksAsync(string? query, CancellationToken cancellationToken) =>
-        browseService.GetTracksAsync(query, cancellationToken);
+    public Task<IReadOnlyList<TrackResponse>> SearchTracksAsync(
+        string? query,
+        CancellationToken cancellationToken,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null) =>
+        browseService.GetTracksAsync(query, cancellationToken, folderId, sourceRootId, folderPath);
 
     public Task<PagedResponse<TrackResponse>> GetTracksPageAsync(
         string? query,
         int page,
         int pageSize,
         CancellationToken cancellationToken,
-        bool random = false) =>
-        browseService.GetTracksPageAsync(query, page, pageSize, cancellationToken, random);
+        bool random = false,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null) =>
+        browseService.GetTracksPageAsync(
+            query,
+            page,
+            pageSize,
+            cancellationToken,
+            random,
+            folderId,
+            sourceRootId,
+            folderPath);
 
     public Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
         string? query,
@@ -1430,6 +1504,23 @@ public sealed class MusicLibraryService(
 
     private static string NormalizeRelativePath(string path) =>
         path == "." ? string.Empty : path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
+
+    private static string NormalizeBrowsePath(string? relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath)) return string.Empty;
+        if (relativePath.Length > 2048 || Path.IsPathRooted(relativePath))
+        {
+            throw new ArgumentException("The folder path must be relative to a configured music source.");
+        }
+
+        var normalizedPath = relativePath.Replace('\\', '/').Trim('/');
+        if (normalizedPath.Split('/').Any(segment => segment is "" or "." or ".."))
+        {
+            throw new ArgumentException("The folder path contains an invalid segment.");
+        }
+
+        return normalizedPath;
+    }
 
     private static string FirstTag(string[]? tags, string fallback) =>
         tags?.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? fallback;

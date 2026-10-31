@@ -8,6 +8,7 @@ export interface MusicTrack {
   id: number;
   sourceRootId: number;
   folderId: number;
+  relativePath: string;
   title: string;
   artist: string;
   album: string;
@@ -66,6 +67,30 @@ export interface MusicFolder {
   sourceRootId: number;
   name: string;
   relativePath: string;
+}
+
+export interface MusicFolderBrowseEntry {
+  sourceRootId: number;
+  name: string;
+  relativePath: string;
+}
+
+export interface MusicFolderFile {
+  name: string;
+  relativePath: string;
+}
+
+export interface MusicFolderContents {
+  sourceRootId: number;
+  rootName: string;
+  relativePath: string;
+  folders: MusicFolderBrowseEntry[];
+  files: MusicFolderFile[];
+}
+
+export interface TrackFolderScope {
+  sourceRootId: number;
+  path: string;
 }
 
 export interface SourceRoot {
@@ -139,8 +164,12 @@ export class MusicLibraryApi {
     ).then((tracks) => this.mapTracks(tracks));
   }
 
-  searchTracks(query: string): Promise<MusicTrack[]> {
+  searchTracks(query: string, folderScope?: TrackFolderScope | null): Promise<MusicTrack[]> {
     const params = new URLSearchParams({ query });
+    if (folderScope) {
+      params.set('sourceRootId', String(folderScope.sourceRootId));
+      params.set('folderPath', folderScope.path);
+    }
     return firstValueFrom(
       this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks/search?${params}`, {
         withCredentials: true,
@@ -148,13 +177,23 @@ export class MusicLibraryApi {
     ).then((tracks) => this.mapTracks(tracks));
   }
 
-  listTrackPage(query: string, page: number, pageSize: number, random = false): Promise<PagedTracks> {
+  listTrackPage(
+    query: string,
+    page: number,
+    pageSize: number,
+    random = false,
+    folderScope?: TrackFolderScope | null,
+  ): Promise<PagedTracks> {
     const params = new URLSearchParams({
       query,
       page: String(page),
       pageSize: String(pageSize),
     });
     if (random) params.set('random', 'true');
+    if (folderScope) {
+      params.set('sourceRootId', String(folderScope.sourceRootId));
+      params.set('folderPath', folderScope.path);
+    }
     return firstValueFrom(
       this.http.get<PagedTracks>(`${MUSIC_API_BASE}/library/tracks/page?${params}`, {
         withCredentials: true,
@@ -251,11 +290,29 @@ export class MusicLibraryApi {
     );
   }
 
-  listFolders(): Promise<MusicFolder[]> {
+  listTrackMoveFolders(): Promise<MusicFolder[]> {
     return firstValueFrom(
       this.http.get<MusicFolder[]>(`${MUSIC_API_BASE}/admin/roots/folders`, {
         withCredentials: true,
       }),
+    );
+  }
+
+  listLibraryFolderRoots(): Promise<MusicFolderBrowseEntry[]> {
+    return firstValueFrom(
+      this.http.get<MusicFolderBrowseEntry[]>(`${MUSIC_API_BASE}/library/folders`, {
+        withCredentials: true,
+      }),
+    );
+  }
+
+  browseLibraryFolder(sourceRootId: number, path: string): Promise<MusicFolderContents> {
+    const params = new URLSearchParams({ path });
+    return firstValueFrom(
+      this.http.get<MusicFolderContents>(
+        `${MUSIC_API_BASE}/library/folders/${sourceRootId}?${params}`,
+        { withCredentials: true },
+      ),
     );
   }
 

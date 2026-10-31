@@ -49,33 +49,24 @@
               ? 'Albums'
               : collectionView() === 'artists'
                 ? 'Artists'
-                : searchQuery()
-                  ? 'Track results'
-                  : 'Tracks'
+                : collectionView() === 'folders'
+                  ? 'Folders'
+                  : searchQuery()
+                    ? 'Track results'
+                    : 'Tracks'
           }}
         </h2>
       </div>
       <div class="collection-actions">
         <div
           class="collection-tabs"
-          [class.tracks-active]="collectionView() === 'tracks'"
           [class.albums-active]="collectionView() === 'albums'"
           [class.artists-active]="collectionView() === 'artists'"
+          [class.tracks-active]="collectionView() === 'tracks'"
+          [class.folders-active]="collectionView() === 'folders'"
           role="tablist"
           aria-label="Library pages"
         >
-          <button
-            id="library-tab-tracks"
-            role="tab"
-            [attr.aria-selected]="collectionView() === 'tracks'"
-            [attr.aria-controls]="'library-panel-tracks'"
-            [tabIndex]="collectionView() === 'tracks' ? 0 : -1"
-            [class.active]="collectionView() === 'tracks'"
-            (click)="selectTab('tracks')"
-            (keydown)="onTabKeydown($event, 'tracks')"
-          >
-            Tracks
-          </button>
           <button
             id="library-tab-albums"
             role="tab"
@@ -99,6 +90,30 @@
             (keydown)="onTabKeydown($event, 'artists')"
           >
             Artists
+          </button>
+          <button
+            id="library-tab-tracks"
+            role="tab"
+            [attr.aria-selected]="collectionView() === 'tracks'"
+            [attr.aria-controls]="'library-panel-tracks'"
+            [tabIndex]="collectionView() === 'tracks' ? 0 : -1"
+            [class.active]="collectionView() === 'tracks'"
+            (click)="selectTab('tracks')"
+            (keydown)="onTabKeydown($event, 'tracks')"
+          >
+            Tracks
+          </button>
+          <button
+            id="library-tab-folders"
+            role="tab"
+            [attr.aria-selected]="collectionView() === 'folders'"
+            [attr.aria-controls]="'library-panel-folders'"
+            [tabIndex]="collectionView() === 'folders' ? 0 : -1"
+            [class.active]="collectionView() === 'folders'"
+            (click)="selectTab('folders')"
+            (keydown)="onTabKeydown($event, 'folders')"
+          >
+            Folders
           </button>
         </div>
         <button
@@ -217,6 +232,35 @@
       >
         <app-library-artists-page
           [active]="collectionView() === 'artists'"
+          [refreshTrigger]="refreshTrigger()"
+        />
+      </div>
+      <div
+        id="library-panel-folders"
+        class="collection-tab-panel"
+        role="tabpanel"
+        aria-labelledby="library-tab-folders"
+        [class.active]="collectionView() === 'folders'"
+        [class.exiting]="tabTransition()?.from === 'folders'"
+        [class.enter-from-right]="
+          tabTransition()?.to === 'folders' && tabTransition()?.direction === 'right'
+        "
+        [class.enter-from-left]="
+          tabTransition()?.to === 'folders' && tabTransition()?.direction === 'left'
+        "
+        [class.exit-to-left]="
+          tabTransition()?.from === 'folders' && tabTransition()?.direction === 'right'
+        "
+        [class.exit-to-right]="
+          tabTransition()?.from === 'folders' && tabTransition()?.direction === 'left'
+        "
+        [attr.aria-hidden]="collectionView() !== 'folders'"
+        [attr.inert]="collectionView() !== 'folders' ? '' : null"
+        tabindex="0"
+        (animationend)="finishTabTransition('folders', $event)"
+      >
+        <app-library-folders-page
+          [active]="collectionView() === 'folders'"
           [refreshTrigger]="refreshTrigger()"
         />
       </div>
