@@ -70,6 +70,8 @@ export class MusicShell {
         return 'Playlists';
       case 'settings':
         return 'Settings';
+      case 'settings/providers':
+        return 'Provider integrations';
       case 'library/album/:trackId': {
         const trackId = Number(childRoute.snapshot.paramMap.get('trackId'));
         return this.library.tracks().find((track) => track.id === trackId)?.album ?? 'Album';

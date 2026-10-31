@@ -1,0 +1,157 @@
+.provider-settings-page {
+  width: 100%;
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 34px 4.1% 56px;
+  color: var(--ink);
+}
+
+.provider-settings-intro {
+  margin-bottom: 28px;
+}
+
+.provider-settings-intro h1 {
+  margin: 8px 0 5px;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(26px, 3vw, 36px);
+}
+
+.provider-settings-intro p,
+.provider-settings-card p,
+.provider-public-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.provider-settings-intro a {
+  display: inline-block;
+  margin-top: 16px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.provider-settings-list {
+  display: grid;
+  gap: 14px;
+}
+
+.provider-settings-card {
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.provider-settings-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.provider-settings-card h2 {
+  margin: 0 0 6px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.provider-status {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.provider-status-ready,
+.provider-settings-status {
+  color: #38764e;
+}
+
+.provider-credentials {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.provider-credential {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.provider-credential-control {
+  display: flex;
+  gap: 8px;
+}
+
+.provider-credential input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+.provider-credential input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.provider-save-button,
+.provider-remove-button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.provider-save-button {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.provider-remove-button {
+  flex: 0 0 auto;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.provider-save-button:disabled,
+.provider-remove-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.provider-settings-error {
+  color: #b24a38;
+  font-size: 12px;
+}
+
+@media (max-width: 680px) {
+  .provider-settings-page {
+    padding: 26px 16px 40px;
+  }
+
+  .provider-settings-card {
+    padding: 18px;
+  }
+
+  .provider-settings-card-heading {
+    flex-direction: column;
+  }
+}

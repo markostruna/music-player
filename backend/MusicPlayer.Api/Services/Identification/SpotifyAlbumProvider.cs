@@ -10,6 +10,8 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
 {
     private static readonly SemaphoreSlim TokenGate = new(1, 1);
     private static string? accessToken;
+    private static string? accessTokenClientId;
+    private static string? accessTokenClientSecret;
     private static DateTimeOffset accessTokenExpiry;
 
     private string? ClientId => configuration["Spotify:ClientId"];
@@ -32,7 +34,7 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
         if (year is > 0) terms.Add($"year:{year}");
 
         using var document = await GetJsonAsync(
-            $"search?type=album&limit=12&q={Uri.EscapeDataString(string.Join(' ', terms))}",
+            $"search?type=album&limit=10&q={Uri.EscapeDataString(string.Join(' ', terms))}",
             cancellationToken);
         var items = document?.RootElement.GetPropertyOrNull("albums")?.GetPropertyOrNull("items");
         if (items is not { ValueKind: JsonValueKind.Array }) return [];
@@ -93,7 +95,7 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
     {
         if (!IsConfigured)
         {
-            throw new AlbumProviderException("Spotify is not configured. Set Spotify:ClientId and Spotify:ClientSecret on the server.");
+            throw new AlbumProviderException("Spotify is not configured. Add a Client ID and Client secret in Provider integrations.");
         }
 
         try
@@ -102,7 +104,17 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await GetTokenAsync(cancellationToken));
             using var response = await http.SendAsync(request, cancellationToken);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
-            response.EnsureSuccessStatusCode();
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                throw new AlbumProviderException(
+                    $"Spotify rejected the API request (HTTP {(int)response.StatusCode}). Verify the app credentials and API access.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new AlbumProviderException($"Spotify API request failed with HTTP {(int)response.StatusCode}.");
+            }
+
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         }
@@ -118,7 +130,12 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
         await TokenGate.WaitAsync(cancellationToken);
         try
         {
-            if (accessToken is not null && accessTokenExpiry > DateTimeOffset.UtcNow.AddMinutes(1))
+            var clientId = ClientId;
+            var clientSecret = ClientSecret;
+            if (accessToken is not null
+                && accessTokenClientId == clientId
+                && accessTokenClientSecret == clientSecret
+                && accessTokenExpiry > DateTimeOffset.UtcNow.AddMinutes(1))
             {
                 return accessToken;
             }
@@ -129,13 +146,25 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
             };
             request.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic",
-                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{ClientId}:{ClientSecret}")));
+                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}")));
             using var response = await http.SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.BadRequest)
+            {
+                throw new AlbumProviderException(
+                    "Spotify rejected the Client ID or Client secret. Check both values in Provider integrations.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new AlbumProviderException($"Spotify token request failed with HTTP {(int)response.StatusCode}.");
+            }
+
             using var document = await JsonDocument.ParseAsync(
                 await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
             accessToken = document.RootElement.GetStringOrNull("access_token")
                 ?? throw new JsonException("The Spotify token response was invalid.");
+            accessTokenClientId = clientId;
+            accessTokenClientSecret = clientSecret;
             var seconds = document.RootElement.GetPropertyOrNull("expires_in") is { ValueKind: JsonValueKind.Number } expires
                 ? expires.GetInt32()
                 : 3600;

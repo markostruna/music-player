@@ -294,6 +294,22 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("MusicPlayer.Api.Data.ProviderCredential", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedValue")
+                        .IsRequired()
+                        .HasMaxLength(8192)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("ProviderCredentials");
+                });
+
             modelBuilder.Entity("MusicPlayer.Api.Data.MusicFolder", b =>
                 {
                     b.HasOne("MusicPlayer.Api.Data.MusicSourceRoot", "SourceRoot")

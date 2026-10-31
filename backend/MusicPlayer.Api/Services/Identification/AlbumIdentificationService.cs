@@ -152,10 +152,12 @@ public sealed partial class AlbumIdentificationService(
             candidates.Add(RemoteCandidate(
                 "caa", "Cover Art Archive", "Cover Art Archive front cover",
                 $"https://coverartarchive.org/release-group/{releaseGroupId}/front-500"));
-            var apiKey = configuration["FanartTv:ApiKey"] ?? configuration["FanartTv:ClientKey"];
+            var apiKey = string.IsNullOrWhiteSpace(configuration["FanartTv:ApiKey"])
+                ? configuration["FanartTv:ClientKey"]
+                : configuration["FanartTv:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                warnings.Add("fanart.tv covers are unavailable because FanartTv:ApiKey is not configured.");
+                warnings.Add("fanart.tv covers are unavailable because an API key is not configured.");
             }
             else
             {

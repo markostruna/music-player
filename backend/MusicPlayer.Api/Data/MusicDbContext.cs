@@ -10,10 +10,12 @@ public sealed class MusicDbContext(DbContextOptions<MusicDbContext> options) : D
     public DbSet<MusicTrack> Tracks => Set<MusicTrack>();
     public DbSet<MusicArtistMetadata> ArtistMetadata => Set<MusicArtistMetadata>();
     public DbSet<MusicAlbumMetadata> AlbumMetadata => Set<MusicAlbumMetadata>();
+    public DbSet<ProviderCredential> ProviderCredentials => Set<ProviderCredential>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<MusicUser>().HasIndex(user => user.NormalizedEmail).IsUnique();
+        modelBuilder.Entity<ProviderCredential>().HasKey(credential => credential.Key);
         modelBuilder.Entity<MusicUser>().Property(user => user.Role).HasConversion<string>();
         modelBuilder.Entity<MusicUser>().Property(user => user.Theme).HasConversion<string>();
         modelBuilder.Entity<MusicSourceRoot>().HasIndex(root => root.Path).IsUnique();

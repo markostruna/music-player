@@ -23,6 +23,9 @@ public sealed class DatabaseMigrationTests
         Assert.Contains(
             "20261024170421_InitialCreate",
             await database.Database.GetAppliedMigrationsAsync());
+        Assert.Contains(
+            "20261031101714_AddProviderCredentials",
+            await database.Database.GetAppliedMigrationsAsync());
     }
 
     [Fact]
@@ -37,12 +40,16 @@ public sealed class DatabaseMigrationTests
         await database.Database.EnsureCreatedAsync();
         database.SourceRoots.Add(new MusicSourceRoot { Name = "Existing", Path = "C:\\Music" });
         await database.SaveChangesAsync();
+        await database.Database.ExecuteSqlRawAsync("DROP TABLE ProviderCredentials");
 
         await DatabaseMigrationInitializer.MigrateAsync(database);
 
         Assert.Equal("Existing", (await database.SourceRoots.SingleAsync()).Name);
         Assert.Contains(
             "20261024170421_InitialCreate",
+            await database.Database.GetAppliedMigrationsAsync());
+        Assert.Contains(
+            "20261031101714_AddProviderCredentials",
             await database.Database.GetAppliedMigrationsAsync());
     }
 }

@@ -25,6 +25,14 @@
   }
 
   @if (isAdmin()) {
+    <section class="settings-card" aria-labelledby="provider-settings-title">
+      <div>
+        <h2 id="provider-settings-title">Provider integrations</h2>
+        <p>Configure API credentials used by the music metadata providers.</p>
+      </div>
+      <a class="settings-action" routerLink="/settings/providers">Configure providers</a>
+    </section>
+
     <section class="settings-card" aria-labelledby="library-settings-title">
       <div>
         <h2 id="library-settings-title">Music library</h2>

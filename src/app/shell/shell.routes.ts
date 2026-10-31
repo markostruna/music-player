@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { requireAuth } from '@shared/guards/auth.guard';
+import { requireAdmin } from '@shared/guards/admin.guard';
 import { adminRoutes } from '../admin/admin.routes';
 import { libraryRoutes } from '../library/library.routes';
 import { nowPlayingRoutes } from '../now-playing/now-playing.routes';
@@ -18,6 +19,14 @@ export const shellRoutes: Routes = [
       ...libraryRoutes,
       ...nowPlayingRoutes,
       ...adminRoutes,
+      {
+        path: 'settings/providers',
+        canActivate: [requireAdmin],
+        loadComponent: () =>
+          import('./provider-settings-page/provider-settings-page').then(
+            (module) => module.ProviderSettingsPage,
+          ),
+      },
       {
         path: 'playlists',
         loadComponent: () =>

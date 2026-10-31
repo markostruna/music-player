@@ -1,0 +1,77 @@
+<section class="provider-settings-page">
+  <header class="provider-settings-intro">
+    <span class="eyebrow">BACKEND INTEGRATIONS</span>
+    <h1>Provider integrations</h1>
+    <p>Credentials are shared by the backend and are only visible to administrators.</p>
+    <a routerLink="/settings">← Back to settings</a>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="provider-settings-error" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (statusMessage()) {
+    <p class="provider-settings-status" role="status">{{ statusMessage() }}</p>
+  }
+  @if (isLoading()) {
+    <p>Loading providers…</p>
+  }
+
+  <div class="provider-settings-list">
+    @for (provider of providers(); track provider.id) {
+      <section class="provider-settings-card" [attr.aria-labelledby]="'provider-' + provider.id">
+        <header class="provider-settings-card-heading">
+          <div>
+            <h2 [id]="'provider-' + provider.id">{{ provider.name }}</h2>
+            <p>{{ provider.description }}</p>
+          </div>
+          <span
+            class="provider-status"
+            [class.provider-status-ready]="provider.isConfigured"
+          >
+            {{ provider.isConfigured ? 'Ready' : 'Not configured' }}
+          </span>
+        </header>
+
+        @if (provider.credentials.length > 0) {
+          <div class="provider-credentials">
+            @for (credential of provider.credentials; track credential.key) {
+              <label class="provider-credential">
+                <span>{{ credential.label }}{{ credential.required ? ' · required' : ' · optional' }}</span>
+                <div class="provider-credential-control">
+                  <input
+                    type="password"
+                    autocomplete="new-password"
+                    [value]="drafts()[provider.id]?.[credential.key] ?? ''"
+                    [placeholder]="credential.isConfigured ? 'Saved — enter a new value to replace' : 'Not configured'"
+                    [disabled]="busyProvider() === provider.id"
+                    (input)="setDraft(provider.id, credential.key, $event)"
+                  />
+                  @if (credential.isConfigured) {
+                    <button
+                      class="provider-remove-button"
+                      type="button"
+                      [disabled]="busyProvider() === provider.id"
+                      (click)="clearCredential(provider, credential.key)"
+                    >
+                      Remove
+                    </button>
+                  }
+                </div>
+              </label>
+            }
+          </div>
+          <button
+            class="provider-save-button"
+            type="button"
+            [disabled]="busyProvider() === provider.id"
+            (click)="saveProvider(provider)"
+          >
+            {{ busyProvider() === provider.id ? 'Saving…' : 'Save credentials' }}
+          </button>
+        } @else {
+          <p class="provider-public-note">This provider is public and does not require credentials.</p>
+        }
+      </section>
+    }
+  </div>
+</section>

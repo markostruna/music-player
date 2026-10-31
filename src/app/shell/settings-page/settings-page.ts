@@ -6,6 +6,7 @@ import { AuthState, ThemeName } from '@shared/services/auth-state';
   selector: 'app-settings-page',
   imports: [RouterLink],
   templateUrl: './settings-page.html',
+  styleUrl: './settings-page.scss',
 })
 export class SettingsPage {
   private readonly auth = inject(AuthState);

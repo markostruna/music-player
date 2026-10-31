@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using MusicPlayer.Api.Data;
@@ -12,6 +13,8 @@ using MusicPlayer.Api.Services.Identification;
 var builder = WebApplication.CreateBuilder(args);
 var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterhours");
 Directory.CreateDirectory(dataDirectory);
+var dataProtectionDirectory = Path.Combine(dataDirectory, "keys");
+Directory.CreateDirectory(dataProtectionDirectory);
 builder.Configuration
     .AddJsonFile(Path.Combine(dataDirectory, "appsettings.json"), optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
@@ -19,6 +22,10 @@ var databasePath = Environment.GetEnvironmentVariable("MUSICPLAYER_DATABASE_PATH
 
 builder.WebHost.UseUrls(builder.Configuration["Api:Url"] ?? "http://127.0.0.1:5080");
 builder.Services.AddDbContext<MusicDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
+builder.Services.AddDataProtection()
+    .SetApplicationName("Afterhours")
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionDirectory));
+builder.Services.AddScoped<IProviderSettingsService, ProviderSettingsService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<MusicLibraryBrowseService>();
 builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
@@ -118,6 +125,8 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var database = scope.ServiceProvider.GetRequiredService<MusicDbContext>();
     await DatabaseMigrationInitializer.MigrateAsync(database, app.Lifetime.ApplicationStopping);
+    var providerSettings = scope.ServiceProvider.GetRequiredService<IProviderSettingsService>();
+    await providerSettings.LoadOverridesAsync(app.Lifetime.ApplicationStopping);
     var accounts = scope.ServiceProvider.GetRequiredService<IAccountService>();
     await accounts.BootstrapAdminAsync(
         Environment.GetEnvironmentVariable("MUSICPLAYER_BOOTSTRAP_EMAIL"),
@@ -130,6 +139,7 @@ app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" }))
     .WithSummary("Checks whether the music API is available.");
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapProviderSettingsEndpoints();
 app.MapLibraryEndpoints();
 app.MapIdentifyEndpoints();
 
