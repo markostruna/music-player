@@ -46,12 +46,6 @@ export class ArtistPage {
   readonly isAdmin = this.auth.isAdmin;
   readonly isMetadataDialogOpen = signal(false);
   readonly editingDescriptionArtist = signal<string | null>(null);
-  readonly isPictureDialogOpen = signal(false);
-  readonly picturePreviewUrl = signal('');
-  readonly pictureError = signal('');
-  readonly isSavingPicture = signal(false);
-  private readonly selectedPicture = signal<File | null>(null);
-  private readonly maxPictureSize = 10 * 1024 * 1024;
   private readonly refreshedInformation = signal<{
     artist: string;
     description: string;
@@ -253,65 +247,6 @@ export class ArtistPage {
     } catch {
       this.toast.show('The artist description could not be saved.', 'error');
     }
-  }
-
-  openPictureDialog(): void {
-    this.pictureError.set('');
-    this.isPictureDialogOpen.set(true);
-  }
-
-  closePictureDialog(): void {
-    if (this.isSavingPicture()) return;
-    this.clearPictureSelection();
-    this.pictureError.set('');
-    this.isPictureDialogOpen.set(false);
-  }
-
-  selectPicture(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const image = input.files?.[0];
-    input.value = '';
-    if (!image) return;
-
-    this.clearPictureSelection();
-    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.type)) {
-      this.pictureError.set('Choose a PNG, JPEG, GIF, or WebP image.');
-      return;
-    }
-    if (image.size > this.maxPictureSize) {
-      this.pictureError.set('Choose an image under 10 MB.');
-      return;
-    }
-
-    this.selectedPicture.set(image);
-    this.picturePreviewUrl.set(URL.createObjectURL(image));
-    this.pictureError.set('');
-  }
-
-  async savePicture(artist: string): Promise<void> {
-    const image = this.selectedPicture();
-    if (!image || this.isSavingPicture()) return;
-    this.isSavingPicture.set(true);
-    this.pictureError.set('');
-    try {
-      await this.libraryApi.updateEntityImage(artist, null, image);
-      await this.store.refreshTracks();
-      await this.loadArtist(artist);
-      this.toast.show('Artist picture saved.', 'success');
-      this.clearPictureSelection();
-      this.isPictureDialogOpen.set(false);
-    } catch {
-      this.pictureError.set('The artist picture could not be saved. Please try again.');
-    } finally {
-      this.isSavingPicture.set(false);
-    }
-  }
-
-  private clearPictureSelection(): void {
-    const previewUrl = this.picturePreviewUrl();
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    this.picturePreviewUrl.set('');
-    this.selectedPicture.set(null);
   }
 
   refreshInformation(): void {

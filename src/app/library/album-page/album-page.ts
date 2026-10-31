@@ -1,9 +1,8 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { formatTime } from '@shared/utils/format-time';
-import { LibraryStore } from '@shared/services/library-store';
 import {
   MetadataRefreshResult,
   MusicLibraryApi,
@@ -11,6 +10,7 @@ import {
 } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
+import { AlbumActions } from '../album-actions/album-actions';
 import { MetadataRefreshDialog } from '../metadata-refresh-dialog/metadata-refresh-dialog';
 import { distinctUntilChanged, map } from 'rxjs';
 
@@ -21,7 +21,7 @@ import { distinctUntilChanged, map } from 'rxjs';
 })
 export class AlbumPage {
   private readonly auth = inject(AuthState);
-  private readonly store = inject(LibraryStore);
+  readonly albumActions = inject(AlbumActions);
   private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
   private readonly toast = inject(ToastService);
@@ -33,12 +33,7 @@ export class AlbumPage {
 
   readonly isAdmin = this.auth.isAdmin;
   readonly isMetadataDialogOpen = signal(false);
-  readonly isCoverDialogOpen = signal(false);
-  readonly coverPreviewUrl = signal('');
-  readonly coverError = signal('');
-  readonly isSavingCover = signal(false);
-  private readonly selectedCover = signal<File | null>(null);
-  private readonly maxCoverSize = 10 * 1024 * 1024;
+  private lastChangeCount = this.albumActions.changeCount();
   private readonly refreshedInformation = signal<{
     key: string;
     imageUrl: string | null;
@@ -85,6 +80,15 @@ export class AlbumPage {
   });
 
   constructor() {
+    effect(() => {
+      const changeCount = this.albumActions.changeCount();
+      if (changeCount === this.lastChangeCount) return;
+      this.lastChangeCount = changeCount;
+      const trackId = untracked(() => Number(this.params()?.get('trackId')));
+      if (Number.isInteger(trackId) && trackId > 0) {
+        untracked(() => void this.loadAlbum(trackId));
+      }
+    });
     this.route.paramMap
       .pipe(
         map((params) => Number(params.get('trackId'))),
@@ -118,65 +122,6 @@ export class AlbumPage {
 
   playTrack(tracks: MusicTrack[], index: number): void {
     this.player.play(tracks, index);
-  }
-
-  openCoverDialog(): void {
-    this.coverError.set('');
-    this.isCoverDialogOpen.set(true);
-  }
-
-  closeCoverDialog(): void {
-    if (this.isSavingCover()) return;
-    this.clearCoverSelection();
-    this.coverError.set('');
-    this.isCoverDialogOpen.set(false);
-  }
-
-  selectCover(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const image = input.files?.[0];
-    input.value = '';
-    if (!image) return;
-
-    this.clearCoverSelection();
-    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.type)) {
-      this.coverError.set('Choose a PNG, JPEG, GIF, or WebP image.');
-      return;
-    }
-    if (image.size > this.maxCoverSize) {
-      this.coverError.set('Choose an image under 10 MB.');
-      return;
-    }
-
-    this.selectedCover.set(image);
-    this.coverPreviewUrl.set(URL.createObjectURL(image));
-    this.coverError.set('');
-  }
-
-  async saveCover(artist: string, album: string): Promise<void> {
-    const image = this.selectedCover();
-    if (!image || this.isSavingCover()) return;
-    this.isSavingCover.set(true);
-    this.coverError.set('');
-    try {
-      await this.libraryApi.updateEntityImage(artist, album, image);
-      await this.store.refreshTracks();
-      await this.loadAlbum(Number(this.params()?.get('trackId')));
-      this.toast.show('Album artwork saved.', 'success');
-      this.clearCoverSelection();
-      this.isCoverDialogOpen.set(false);
-    } catch {
-      this.coverError.set('The album artwork could not be saved. Please try again.');
-    } finally {
-      this.isSavingCover.set(false);
-    }
-  }
-
-  private clearCoverSelection(): void {
-    const previewUrl = this.coverPreviewUrl();
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    this.coverPreviewUrl.set('');
-    this.selectedCover.set(null);
   }
 
   refreshInformation(): void {
