@@ -144,6 +144,33 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ArtistAndAlbumLookupsFindTracksWithUnicodeArtistNames()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Unicode Artist Album");
+        Directory.CreateDirectory(albumDirectory);
+        var audioPath = Path.Combine(albumDirectory, "track.wav");
+        await CreateWaveFileAsync(audioPath);
+        using (var audio = TagLib.File.Create(audioPath))
+        {
+            audio.Tag.Title = "Unicode Artist Track";
+            audio.Tag.Performers = ["Motörhead"];
+            audio.Tag.AlbumArtists = ["Motörhead"];
+            audio.Tag.Album = "After Hours";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Unicode Artist Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        Assert.Single(await library.GetArtistTracksAsync("Motörhead", CancellationToken.None));
+        Assert.Single(await library.GetAlbumTracksAsync("Motörhead", "After Hours", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task TrackPageFiltersAndLimitsResults()
     {
         var albumDirectory = Path.Combine(sourceDirectory, "Paged Album");

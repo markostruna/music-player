@@ -139,12 +139,15 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         string album,
         CancellationToken cancellationToken)
     {
-        var normalizedArtist = artist.Trim().ToUpper();
-        var normalizedAlbum = album.Trim().ToUpper();
+        var requestedArtist = artist.Trim();
+        var requestedAlbum = album.Trim();
+        var normalizedArtist = requestedArtist.ToUpperInvariant();
+        var normalizedAlbum = requestedAlbum.ToUpperInvariant();
         var tracks = await AvailableTracks()
             .Where(track =>
-                (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()).ToUpper() == normalizedArtist
-                && track.Album.Trim().ToUpper() == normalizedAlbum)
+                ((track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()) == requestedArtist
+                    || (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()).ToUpper() == normalizedArtist)
+                && (track.Album.Trim() == requestedAlbum || track.Album.Trim().ToUpper() == normalizedAlbum))
             .OrderBy(track => track.DiscNumber)
             .ThenBy(track => track.TrackNumber)
             .ThenBy(track => track.Title)
@@ -157,10 +160,13 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         string artist,
         CancellationToken cancellationToken)
     {
-        var normalizedArtist = artist.Trim().ToUpper();
+        var requestedArtist = artist.Trim();
+        var normalizedArtist = requestedArtist.ToUpperInvariant();
         var tracks = await AvailableTracks()
             .Where(track =>
-                (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim()).ToUpper() == normalizedArtist
+                (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim()) == requestedArtist
+                || (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim()).ToUpper() == normalizedArtist
+                || (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()) == requestedArtist
                 || (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()).ToUpper() == normalizedArtist)
             .OrderBy(track => track.AlbumArtist)
             .ThenBy(track => track.Album)
