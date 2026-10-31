@@ -46,14 +46,13 @@ public sealed record TrackResponse(
     double DurationSeconds,
     string StreamUrl,
     string CoverUrl,
-    string FileExtension,
-    string AlbumDescription,
-    string ArtistDescription,
-    string ArtistImageUrl,
-    bool ArtistImageMissing,
-    string AlbumArtistDescription,
-    string AlbumArtistImageUrl,
-    bool AlbumArtistImageMissing);
+    string FileExtension);
+
+public sealed record ArtistMetadataResponse(
+    string Description,
+    string? ImageUrl,
+    bool ImageMissing,
+    IReadOnlyList<string> ReferencedArtists);
 
 public sealed record PagedResponse<T>(
     IReadOnlyList<T> Items,
@@ -82,9 +81,6 @@ public sealed record MetadataDescriptionRequest
 {
     [Required, MaxLength(1024)]
     public required string Artist { get; init; }
-
-    [MaxLength(1024)]
-    public string Album { get; init; } = "";
 
     [MaxLength(20000)]
     public string Description { get; init; } = "";

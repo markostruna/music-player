@@ -145,6 +145,20 @@ public static class LibraryEndpoints
         })
         .WithName("ListArtistTracks")
         .WithSummary("Lists tracks for one artist.");
+        library.MapGet("/artists/metadata", async Task<Results<Ok<ArtistMetadataResponse>, BadRequest<string>>> (
+            string artist,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(artist) || artist.Length > 1024)
+            {
+                return TypedResults.BadRequest("Artist name is required and cannot exceed 1024 characters.");
+            }
+
+            return TypedResults.Ok(await music.GetArtistMetadataAsync(artist, cancellationToken));
+        })
+        .WithName("GetArtistMetadata")
+        .WithSummary("Gets description and image details for one artist.");
         library.MapGet("/folders", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
                 TypedResults.Ok(await music.GetLibraryFolderRootsAsync(cancellationToken)))
             .WithName("ListLibraryFolders")
@@ -512,18 +526,11 @@ public static class LibraryEndpoints
         .WithSummary("Previews metadata for a selected album provider candidate without saving it.");
         adminMetadata.MapPut("/artists/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
         {
-            await music.UpdateMetadataDescriptionAsync(request, album: false, cancellationToken);
+            await music.UpdateArtistDescriptionAsync(request, cancellationToken);
             return TypedResults.NoContent();
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("UpdateArtistDescription");
-        adminMetadata.MapPut("/albums/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
-        {
-            await music.UpdateMetadataDescriptionAsync(request, album: true, cancellationToken);
-            return TypedResults.NoContent();
-        })
-        .AddEndpointFilter<CsrfEndpointFilter>()
-        .WithName("UpdateAlbumDescription");
         adminMetadata.MapPut("/artists/image", async Task<Results<NoContent, BadRequest<string>>> (
         MetadataImageRequest request,
         IMusicLibraryService music,

@@ -277,6 +277,49 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ArtistPageGroupsTracksByAlbumArtistInsteadOfPerTrackCredits()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Featured Album");
+        Directory.CreateDirectory(albumDirectory);
+        var performers = new[]
+        {
+            "Cojones feat. Pavel Miholjević",
+            "Cojones feat. Guest Singer",
+            "Cojones",
+        };
+        for (var index = 0; index < performers.Length; index++)
+        {
+            var audioPath = Path.Combine(albumDirectory, $"track-{index}.wav");
+            await CreateWaveFileAsync(audioPath);
+            using var audio = TagLib.File.Create(audioPath);
+            audio.Tag.Title = $"Track {index}";
+            audio.Tag.Performers = [performers[index]];
+            audio.Tag.AlbumArtists = ["Cojones"];
+            audio.Tag.Album = "Featured Album";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Featured Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        var artists = await library.GetArtistsPageAsync(null, 1, 10, CancellationToken.None);
+        var albumArtistTracks = await library.GetArtistTracksAsync("Cojones", CancellationToken.None);
+        var performerArtists = await library.GetArtistsPageAsync("Pavel", 1, 10, CancellationToken.None);
+
+        var artist = Assert.Single(artists.Items);
+        Assert.Equal("Cojones", artist.Artist);
+        Assert.Equal(3, artist.TrackCount);
+        Assert.Equal(1, artist.AlbumCount);
+        Assert.Equal(3, albumArtistTracks.Count);
+        Assert.All(albumArtistTracks, track => Assert.Equal("Cojones", track.AlbumArtist));
+        Assert.Empty(performerArtists.Items);
+    }
+
+    [Fact]
     public async Task FolderBrowserListsPhysicalDirectoriesAndFilesBeforeScanning()
     {
         var artistDirectory = Path.Combine(sourceDirectory, "Artist");
@@ -337,7 +380,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ArtistAndAlbumDescriptionsAndImagesCanBeEditedAndPersisted()
+    public async Task ArtistDescriptionAndImagesCanBeEditedAndPersisted()
     {
         var albumDirectory = Path.Combine(sourceDirectory, "Metadata Album");
         Directory.CreateDirectory(albumDirectory);
@@ -359,20 +402,34 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         }, CancellationToken.None);
         await library.ScanAsync(root.Id, CancellationToken.None);
 
-        await library.UpdateMetadataDescriptionAsync(new MetadataDescriptionRequest
+        await library.UpdateArtistDescriptionAsync(new MetadataDescriptionRequest
         {
             Artist = "Metadata Artist",
             Description = "  Artist biography.  ",
-        }, album: false, CancellationToken.None);
-        await library.UpdateMetadataDescriptionAsync(new MetadataDescriptionRequest
+        }, CancellationToken.None);
+        var track = Assert.Single(await library.GetTracksAsync(CancellationToken.None));
+        Assert.Equal("Metadata Track", track.Title);
+        var artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
+        Assert.Equal("Artist biography.", artistMetadata.Description);
+        Assert.True(artistMetadata.ImageMissing);
+
+        database.Tracks.Add(new MusicTrack
+        {
+            SourceRootId = root.Id,
+            FolderId = track.FolderId,
+            RelativePath = "Metadata Album/reference.wav",
+            Title = "Reference Track",
+            Artist = "Referenced Artist",
+            Album = "Reference Album",
+        });
+        await database.SaveChangesAsync();
+        await library.UpdateArtistDescriptionAsync(new MetadataDescriptionRequest
         {
             Artist = "Metadata Artist",
-            Album = "Metadata Album",
-            Description = "  Album notes.  ",
-        }, album: true, CancellationToken.None);
-        var track = Assert.Single(await library.GetTracksAsync(CancellationToken.None));
-        Assert.Equal("Artist biography.", track.ArtistDescription);
-        Assert.Equal("Album notes.", track.AlbumDescription);
+            Description = "Bio [a=Referenced Artist] [a=Missing Artist]",
+        }, CancellationToken.None);
+        artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
+        Assert.Equal(["Referenced Artist"], artistMetadata.ReferencedArtists);
 
         var imageBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a+2QAAAAASUVORK5CYII=");
         var cleanupPaths = new List<string>();
@@ -400,6 +457,9 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
                 "Afterhours", "metadata", "albums", album.ImageFileName!));
             Assert.False(artist.ImageMissing);
             Assert.False(album.ImageMissing);
+            artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
+            Assert.False(artistMetadata.ImageMissing);
+            Assert.Contains("/api/library/artists/", artistMetadata.ImageUrl);
             Assert.Equal(imageBytes, (await library.ResolveArtistImageAsync(artist.Key, CancellationToken.None))?.Data);
             Assert.Equal(imageBytes, (await library.ResolveCoverAsync(track.Id, CancellationToken.None))?.Data);
         }
@@ -430,7 +490,6 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal("artist-mbid", artist.MusicBrainzId);
         Assert.Equal("Fresh artist description.", artist.Description);
         Assert.Equal("album-mbid", album.MusicBrainzId);
-        Assert.Equal("Fresh album description.", album.Description);
         Assert.Equal(1, musicBrainz.ArtistLookups);
         Assert.Equal(1, musicBrainz.AlbumLookups);
     }
@@ -540,7 +599,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             CancellationToken.None);
 
         Assert.True(saved.Found);
-        Assert.Equal("Candidate description.", (await database.AlbumMetadata.SingleAsync()).Description);
+        Assert.Equal("Candidate description.", saved.Description);
         Assert.Equal(2, provider.GetCount);
     }
 

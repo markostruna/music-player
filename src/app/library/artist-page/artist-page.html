@@ -113,7 +113,10 @@
             </button>
           </div>
         } @else {
-          <p>{{ artist.description || 'No artist description is available.' }}</p>
+          <div
+            class="description-content"
+            [innerHTML]="formatDescription(artist.description, artist.referencedArtists)"
+          ></div>
         }
       </section>
 
@@ -202,9 +205,8 @@
                 /><span class="tile-play" aria-hidden="true">▶</span></span
               >
               <span class="tile-title">{{ album.title }}</span>
-              <span class="tile-detail">{{ album.year || 'Unknown year' }}</span>
-              <span class="tile-meta"
-                >{{ album.tracks.length }}
+              <span class="tile-detail"
+                >{{ album.year || 'Unknown year' }} • {{ album.tracks.length }}
                 {{ album.tracks.length === 1 ? 'track' : 'tracks' }}</span
               >
             </a>

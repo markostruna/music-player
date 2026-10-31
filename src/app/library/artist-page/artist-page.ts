@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { Location } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore } from '@shared/services/library-store';
 import {
@@ -25,8 +26,17 @@ export class ArtistPage {
   private readonly player = inject(PlayerService);
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly params = toSignal(this.route.paramMap);
   private readonly artistTracks = signal<MusicTrack[]>([]);
+  private readonly artistMetadata = signal<{
+    artist: string;
+    description: string;
+    imageUrl: string | null;
+    imageMissing: boolean;
+    referencedArtists: string[];
+  } | null>(null);
   private readonly loadingError = signal('');
   private artistRequestId = 0;
 
@@ -61,8 +71,8 @@ export class ArtistPage {
     const tracks = this.artistTracks()
       .filter(
         (track) =>
-          (track.artist.trim() || 'Unknown artist').toLowerCase() === name ||
-          (track.albumArtist.trim() || track.artist).toLowerCase() === name,
+          (track.albumArtist.trim() || track.artist.trim() || 'Unknown artist').toLowerCase() ===
+          name,
       );
     if (!tracks.length) return null;
 
@@ -71,7 +81,7 @@ export class ArtistPage {
       { key: string; title: string; coverUrl: string; year: number; tracks: MusicTrack[] }
     >();
     for (const track of tracks) {
-      const key = `${(track.albumArtist.trim() || track.artist).toLowerCase()}\u0000${track.album.toLowerCase()}`;
+      const key = `${(track.albumArtist.trim() || track.artist.trim() || 'Unknown artist').toLowerCase()}\u0000${track.album.toLowerCase()}`;
       const group = groups.get(key);
       if (group) {
         group.tracks.push(track);
@@ -88,26 +98,17 @@ export class ArtistPage {
     }
 
     const first = tracks[0];
-    const displayName =
-      [first.artist, first.albumArtist]
-        .find((value) => value.trim().toLowerCase() === name)
-        ?.trim() ?? name;
-    const isTrackArtist = (first.artist.trim() || 'Unknown artist').toLowerCase() === name;
+    const displayName = first.albumArtist.trim() || first.artist.trim() || 'Unknown artist';
     const refreshed =
       this.refreshedInformation()?.artist === name ? this.refreshedInformation() : null;
+    const metadata =
+      this.artistMetadata()?.artist === name ? this.artistMetadata() : null;
     return {
       name: displayName,
-      coverUrl:
-        refreshed?.imageUrl ||
-        (isTrackArtist
-          ? first.artistImageUrl || first.coverUrl
-          : first.albumArtistImageUrl || first.coverUrl),
-      imageMissing:
-        refreshed?.imageMissing ??
-        (isTrackArtist ? first.artistImageMissing : first.albumArtistImageMissing),
-      description:
-        refreshed?.description ??
-        (isTrackArtist ? first.artistDescription : first.albumArtistDescription),
+      coverUrl: refreshed?.imageUrl || metadata?.imageUrl || first.coverUrl,
+      imageMissing: refreshed?.imageMissing ?? metadata?.imageMissing ?? true,
+      description: refreshed?.description ?? metadata?.description ?? '',
+      referencedArtists: metadata?.referencedArtists ?? [],
       musicBrainzId: refreshed?.musicBrainzId ?? '',
       informationUpdatedAt: refreshed?.updatedAt ?? '',
       trackCount: tracks.length,
@@ -132,9 +133,23 @@ export class ArtistPage {
     this.isLoading.set(true);
     this.loadingError.set('');
     this.artistTracks.set([]);
+    this.artistMetadata.set(null);
+    this.refreshedInformation.set(null);
     try {
-      const tracks = await this.libraryApi.listArtistTracks(artist);
-      if (requestId === this.artistRequestId) this.artistTracks.set(tracks);
+      const [tracks, metadata] = await Promise.all([
+        this.libraryApi.listArtistTracks(artist),
+        this.libraryApi.getArtistMetadata(artist),
+      ]);
+      if (requestId === this.artistRequestId) {
+        this.artistTracks.set(tracks);
+        this.artistMetadata.set({
+          artist: artist.toLowerCase(),
+          description: metadata.description,
+          imageUrl: metadata.imageUrl,
+          imageMissing: metadata.imageMissing,
+          referencedArtists: metadata.referencedArtists,
+        });
+      }
     } catch {
       if (requestId === this.artistRequestId) {
         this.loadingError.set('The artist could not be loaded. Check the music server connection.');
@@ -146,6 +161,44 @@ export class ArtistPage {
 
   descriptionValue(artist: string, description: string): string {
     return this.descriptionDraftArtist === artist ? (this.descriptionDraft ?? '') : description;
+  }
+
+  formatDescription(description: string, referencedArtists: string[]): string {
+    const knownArtists = new Map(
+      referencedArtists.map((artist) => [artist.toLocaleLowerCase(), artist]),
+    );
+    return description
+      ? description
+          .replace(/\[a=([^\]]+)\]/gi, (_reference, artist: string) => {
+            const name = artist.trim();
+            const knownArtist = knownArtists.get(name.toLocaleLowerCase());
+            if (!knownArtist) return this.escapeHtml(name);
+            const tree = this.router.createUrlTree(['/library/artist', knownArtist]);
+            const href = this.location.prepareExternalUrl(this.router.serializeUrl(tree));
+            return `<a href="${this.escapeHtml(href)}">${this.escapeHtml(name)}</a>`;
+          })
+          .replace(/\[b\]/gi, '<strong>')
+          .replace(/\[\/b\]/gi, '</strong>')
+          .replace(/\[s\]/gi, '<s>')
+          .replace(/\[\/s\]/gi, '</s>')
+      : 'No artist description is available.';
+  }
+
+  private escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (character) => {
+      switch (character) {
+        case '&':
+          return '&amp;';
+        case '<':
+          return '&lt;';
+        case '>':
+          return '&gt;';
+        case '"':
+          return '&quot;';
+        default:
+          return '&#39;';
+      }
+    });
   }
 
   isEditingDescription(artist: string): boolean {
@@ -175,7 +228,7 @@ export class ArtistPage {
         this.descriptionDraftArtist === artist
           ? (this.descriptionDraft ?? '')
           : (this.artist()?.description ?? '');
-      await this.libraryApi.updateDescription(artist, null, description);
+      await this.libraryApi.updateArtistDescription(artist, description);
       this.descriptionDraft = null;
       this.descriptionDraftArtist = null;
       this.editingDescriptionArtist.set(null);
@@ -254,10 +307,10 @@ export class ArtistPage {
     this.isMetadataDialogOpen.set(false);
   }
 
-  saveRefreshedInformation(
+  async saveRefreshedInformation(
     artist: string,
     selection: { result: MetadataRefreshResult; providerId: string },
-  ): void {
+  ): Promise<void> {
     const { result, providerId } = selection;
     this.descriptionDraft = null;
     this.descriptionDraftArtist = null;
@@ -270,6 +323,11 @@ export class ArtistPage {
       musicBrainzId: result.musicBrainzId,
       updatedAt: result.updatedAt,
     });
+    try {
+      await this.loadArtistMetadata(artist);
+    } catch {
+      this.toast.show('Artist reference links could not be loaded.', 'error');
+    }
     this.toast.show(
       `Artist information refreshed from ${providerId}. ${this.pictureRefreshStatus(result)} Updated ${new Date(result.updatedAt).toLocaleString()}.`,
       'success',
@@ -287,5 +345,17 @@ export class ArtistPage {
     return result.imageMissing
       ? 'Fanart.tv and linked sources returned no picture; the artist picture remains missing.'
       : 'No new picture was returned; the existing artist picture was kept.';
+  }
+
+  private async loadArtistMetadata(artist: string): Promise<void> {
+    const metadata = await this.libraryApi.getArtistMetadata(artist);
+    if (this.artistMetadata()?.artist !== artist.toLowerCase()) return;
+    this.artistMetadata.set({
+      artist: artist.toLowerCase(),
+      description: metadata.description,
+      imageUrl: metadata.imageUrl,
+      imageMissing: metadata.imageMissing,
+      referencedArtists: metadata.referencedArtists,
+    });
   }
 }

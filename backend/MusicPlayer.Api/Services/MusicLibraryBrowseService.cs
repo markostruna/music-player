@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
@@ -8,6 +9,11 @@ namespace MusicPlayer.Api.Services;
 
 public sealed class MusicLibraryBrowseService(MusicDbContext database)
 {
+    private static readonly Regex ArtistReferencePattern = new(
+        @"\[a=(?<artist>[^\]]+)\]",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+
     public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken)
         => await GetTracksAsync(null, cancellationToken);
 
@@ -164,10 +170,12 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         var normalizedArtist = requestedArtist.ToUpperInvariant();
         var tracks = await AvailableTracks()
             .Where(track =>
-                (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim()) == requestedArtist
-                || (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim()).ToUpper() == normalizedArtist
-                || (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()) == requestedArtist
-                || (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()).ToUpper() == normalizedArtist)
+                (track.AlbumArtist.Trim() == ""
+                    ? (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim())
+                    : track.AlbumArtist.Trim()) == requestedArtist
+                || (track.AlbumArtist.Trim() == ""
+                    ? (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim())
+                    : track.AlbumArtist.Trim()).ToUpper() == normalizedArtist)
             .OrderBy(track => track.AlbumArtist)
             .ThenBy(track => track.Album)
             .ThenBy(track => track.DiscNumber)
@@ -206,7 +214,9 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         {
             Track = track,
             Artist = EF.Functions.Collate(
-                track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim(),
+                track.AlbumArtist.Trim() == ""
+                    ? (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim())
+                    : track.AlbumArtist.Trim(),
                 "NOCASE"),
         });
         if (!string.IsNullOrWhiteSpace(query))
@@ -239,10 +249,9 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             .Select(track => new
             {
                 Artist = EF.Functions.Collate(
-                    track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim(),
-                    "NOCASE"),
-                AlbumArtist = EF.Functions.Collate(
-                    (track.AlbumArtist.Trim() == "" ? track.Artist : track.AlbumArtist).Trim(),
+                    track.AlbumArtist.Trim() == ""
+                        ? (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim())
+                        : track.AlbumArtist.Trim(),
                     "NOCASE"),
                 Album = EF.Functions.Collate(track.Album.Trim(), "NOCASE"),
             })
@@ -253,24 +262,75 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             .Select(group => new { Artist = group.Key, Count = group.Count() })
             .ToDictionaryAsync(item => item.Artist, item => item.Count, cancellationToken);
         var representativeIds = artistPage.Select(item => item.RepresentativeTrackId).ToArray();
-        var representatives = representativeIds.Length == 0
-            ? Array.Empty<TrackResponse>()
-            : await ToTrackResponsesAsync(
-                await AvailableTracks().Where(track => representativeIds.Contains(track.Id)).ToListAsync(cancellationToken),
-                cancellationToken);
+        var representativeTracks = representativeIds.Length == 0
+            ? new List<MusicTrack>()
+            : await AvailableTracks()
+                .Where(track => representativeIds.Contains(track.Id))
+                .ToListAsync(cancellationToken);
+        var representatives = await ToTrackResponsesAsync(representativeTracks, cancellationToken);
         var representativesById = representatives.ToDictionary(track => track.Id);
+        var artistKeys = artistPage.Select(item => GetArtistMetadataKey(item.Artist)).Distinct().ToArray();
+        var artistMetadata = artistKeys.Length == 0
+            ? new Dictionary<string, MusicArtistMetadata>()
+            : await database.ArtistMetadata.AsNoTracking()
+                .Where(item => artistKeys.Contains(item.Key))
+                .ToDictionaryAsync(item => item.Key, cancellationToken);
         var items = artistPage.Select(item =>
         {
             var representative = representativesById[item.RepresentativeTrackId];
+            artistMetadata.TryGetValue(GetArtistMetadataKey(item.Artist), out var metadata);
             return new ArtistSummaryResponse(
                 item.Artist,
                 item.TrackCount,
                 albumCounts.GetValueOrDefault(item.Artist),
                 representative.CoverUrl,
-                representative.ArtistImageUrl,
-                representative.ArtistImageMissing);
+                GetArtistImageUrl(metadata) ?? "",
+                IsArtistImageMissing(metadata));
         }).ToArray();
         return new PagedResponse<ArtistSummaryResponse>(items, totalCount, actualPage, pageSize);
+    }
+
+    public async Task<ArtistMetadataResponse> GetArtistMetadataAsync(
+        string artist,
+        CancellationToken cancellationToken)
+    {
+        var key = GetArtistMetadataKey(artist);
+        var metadata = await database.ArtistMetadata.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+        var description = metadata?.Description ?? "";
+        var references = ArtistReferencePattern.Matches(description)
+            .Select(match => match.Groups["artist"].Value.Trim())
+            .Where(name => name.Length is > 0 and <= 1024)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var referencedArtists = Array.Empty<string>();
+        if (references.Length > 0)
+        {
+            var normalizedReferences = references.Select(name => name.ToUpperInvariant()).ToArray();
+            var trackArtists = await AvailableTracks()
+                .Where(track => normalizedReferences.Contains(
+                    (track.AlbumArtist.Trim() == ""
+                        ? (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim())
+                        : track.AlbumArtist.Trim()).ToUpper()))
+                .Select(track => track.AlbumArtist.Trim() == ""
+                    ? (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim())
+                    : track.AlbumArtist.Trim())
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            var knownArtists = trackArtists
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(name => name, StringComparer.OrdinalIgnoreCase);
+            referencedArtists = references
+                .Where(knownArtists.ContainsKey)
+                .Select(name => knownArtists[name])
+                .ToArray();
+        }
+
+        return new ArtistMetadataResponse(
+            description,
+            GetArtistImageUrl(metadata),
+            IsArtistImageMissing(metadata),
+            referencedArtists);
     }
 
     public async Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken)
@@ -336,25 +396,12 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         IReadOnlyList<MusicTrack> tracks,
         CancellationToken cancellationToken)
     {
-        var artistKeys = tracks
-            .SelectMany(track => new[]
-            {
-                GetArtistMetadataKey(track.Artist),
-                GetArtistMetadataKey(string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist),
-            })
-            .Distinct()
-            .ToArray();
         var albumKeys = tracks
             .Select(track => GetAlbumMetadataKey(
                 string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist,
                 track.Album))
             .Distinct()
             .ToArray();
-        var artistMetadata = artistKeys.Length == 0
-            ? new Dictionary<string, MusicArtistMetadata>()
-            : await database.ArtistMetadata.AsNoTracking()
-                .Where(item => artistKeys.Contains(item.Key))
-                .ToDictionaryAsync(item => item.Key, cancellationToken);
         var albumMetadata = albumKeys.Length == 0
             ? new Dictionary<string, MusicAlbumMetadata>()
             : await database.AlbumMetadata.AsNoTracking()
@@ -364,17 +411,13 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         return tracks.Select(track =>
         {
             var albumArtist = string.IsNullOrWhiteSpace(track.AlbumArtist) ? track.Artist : track.AlbumArtist;
-            artistMetadata.TryGetValue(GetArtistMetadataKey(track.Artist), out var artist);
-            artistMetadata.TryGetValue(GetArtistMetadataKey(albumArtist), out var albumArtistInfo);
             albumMetadata.TryGetValue(GetAlbumMetadataKey(albumArtist, track.Album), out var album);
-            return ToResponse(track, artist, albumArtistInfo, album);
+            return ToResponse(track, album);
         }).ToArray();
     }
 
     private static TrackResponse ToResponse(
         MusicTrack track,
-        MusicArtistMetadata? artist,
-        MusicArtistMetadata? albumArtist,
         MusicAlbumMetadata? album) => new(
         track.Id,
         track.SourceRootId,
@@ -392,19 +435,16 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         $"/api/library/tracks/{track.Id}/stream",
         album?.ImageMissing == false && !string.IsNullOrWhiteSpace(album.ImageFileName)
             ? $"/api/library/tracks/{track.Id}/cover?v={album.UpdatedAt.ToUnixTimeMilliseconds()}"
-            : $"/api/library/tracks/{track.Id}/cover",
-        Path.GetExtension(track.RelativePath).TrimStart('.').ToLowerInvariant(),
-        album?.Description ?? "",
-        artist?.Description ?? "",
-        artist?.ImageMissing == false && !string.IsNullOrWhiteSpace(artist.ImageFileName)
-            ? $"/api/library/artists/{artist.Key}/image?v={artist.UpdatedAt.ToUnixTimeMilliseconds()}"
-            : "",
-        artist is null || artist.ImageMissing || string.IsNullOrWhiteSpace(artist.ImageFileName),
-        albumArtist?.Description ?? "",
-        albumArtist?.ImageMissing == false && !string.IsNullOrWhiteSpace(albumArtist.ImageFileName)
-            ? $"/api/library/artists/{albumArtist.Key}/image?v={albumArtist.UpdatedAt.ToUnixTimeMilliseconds()}"
-            : "",
-        albumArtist is null || albumArtist.ImageMissing || string.IsNullOrWhiteSpace(albumArtist.ImageFileName));
+            :                         $"/api/library/tracks/{track.Id}/cover",
+            Path.GetExtension(track.RelativePath).TrimStart('.').ToLowerInvariant());
+
+    private static string? GetArtistImageUrl(MusicArtistMetadata? metadata) =>
+            metadata?.ImageMissing == false && !string.IsNullOrWhiteSpace(metadata.ImageFileName)
+                ? $"/api/library/artists/{metadata.Key}/image?v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
+                : null;
+
+    private static bool IsArtistImageMissing(MusicArtistMetadata? metadata) =>
+            metadata is null || metadata.ImageMissing || string.IsNullOrWhiteSpace(metadata.ImageFileName);
 
     private static string GetArtistMetadataKey(string artist) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"artist\0{artist.Trim().ToUpperInvariant()}")));

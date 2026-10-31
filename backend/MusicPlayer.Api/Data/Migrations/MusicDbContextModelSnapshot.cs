@@ -33,14 +33,6 @@ namespace MusicPlayer.Api.Data.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(20000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("DescriptionEdited")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("ImageFileName")
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");

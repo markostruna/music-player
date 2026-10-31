@@ -33,7 +33,6 @@ export class AlbumPage {
 
   readonly isAdmin = this.auth.isAdmin;
   readonly isMetadataDialogOpen = signal(false);
-  readonly editingDescriptionKey = signal<string | null>(null);
   readonly isCoverDialogOpen = signal(false);
   readonly coverPreviewUrl = signal('');
   readonly coverError = signal('');
@@ -42,13 +41,10 @@ export class AlbumPage {
   private readonly maxCoverSize = 10 * 1024 * 1024;
   private readonly refreshedInformation = signal<{
     key: string;
-    description: string;
     imageUrl: string | null;
     musicBrainzId: string;
     updatedAt: string;
   } | null>(null);
-  descriptionDraft: string | null = null;
-  private descriptionDraftKey: string | null = null;
   readonly isLoading = signal(true);
   readonly errorMessage = computed(() => {
     if (this.loadingError()) return this.loadingError();
@@ -80,7 +76,6 @@ export class AlbumPage {
       title: selectedTrack.album,
       artist,
       coverUrl: refreshed?.imageUrl || selectedTrack.coverUrl,
-      description: refreshed?.description ?? selectedTrack.albumDescription,
       musicBrainzId: refreshed?.musicBrainzId ?? '',
       informationUpdatedAt: refreshed?.updatedAt ?? '',
       releaseYear: albumTracks.find((track) => track.year > 0)?.year,
@@ -123,53 +118,6 @@ export class AlbumPage {
 
   playTrack(tracks: MusicTrack[], index: number): void {
     this.player.play(tracks, index);
-  }
-
-  descriptionValue(artist: string, album: string, description: string): string {
-    return this.descriptionDraftKey === `${artist}\0${album}`
-      ? (this.descriptionDraft ?? '')
-      : description;
-  }
-
-  isEditingDescription(artist: string, album: string): boolean {
-    return this.editingDescriptionKey() === `${artist}\0${album}`;
-  }
-
-  editDescription(artist: string, album: string, description: string): void {
-    const key = `${artist}\0${album}`;
-    this.descriptionDraftKey = key;
-    this.descriptionDraft = description;
-    this.editingDescriptionKey.set(key);
-  }
-
-  setDescription(event: Event, artist: string, album: string): void {
-    this.descriptionDraftKey = `${artist}\0${album}`;
-    this.descriptionDraft = (event.target as HTMLTextAreaElement).value;
-  }
-
-  cancelDescriptionEdit(): void {
-    this.descriptionDraft = null;
-    this.descriptionDraftKey = null;
-    this.editingDescriptionKey.set(null);
-  }
-
-  async saveDescription(artist: string, album: string): Promise<void> {
-    const key = `${artist}\0${album}`;
-    try {
-      const description =
-        this.descriptionDraftKey === key
-          ? (this.descriptionDraft ?? '')
-          : (this.album()?.description ?? '');
-      await this.libraryApi.updateDescription(artist, album, description);
-      this.descriptionDraft = null;
-      this.descriptionDraftKey = null;
-      this.editingDescriptionKey.set(null);
-      await this.store.refreshTracks();
-      await this.loadAlbum(Number(this.params()?.get('trackId')));
-      this.toast.show('Album description saved.', 'success');
-    } catch {
-      this.toast.show('The album description could not be saved.', 'error');
-    }
   }
 
   openCoverDialog(): void {
@@ -245,12 +193,8 @@ export class AlbumPage {
     selection: { result: MetadataRefreshResult; providerId: string },
   ): void {
     const { result, providerId } = selection;
-    this.descriptionDraft = null;
-    this.descriptionDraftKey = null;
-    this.editingDescriptionKey.set(null);
     this.refreshedInformation.set({
       key: `${artist.toLowerCase()}\0${album.toLowerCase()}`,
-      description: result.description,
       imageUrl: result.imageUrl,
       musicBrainzId: result.musicBrainzId,
       updatedAt: result.updatedAt,

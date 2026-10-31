@@ -44,6 +44,9 @@ public interface IMusicLibraryService
     Task<IReadOnlyList<TrackResponse>> GetArtistTracksAsync(
         string artist,
         CancellationToken cancellationToken);
+    Task<ArtistMetadataResponse> GetArtistMetadataAsync(
+        string artist,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetAlbumTracksByTrackIdAsync(
         int trackId,
         CancellationToken cancellationToken);
@@ -80,7 +83,7 @@ public interface IMusicLibraryService
         string providerId,
         string candidateId,
         CancellationToken cancellationToken);
-    Task UpdateMetadataDescriptionAsync(MetadataDescriptionRequest request, bool album, CancellationToken cancellationToken);
+    Task UpdateArtistDescriptionAsync(MetadataDescriptionRequest request, CancellationToken cancellationToken);
     Task UpdateMetadataImageAsync(MetadataImageRequest request, bool album, CancellationToken cancellationToken);
     Task<BatchMutationResponse> UpdateMetadataAsync(int[] trackIds, MusicMetadataPatch changes, CancellationToken cancellationToken);
     Task<BatchMutationResponse> UpdateCoverAsync(int[] trackIds, byte[] image, CancellationToken cancellationToken);

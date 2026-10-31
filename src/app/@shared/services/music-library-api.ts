@@ -21,13 +21,13 @@ export interface MusicTrack {
   streamUrl: string;
   coverUrl: string;
   fileExtension: string;
-  albumDescription: string;
-  artistDescription: string;
-  artistImageUrl: string;
-  artistImageMissing: boolean;
-  albumArtistDescription: string;
-  albumArtistImageUrl: string;
-  albumArtistImageMissing: boolean;
+}
+
+export interface ArtistMetadata {
+  description: string;
+  imageUrl: string | null;
+  imageMissing: boolean;
+  referencedArtists: string[];
 }
 
 export interface PagedTracks {
@@ -265,6 +265,18 @@ export class MusicLibraryApi {
     ).then((tracks) => this.mapTracks(tracks));
   }
 
+  getArtistMetadata(artist: string): Promise<ArtistMetadata> {
+    const params = new URLSearchParams({ artist });
+    return firstValueFrom(
+      this.http.get<ArtistMetadata>(`${MUSIC_API_BASE}/library/artists/metadata?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((metadata) => ({
+      ...metadata,
+      imageUrl: metadata.imageUrl ? `${MUSIC_API_PREFIX}${metadata.imageUrl}` : null,
+    }));
+  }
+
   listArtistPage(
     query: string,
     page: number,
@@ -401,16 +413,11 @@ export class MusicLibraryApi {
     return response.results;
   }
 
-  async updateDescription(
-    artist: string,
-    album: string | null,
-    description: string,
-  ): Promise<void> {
-    const path = album === null ? 'artists' : 'albums';
+  async updateArtistDescription(artist: string, description: string): Promise<void> {
     await firstValueFrom(
       this.http.put<void>(
-        `${MUSIC_API_BASE}/admin/metadata/${path}/description`,
-        { artist, album: album ?? '', description },
+        `${MUSIC_API_BASE}/admin/metadata/artists/description`,
+        { artist, description },
         await this.writeOptions(),
       ),
     );
@@ -542,10 +549,6 @@ export class MusicLibraryApi {
       ...track,
       streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
       coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
-      artistImageUrl: track.artistImageUrl ? `${MUSIC_API_PREFIX}${track.artistImageUrl}` : '',
-      albumArtistImageUrl: track.albumArtistImageUrl
-        ? `${MUSIC_API_PREFIX}${track.albumArtistImageUrl}`
-        : '',
     }));
   }
 }

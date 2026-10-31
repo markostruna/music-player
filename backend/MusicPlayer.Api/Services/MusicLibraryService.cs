@@ -361,6 +361,11 @@ public sealed class MusicLibraryService(
         CancellationToken cancellationToken) =>
         browseService.GetArtistTracksAsync(artist, cancellationToken);
 
+    public Task<ArtistMetadataResponse> GetArtistMetadataAsync(
+        string artist,
+        CancellationToken cancellationToken) =>
+        browseService.GetArtistMetadataAsync(artist, cancellationToken);
+
     public Task<IReadOnlyList<TrackResponse>> GetAlbumTracksByTrackIdAsync(
         int trackId,
         CancellationToken cancellationToken) =>
@@ -690,7 +695,7 @@ public sealed class MusicLibraryService(
                 : new MetadataRefreshResponse(
                     false,
                     metadata.MusicBrainzId,
-                    metadata.Description,
+                    "",
                     existingTrackId is null ? null : GetAlbumImageUrl(existingTrackId.Value, metadata.UpdatedAt),
                     metadata.ImageMissing,
                     metadata.UpdatedAt);
@@ -704,12 +709,6 @@ public sealed class MusicLibraryService(
         var oldImageFileName = metadata.ImageFileName;
         var oldImageRootId = metadata.ImageSourceRootId;
         var oldImageRelativePath = metadata.ImageRelativePath;
-
-        if (!string.IsNullOrWhiteSpace(result.Description))
-        {
-            metadata.Description = result.Description;
-            metadata.DescriptionEdited = false;
-        }
 
         metadata.MusicBrainzId = result.MusicBrainzId;
         metadata.UpdatedAt = DateTimeOffset.UtcNow;
@@ -745,7 +744,7 @@ public sealed class MusicLibraryService(
         return new MetadataRefreshResponse(
             true,
             metadata.MusicBrainzId,
-            metadata.Description,
+            result.Description,
             trackId is null ? null : GetAlbumImageUrl(trackId.Value, metadata.UpdatedAt),
             metadata.ImageMissing,
             metadata.UpdatedAt,
@@ -833,40 +832,21 @@ public sealed class MusicLibraryService(
         }
     }
 
-    public async Task UpdateMetadataDescriptionAsync(
+    public async Task UpdateArtistDescriptionAsync(
         MetadataDescriptionRequest request,
-        bool album,
         CancellationToken cancellationToken)
     {
-        if (album)
+        var key = GetArtistMetadataKey(request.Artist);
+        var metadata = await database.ArtistMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+        if (metadata is null)
         {
-            var key = GetAlbumMetadataKey(request.Artist, request.Album);
-            var metadata = await database.AlbumMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
-            if (metadata is null)
-            {
-                metadata = new MusicAlbumMetadata { Key = key, Artist = request.Artist.Trim(), Album = request.Album.Trim() };
-                database.AlbumMetadata.Add(metadata);
-            }
-
-            metadata.Description = request.Description.Trim();
-            metadata.DescriptionEdited = true;
-            metadata.UpdatedAt = DateTimeOffset.UtcNow;
-        }
-        else
-        {
-            var key = GetArtistMetadataKey(request.Artist);
-            var metadata = await database.ArtistMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
-            if (metadata is null)
-            {
-                metadata = new MusicArtistMetadata { Key = key, Artist = request.Artist.Trim() };
-                database.ArtistMetadata.Add(metadata);
-            }
-
-            metadata.Description = request.Description.Trim();
-            metadata.DescriptionEdited = true;
-            metadata.UpdatedAt = DateTimeOffset.UtcNow;
+            metadata = new MusicArtistMetadata { Key = key, Artist = request.Artist.Trim() };
+            database.ArtistMetadata.Add(metadata);
         }
 
+        metadata.Description = request.Description.Trim();
+        metadata.DescriptionEdited = true;
+        metadata.UpdatedAt = DateTimeOffset.UtcNow;
         await database.SaveChangesAsync(cancellationToken);
     }
 
