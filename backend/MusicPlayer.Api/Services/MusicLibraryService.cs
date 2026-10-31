@@ -263,15 +263,27 @@ public sealed class MusicLibraryService(
         string? query,
         int page,
         int pageSize,
-        CancellationToken cancellationToken) =>
-        browseService.GetTracksPageAsync(query, page, pageSize, cancellationToken);
+        CancellationToken cancellationToken,
+        bool random = false) =>
+        browseService.GetTracksPageAsync(query, page, pageSize, cancellationToken, random);
 
     public Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
         string? query,
         int page,
         int pageSize,
+        CancellationToken cancellationToken,
+        bool random = false) =>
+        browseService.GetAlbumsPageAsync(query, page, pageSize, cancellationToken, random);
+
+    public Task<IReadOnlyList<TrackResponse>> GetArtistTracksAsync(
+        string artist,
         CancellationToken cancellationToken) =>
-        browseService.GetAlbumsPageAsync(query, page, pageSize, cancellationToken);
+        browseService.GetArtistTracksAsync(artist, cancellationToken);
+
+    public Task<IReadOnlyList<TrackResponse>> GetAlbumTracksByTrackIdAsync(
+        int trackId,
+        CancellationToken cancellationToken) =>
+        browseService.GetAlbumTracksByTrackIdAsync(trackId, cancellationToken);
 
     public Task<IReadOnlyList<TrackResponse>> GetAlbumTracksAsync(
         string artist,
@@ -283,8 +295,9 @@ public sealed class MusicLibraryService(
         string? query,
         int page,
         int pageSize,
-        CancellationToken cancellationToken) =>
-        browseService.GetArtistsPageAsync(query, page, pageSize, cancellationToken);
+        CancellationToken cancellationToken,
+        bool random = false) =>
+        browseService.GetArtistsPageAsync(query, page, pageSize, cancellationToken, random);
 
     public Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken) =>
         browseService.GetAlbumsAsync(cancellationToken);

@@ -180,11 +180,18 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         var result = await library.GetTracksPageAsync("matching", page: 1, pageSize: 1, CancellationToken.None);
         var albums = await library.GetAlbumsPageAsync("Paged", page: 1, pageSize: 1, CancellationToken.None);
         var artists = await library.GetArtistsPageAsync("Page", page: 1, pageSize: 1, CancellationToken.None);
+        var artistTracks = await library.GetArtistTracksAsync("Page Artist", CancellationToken.None);
+        var albumTracksByTrackId = await library.GetAlbumTracksByTrackIdAsync(
+            result.Items.Single().Id,
+            CancellationToken.None);
         var albumTracks = await library.GetAlbumTracksAsync("Page Artist", "Paged Album", CancellationToken.None);
         var firstAlbumPage = await library.GetAlbumsPageAsync(null, page: 1, pageSize: 1, CancellationToken.None);
         var secondAlbumPage = await library.GetAlbumsPageAsync(null, page: 2, pageSize: 1, CancellationToken.None);
         var firstArtistPage = await library.GetArtistsPageAsync(null, page: 1, pageSize: 1, CancellationToken.None);
         var secondArtistPage = await library.GetArtistsPageAsync(null, page: 2, pageSize: 1, CancellationToken.None);
+        var randomTracks = await library.GetTracksPageAsync(null, page: 1, pageSize: 6, CancellationToken.None, random: true);
+        var randomAlbums = await library.GetAlbumsPageAsync(null, page: 1, pageSize: 6, CancellationToken.None, random: true);
+        var randomArtists = await library.GetArtistsPageAsync(null, page: 1, pageSize: 6, CancellationToken.None, random: true);
 
         Assert.Equal(1, result.TotalCount);
         Assert.Equal(1, result.Page);
@@ -196,6 +203,9 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal(1, artists.TotalCount);
         Assert.Equal(2, artists.Items.Single().TrackCount);
         Assert.Equal(1, artists.Items.Single().AlbumCount);
+        Assert.Equal(2, artistTracks.Count);
+        Assert.All(artistTracks, track => Assert.Equal("Page Artist", track.Artist));
+        Assert.Equal(2, albumTracksByTrackId.Count);
         Assert.Equal(2, albumTracks.Count);
         Assert.Equal(2, firstAlbumPage.TotalCount);
         Assert.Equal("Paged Album", firstAlbumPage.Items.Single().Album);
@@ -203,6 +213,9 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal(2, firstArtistPage.TotalCount);
         Assert.Equal("Page Artist", firstArtistPage.Items.Single().Artist);
         Assert.Equal("Second Artist", secondArtistPage.Items.Single().Artist);
+        Assert.Equal(3, randomTracks.Items.Count);
+        Assert.Equal(2, randomAlbums.Items.Count);
+        Assert.Equal(2, randomArtists.Items.Count);
     }
 
     [Fact]

@@ -37,9 +37,9 @@ export class HomePage implements OnInit {
     this.errorMessage.set('');
     try {
       const [albumPage, artistPage, trackPage] = await Promise.all([
-        this.library.listAlbumPage('', 1, HOME_COLLECTION_SIZE),
-        this.library.listArtistPage('', 1, HOME_COLLECTION_SIZE),
-        this.library.listTrackPage('', 1, HOME_COLLECTION_SIZE),
+        this.library.listAlbumPage('', 1, HOME_COLLECTION_SIZE, true),
+        this.library.listArtistPage('', 1, HOME_COLLECTION_SIZE, true),
+        this.library.listTrackPage('', 1, HOME_COLLECTION_SIZE, true),
       ]);
       this.albums.set(albumPage.items);
       this.artists.set(artistPage.items);

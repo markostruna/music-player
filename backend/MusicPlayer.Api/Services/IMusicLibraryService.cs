@@ -19,11 +19,19 @@ public interface IMusicLibraryService
         string? query,
         int page,
         int pageSize,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool random = false);
     Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
         string? query,
         int page,
         int pageSize,
+        CancellationToken cancellationToken,
+        bool random = false);
+    Task<IReadOnlyList<TrackResponse>> GetArtistTracksAsync(
+        string artist,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<TrackResponse>> GetAlbumTracksByTrackIdAsync(
+        int trackId,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetAlbumTracksAsync(
         string artist,
@@ -33,7 +41,8 @@ public interface IMusicLibraryService
         string? query,
         int page,
         int pageSize,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool random = false);
     Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken);
     Task<ResolvedMedia?> ResolveStreamAsync(int trackId, CancellationToken cancellationToken);
     Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken);

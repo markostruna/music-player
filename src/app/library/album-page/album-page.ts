@@ -1,5 +1,5 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { formatTime } from '@shared/utils/format-time';
@@ -7,19 +7,24 @@ import { LibraryStore } from '@shared/services/library-store';
 import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
+import { distinctUntilChanged, map } from 'rxjs';
 
 @Component({
   selector: 'app-album-page',
   imports: [RouterLink],
   templateUrl: './album-page.html',
 })
-export class AlbumPage implements OnInit {
+export class AlbumPage {
   private readonly auth = inject(AuthState);
   private readonly store = inject(LibraryStore);
   private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
   private readonly toast = inject(ToastService);
-  private readonly params = toSignal(inject(ActivatedRoute).paramMap);
+  private readonly route = inject(ActivatedRoute);
+  private readonly params = toSignal(this.route.paramMap);
+  private readonly albumTracks = signal<MusicTrack[]>([]);
+  private readonly loadingError = signal('');
+  private albumRequestId = 0;
 
   readonly isAdmin = this.auth.isAdmin;
   readonly isRefreshingInformation = signal(false);
@@ -39,10 +44,10 @@ export class AlbumPage implements OnInit {
   } | null>(null);
   descriptionDraft: string | null = null;
   private descriptionDraftKey: string | null = null;
-  readonly isLoading = this.store.isLoading;
+  readonly isLoading = signal(true);
   readonly errorMessage = computed(() => {
-    if (this.store.errorMessage()) return this.store.errorMessage();
-    return !this.store.isLoading() && !this.album()
+    if (this.loadingError()) return this.loadingError();
+    return !this.isLoading() && !this.album()
       ? 'This album could not be found in your library.'
       : '';
   });
@@ -54,25 +59,16 @@ export class AlbumPage implements OnInit {
     return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}min`;
   }
   readonly album = computed(() => {
-    const trackId = Number(this.params()?.get('trackId'));
-    const selectedTrack = this.store.tracks().find((track) => track.id === trackId);
+    const albumTracks = [...this.albumTracks()].sort(
+      (first, second) =>
+        first.discNumber - second.discNumber ||
+        first.trackNumber - second.trackNumber ||
+        first.title.localeCompare(second.title),
+    );
+    const selectedTrack = albumTracks[0];
     if (!selectedTrack) return null;
 
     const artist = selectedTrack.albumArtist.trim() || selectedTrack.artist;
-    const albumTracks = this.store
-      .tracks()
-      .filter(
-        (track) =>
-          track.album.toLowerCase() === selectedTrack.album.toLowerCase() &&
-          (track.albumArtist.trim() || track.artist).toLowerCase() === artist.toLowerCase(),
-      )
-      .sort(
-        (first, second) =>
-          first.discNumber - second.discNumber ||
-          first.trackNumber - second.trackNumber ||
-          first.title.localeCompare(second.title),
-      );
-
     const key = `${artist.toLowerCase()}\0${selectedTrack.album.toLowerCase()}`;
     const refreshed = this.refreshedInformation()?.key === key ? this.refreshedInformation() : null;
     return {
@@ -88,8 +84,36 @@ export class AlbumPage implements OnInit {
     };
   });
 
-  ngOnInit(): void {
-    void this.store.ensureLoaded();
+  constructor() {
+    this.route.paramMap
+      .pipe(
+        map((params) => Number(params.get('trackId'))),
+        distinctUntilChanged(),
+        takeUntilDestroyed(),
+      )
+      .subscribe((trackId) => void this.loadAlbum(trackId));
+  }
+
+  private async loadAlbum(trackId: number): Promise<void> {
+    const requestId = ++this.albumRequestId;
+    this.isLoading.set(true);
+    this.loadingError.set('');
+    this.albumTracks.set([]);
+    if (!Number.isInteger(trackId) || trackId < 1) {
+      this.isLoading.set(false);
+      return;
+    }
+
+    try {
+      const tracks = await this.libraryApi.listAlbumTracksByTrackId(trackId);
+      if (requestId === this.albumRequestId) this.albumTracks.set(tracks);
+    } catch {
+      if (requestId === this.albumRequestId) {
+        this.loadingError.set('The album could not be loaded. Check the music server connection.');
+      }
+    } finally {
+      if (requestId === this.albumRequestId) this.isLoading.set(false);
+    }
   }
 
   playTrack(tracks: MusicTrack[], index: number): void {
@@ -136,6 +160,7 @@ export class AlbumPage implements OnInit {
       this.descriptionDraftKey = null;
       this.editingDescriptionKey.set(null);
       await this.store.refreshTracks();
+      await this.loadAlbum(Number(this.params()?.get('trackId')));
       this.toast.show('Album description saved.', 'success');
     } catch {
       this.toast.show('The album description could not be saved.', 'error');
@@ -183,6 +208,7 @@ export class AlbumPage implements OnInit {
     try {
       await this.libraryApi.updateEntityImage(artist, album, image);
       await this.store.refreshTracks();
+      await this.loadAlbum(Number(this.params()?.get('trackId')));
       this.toast.show('Album artwork saved.', 'success');
       this.clearCoverSelection();
       this.isCoverDialogOpen.set(false);

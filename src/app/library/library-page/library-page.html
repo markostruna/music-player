@@ -128,7 +128,11 @@
         </button>
       </div>
     </div>
-    <div class="collection-panel-container">
+    <div
+      #collectionPanelContainer
+      class="collection-panel-container"
+      [style.min-height.px]="tabPanelMinHeight()"
+    >
       <div
         id="library-panel-tracks"
         class="collection-tab-panel"

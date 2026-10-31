@@ -28,20 +28,23 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         string? query,
         int page,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool random = false)
     {
         var tracksQuery = ApplySearch(AvailableTracks(), query);
 
         var totalCount = await tracksQuery.CountAsync(cancellationToken);
         var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
         var actualPage = Math.Min(page, pageCount);
-        var tracks = await tracksQuery
-            .OrderBy(track => track.AlbumArtist)
-            .ThenBy(track => track.Album)
-            .ThenBy(track => track.DiscNumber)
-            .ThenBy(track => track.TrackNumber)
-            .ThenBy(track => track.Title)
-            .ThenBy(track => track.Id)
+        var orderedTracks = random
+            ? tracksQuery.OrderBy(track => EF.Functions.Random()).ThenBy(track => track.Id)
+            : tracksQuery.OrderBy(track => track.AlbumArtist)
+                .ThenBy(track => track.Album)
+                .ThenBy(track => track.DiscNumber)
+                .ThenBy(track => track.TrackNumber)
+                .ThenBy(track => track.Title)
+                .ThenBy(track => track.Id);
+        var tracks = await orderedTracks
             .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -57,7 +60,8 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         string? query,
         int page,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool random = false)
     {
         var albums = AvailableTracks().Select(track => new
         {
@@ -81,7 +85,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             .CountAsync(cancellationToken);
         var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
         var actualPage = Math.Min(page, pageCount);
-        var albumPage = await albums
+        var albumGroups = albums
             .GroupBy(item => new { item.Album, item.Artist })
             .Select(group => new
             {
@@ -90,10 +94,13 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 TrackCount = group.Count(),
                 DurationSeconds = group.Sum(item => item.Track.DurationSeconds),
                 CoverTrackId = group.Min(item => item.Track.Id),
-            })
-            .OrderBy(item => item.Artist)
-            .ThenBy(item => item.Album)
-            .ThenBy(item => item.CoverTrackId)
+            });
+        var orderedAlbums = random
+            ? albumGroups.OrderBy(_ => EF.Functions.Random()).ThenBy(item => item.CoverTrackId)
+            : albumGroups.OrderBy(item => item.Artist)
+                .ThenBy(item => item.Album)
+                .ThenBy(item => item.CoverTrackId);
+        var albumPage = await orderedAlbums
             .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -134,11 +141,48 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         return await ToTrackResponsesAsync(tracks, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<TrackResponse>> GetArtistTracksAsync(
+        string artist,
+        CancellationToken cancellationToken)
+    {
+        var normalizedArtist = artist.Trim().ToUpper();
+        var tracks = await AvailableTracks()
+            .Where(track =>
+                (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim()).ToUpper() == normalizedArtist
+                || (track.AlbumArtist.Trim() == "" ? track.Artist.Trim() : track.AlbumArtist.Trim()).ToUpper() == normalizedArtist)
+            .OrderBy(track => track.AlbumArtist)
+            .ThenBy(track => track.Album)
+            .ThenBy(track => track.DiscNumber)
+            .ThenBy(track => track.TrackNumber)
+            .ThenBy(track => track.Title)
+            .ThenBy(track => track.Id)
+            .ToListAsync(cancellationToken);
+        return await ToTrackResponsesAsync(tracks, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TrackResponse>> GetAlbumTracksByTrackIdAsync(
+        int trackId,
+        CancellationToken cancellationToken)
+    {
+        var album = await AvailableTracks()
+            .Where(track => track.Id == trackId)
+            .Select(track => new
+            {
+                Artist = (track.AlbumArtist.Trim() == "" ? track.Artist : track.AlbumArtist).Trim(),
+                track.Album,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        return album is null
+            ? Array.Empty<TrackResponse>()
+            : await GetAlbumTracksAsync(album.Artist, album.Album, cancellationToken);
+    }
+
     public async Task<PagedResponse<ArtistSummaryResponse>> GetArtistsPageAsync(
         string? query,
         int page,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool random = false)
     {
         var artists = AvailableTracks().Select(track => new
         {
@@ -156,16 +200,18 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         var totalCount = await artists.Select(item => item.Artist).Distinct().CountAsync(cancellationToken);
         var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
         var actualPage = Math.Min(page, pageCount);
-        var artistPage = await artists
+        var artistGroups = artists
             .GroupBy(item => item.Artist)
             .Select(group => new
             {
                 Artist = group.Key,
                 TrackCount = group.Count(),
                 RepresentativeTrackId = group.Min(item => item.Track.Id),
-            })
-            .OrderBy(item => item.Artist)
-            .ThenBy(item => item.RepresentativeTrackId)
+            });
+        var orderedArtists = random
+            ? artistGroups.OrderBy(_ => EF.Functions.Random()).ThenBy(item => item.RepresentativeTrackId)
+            : artistGroups.OrderBy(item => item.Artist).ThenBy(item => item.RepresentativeTrackId);
+        var artistPage = await orderedArtists
             .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);

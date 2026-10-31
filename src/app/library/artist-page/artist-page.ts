@@ -1,24 +1,29 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore } from '@shared/services/library-store';
 import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
+import { distinctUntilChanged, map } from 'rxjs';
 
 @Component({
   selector: 'app-artist-page',
   imports: [RouterLink],
   templateUrl: './artist-page.html',
 })
-export class ArtistPage implements OnInit {
+export class ArtistPage {
   private readonly auth = inject(AuthState);
   private readonly store = inject(LibraryStore);
   private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
   private readonly toast = inject(ToastService);
-  private readonly params = toSignal(inject(ActivatedRoute).paramMap);
+  private readonly route = inject(ActivatedRoute);
+  private readonly params = toSignal(this.route.paramMap);
+  private readonly artistTracks = signal<MusicTrack[]>([]);
+  private readonly loadingError = signal('');
+  private artistRequestId = 0;
 
   readonly isAdmin = this.auth.isAdmin;
   readonly isRefreshingInformation = signal(false);
@@ -39,17 +44,16 @@ export class ArtistPage implements OnInit {
   } | null>(null);
   descriptionDraft: string | null = null;
   private descriptionDraftArtist: string | null = null;
-  readonly isLoading = this.store.isLoading;
+  readonly isLoading = signal(true);
   readonly errorMessage = computed(() => {
-    if (this.store.errorMessage()) return this.store.errorMessage();
-    return !this.store.isLoading() && !this.artist()
+    if (this.loadingError()) return this.loadingError();
+    return !this.isLoading() && !this.artist()
       ? 'This artist could not be found in your library.'
       : '';
   });
   readonly artist = computed(() => {
     const name = (this.params()?.get('name') ?? '').trim().toLowerCase();
-    const tracks = this.store
-      .tracks()
+    const tracks = this.artistTracks()
       .filter(
         (track) =>
           (track.artist.trim() || 'Unknown artist').toLowerCase() === name ||
@@ -107,8 +111,32 @@ export class ArtistPage implements OnInit {
       ),
     };
   });
-  ngOnInit(): void {
-    void this.store.ensureLoaded();
+
+  constructor() {
+    this.route.paramMap
+      .pipe(
+        map((params) => params.get('name') ?? ''),
+        distinctUntilChanged(),
+        takeUntilDestroyed(),
+      )
+      .subscribe((artist) => void this.loadArtist(artist));
+  }
+
+  private async loadArtist(artist: string): Promise<void> {
+    const requestId = ++this.artistRequestId;
+    this.isLoading.set(true);
+    this.loadingError.set('');
+    this.artistTracks.set([]);
+    try {
+      const tracks = await this.libraryApi.listArtistTracks(artist);
+      if (requestId === this.artistRequestId) this.artistTracks.set(tracks);
+    } catch {
+      if (requestId === this.artistRequestId) {
+        this.loadingError.set('The artist could not be loaded. Check the music server connection.');
+      }
+    } finally {
+      if (requestId === this.artistRequestId) this.isLoading.set(false);
+    }
   }
 
   descriptionValue(artist: string, description: string): string {
@@ -147,6 +175,7 @@ export class ArtistPage implements OnInit {
       this.descriptionDraftArtist = null;
       this.editingDescriptionArtist.set(null);
       await this.store.refreshTracks();
+      await this.loadArtist(artist);
       this.toast.show('Artist description saved.', 'success');
     } catch {
       this.toast.show('The artist description could not be saved.', 'error');
@@ -194,6 +223,7 @@ export class ArtistPage implements OnInit {
     try {
       await this.libraryApi.updateEntityImage(artist, null, image);
       await this.store.refreshTracks();
+      await this.loadArtist(artist);
       this.toast.show('Artist picture saved.', 'success');
       this.clearPictureSelection();
       this.isPictureDialogOpen.set(false);

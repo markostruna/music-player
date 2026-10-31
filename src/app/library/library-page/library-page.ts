@@ -1,4 +1,12 @@
-import { AfterViewInit, Component, inject, OnDestroy, signal } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  inject,
+  OnDestroy,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { LibraryStore, LibraryView } from '@shared/services/library-store';
 import { MusicLibraryApi } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
@@ -23,14 +31,18 @@ export class LibraryPage implements AfterViewInit, OnDestroy {
   readonly collectionView = this.store.collectionView;
   readonly searchQuery = this.store.searchQuery;
   readonly refreshTrigger = signal(0);
+  readonly tabPanelMinHeight = signal(0);
   readonly tabTransition = signal<{
     from: LibraryView;
     to: LibraryView;
     direction: 'left' | 'right';
   } | null>(null);
 
+  @ViewChild('collectionPanelContainer')
+  private collectionPanelContainer?: ElementRef<HTMLElement>;
+
   ngAfterViewInit(): void {
-    window.scrollTo(0, this.store.scrollTop);
+    if (this.store.scrollTop > 0) window.scrollTo(0, this.store.scrollTop);
   }
 
   ngOnDestroy(): void {
@@ -40,6 +52,12 @@ export class LibraryPage implements AfterViewInit, OnDestroy {
   selectTab(view: LibraryView): void {
     const currentView = this.collectionView();
     if (view === currentView) return;
+    const panel = this.collectionPanelContainer?.nativeElement;
+    if (panel) {
+      const panelTop = panel.getBoundingClientRect().top + window.scrollY;
+      const minimumHeight = Math.max(0, window.scrollY + window.innerHeight - panelTop);
+      this.tabPanelMinHeight.update((height) => Math.max(height, minimumHeight));
+    }
     this.tabTransition.set({
       from: currentView,
       to: view,

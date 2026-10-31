@@ -33,14 +33,15 @@ public static class LibraryEndpoints
             int page,
             int pageSize,
             IMusicLibraryService music,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            bool random = false) =>
         {
             if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
             {
                 return TypedResults.BadRequest("Page, page size, or search text is invalid.");
             }
 
-            return TypedResults.Ok(await music.GetTracksPageAsync(query, page, pageSize, cancellationToken));
+            return TypedResults.Ok(await music.GetTracksPageAsync(query, page, pageSize, cancellationToken, random));
         })
         .WithName("ListTrackPage")
         .WithSummary("Searches and returns one page of playable tracks.");
@@ -49,14 +50,15 @@ public static class LibraryEndpoints
             int page,
             int pageSize,
             IMusicLibraryService music,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            bool random = false) =>
         {
             if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
             {
                 return TypedResults.BadRequest("Page, page size, or search text is invalid.");
             }
 
-            return TypedResults.Ok(await music.GetAlbumsPageAsync(query, page, pageSize, cancellationToken));
+            return TypedResults.Ok(await music.GetAlbumsPageAsync(query, page, pageSize, cancellationToken, random));
         })
         .WithName("ListAlbumPage")
         .WithSummary("Searches and returns one page of album summaries.");
@@ -75,22 +77,44 @@ public static class LibraryEndpoints
         })
         .WithName("ListAlbumTracks")
         .WithSummary("Lists tracks for one album.");
+        library.MapGet("/albums/by-track/{trackId:int}/tracks", async (
+            int trackId,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+                TypedResults.Ok(await music.GetAlbumTracksByTrackIdAsync(trackId, cancellationToken)))
+            .WithName("ListAlbumTracksByTrackId")
+            .WithSummary("Lists album tracks based on one catalogued track.");
         library.MapGet("/artists/page", async Task<Results<Ok<PagedResponse<ArtistSummaryResponse>>, BadRequest<string>>> (
             string? query,
             int page,
             int pageSize,
             IMusicLibraryService music,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            bool random = false) =>
         {
             if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
             {
                 return TypedResults.BadRequest("Page, page size, or search text is invalid.");
             }
 
-            return TypedResults.Ok(await music.GetArtistsPageAsync(query, page, pageSize, cancellationToken));
+            return TypedResults.Ok(await music.GetArtistsPageAsync(query, page, pageSize, cancellationToken, random));
         })
         .WithName("ListArtistPage")
         .WithSummary("Searches and returns one page of artist summaries.");
+        library.MapGet("/artists/tracks", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
+            string artist,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (artist.Length > 1024)
+            {
+                return TypedResults.BadRequest("Artist name cannot exceed 1024 characters.");
+            }
+
+            return TypedResults.Ok(await music.GetArtistTracksAsync(artist, cancellationToken));
+        })
+        .WithName("ListArtistTracks")
+        .WithSummary("Lists tracks for one artist.");
         library.MapGet("/albums", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
                 TypedResults.Ok(await music.GetAlbumsAsync(cancellationToken)))
             .WithName("ListAlbums")

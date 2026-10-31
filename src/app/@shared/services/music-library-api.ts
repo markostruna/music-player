@@ -148,12 +148,13 @@ export class MusicLibraryApi {
     ).then((tracks) => this.mapTracks(tracks));
   }
 
-  listTrackPage(query: string, page: number, pageSize: number): Promise<PagedTracks> {
+  listTrackPage(query: string, page: number, pageSize: number, random = false): Promise<PagedTracks> {
     const params = new URLSearchParams({
       query,
       page: String(page),
       pageSize: String(pageSize),
     });
+    if (random) params.set('random', 'true');
     return firstValueFrom(
       this.http.get<PagedTracks>(`${MUSIC_API_BASE}/library/tracks/page?${params}`, {
         withCredentials: true,
@@ -164,12 +165,18 @@ export class MusicLibraryApi {
     }));
   }
 
-  listAlbumPage(query: string, page: number, pageSize: number): Promise<PagedResult<AlbumSummary>> {
+  listAlbumPage(
+    query: string,
+    page: number,
+    pageSize: number,
+    random = false,
+  ): Promise<PagedResult<AlbumSummary>> {
     const params = new URLSearchParams({
       query,
       page: String(page),
       pageSize: String(pageSize),
     });
+    if (random) params.set('random', 'true');
     return firstValueFrom(
       this.http.get<PagedResult<AlbumSummary>>(`${MUSIC_API_BASE}/library/albums/page?${params}`, {
         withCredentials: true,
@@ -192,12 +199,36 @@ export class MusicLibraryApi {
     ).then((tracks) => this.mapTracks(tracks));
   }
 
-  listArtistPage(query: string, page: number, pageSize: number): Promise<PagedResult<ArtistSummary>> {
+  listAlbumTracksByTrackId(trackId: number): Promise<MusicTrack[]> {
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(
+        `${MUSIC_API_BASE}/library/albums/by-track/${trackId}/tracks`,
+        { withCredentials: true },
+      ),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  listArtistTracks(artist: string): Promise<MusicTrack[]> {
+    const params = new URLSearchParams({ artist });
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/artists/tracks?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  listArtistPage(
+    query: string,
+    page: number,
+    pageSize: number,
+    random = false,
+  ): Promise<PagedResult<ArtistSummary>> {
     const params = new URLSearchParams({
       query,
       page: String(page),
       pageSize: String(pageSize),
     });
+    if (random) params.set('random', 'true');
     return firstValueFrom(
       this.http.get<PagedResult<ArtistSummary>>(`${MUSIC_API_BASE}/library/artists/page?${params}`, {
         withCredentials: true,
