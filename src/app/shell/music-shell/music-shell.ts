@@ -131,6 +131,18 @@ export class MusicShell {
     }
   }
 
+  @HostListener('document:click', ['$event'])
+  hideMenuOnOutsideClick(event: MouseEvent): void {
+    if (!this.menuVisible()) {
+      return;
+    }
+    const target = event.target as Element | null;
+    if (target?.closest('#side-menu, [aria-controls="side-menu"]')) {
+      return;
+    }
+    this.menuVisible.set(false);
+  }
+
   constructor() {
     if (typeof window !== 'undefined') {
       this.lastScrollY = window.scrollY;
