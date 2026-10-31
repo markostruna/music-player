@@ -66,12 +66,12 @@ export class LibraryStore {
     const view = this.collectionView();
     if (view === 'folders') return Promise.resolve();
     if (view === 'tracks') {
-      return this.loadTrackPage(this.searchQuery(), this.currentPage(), LIBRARY_PAGE_SIZE);
+      return this.loadTrackPage(this.searchQuery(), 1, LIBRARY_PAGE_SIZE);
     }
     return this.loadCollectionPage(
       view,
       this.searchQuery(),
-      this.currentPage(),
+      1,
       LIBRARY_PAGE_SIZE,
     );
   }
@@ -87,6 +87,7 @@ export class LibraryStore {
     query: string,
     page: number,
     pageSize: number,
+    append = false,
   ): Promise<void> {
     const requestId = ++this.pageRequestIds[view];
     const latestRequestId = ++this.pageRequestId;
@@ -98,13 +99,17 @@ export class LibraryStore {
       if (view === 'albums') {
         const result = await this.api.listAlbumPage(query, page, pageSize);
         if (requestId !== this.pageRequestIds[view]) return;
-        this.pageAlbums.set(result.items);
+        const shouldAppend =
+          append && result.page === page && this.currentPages()[view] + 1 === page;
+        this.pageAlbums.update((items) => (shouldAppend ? [...items, ...result.items] : result.items));
         this.totalAlbumCount.set(result.totalCount);
         this.currentPages.update((pages) => ({ ...pages, [view]: result.page }));
       } else {
         const result = await this.api.listArtistPage(query, page, pageSize);
         if (requestId !== this.pageRequestIds[view]) return;
-        this.pageArtists.set(result.items);
+        const shouldAppend =
+          append && result.page === page && this.currentPages()[view] + 1 === page;
+        this.pageArtists.update((items) => (shouldAppend ? [...items, ...result.items] : result.items));
         this.totalArtistCount.set(result.totalCount);
         this.currentPages.update((pages) => ({ ...pages, [view]: result.page }));
       }
@@ -128,6 +133,7 @@ export class LibraryStore {
     page: number,
     pageSize: number,
     folderScope?: TrackFolderScope | null,
+    append = false,
   ): Promise<void> {
     const requestId = ++this.pageRequestIds.tracks;
     const latestRequestId = ++this.pageRequestId;
@@ -138,7 +144,9 @@ export class LibraryStore {
     try {
       const result = await this.api.listTrackPage(query, page, pageSize, false, folderScope);
       if (requestId !== this.pageRequestIds.tracks) return;
-      this.pageTracks.set(result.items);
+      const shouldAppend =
+        append && result.page === page && this.currentPages().tracks + 1 === page;
+      this.pageTracks.update((items) => (shouldAppend ? [...items, ...result.items] : result.items));
       this.totalTrackCount.set(result.totalCount);
       this.currentPages.update((pages) => ({ ...pages, tracks: result.page }));
       if (this.collectionView() === 'tracks') this.currentPage.set(result.page);

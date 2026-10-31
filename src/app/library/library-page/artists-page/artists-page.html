@@ -1,6 +1,6 @@
-@if (isLoading()) {
+@if (isLoading() && !visibleArtists().length) {
   <p class="empty-state">Loading your music…</p>
-} @else if (errorMessage()) {
+} @else if (errorMessage() && !visibleArtists().length) {
   <p class="empty-state" role="alert">{{ errorMessage() }}</p>
 } @else if (visibleArtists().length) {
   <div class="collection-grid">
@@ -39,29 +39,12 @@
   </p>
 }
 
-@if (!isLoading() && !errorMessage() && totalItems() > 0) {
-  <nav class="library-pagination" aria-label="Library pagination">
-    <span>Showing {{ pageStart() }}–{{ pageEnd() }} of {{ totalItems() }}</span>
-    <div class="pagination-controls">
-      <button
-        type="button"
-        aria-label="Previous page"
-        title="Previous page"
-        [disabled]="pageNumber() === 1"
-        (click)="previousPage()"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
-      </button>
-      <span>Page {{ pageNumber() }} of {{ totalPages() }}</span>
-      <button
-        type="button"
-        aria-label="Next page"
-        title="Next page"
-        [disabled]="pageNumber() === totalPages()"
-        (click)="nextPage()"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
-      </button>
-    </div>
-  </nav>
+@if (errorMessage() && visibleArtists().length) {
+  <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+}
+
+@if (hasMore()) {
+  <button class="load-more" type="button" [disabled]="isLoading()" (click)="loadMore()">
+    {{ isLoading() ? 'Loading…' : 'Load more' }}
+  </button>
 }

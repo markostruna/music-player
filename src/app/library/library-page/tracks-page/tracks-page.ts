@@ -40,13 +40,8 @@ export class TracksPage {
   readonly selectedTrackIds = signal(new Set<number>());
   readonly hasSelection = computed(() => this.selectedTrackIds().size > 0);
   readonly totalItems = this.store.totalTrackCount;
-  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalItems() / this.pageSize)));
-  readonly pageNumber = computed(() => Math.min(this.currentPage(), this.totalPages()));
-  readonly pageStart = computed(() =>
-    this.totalItems() === 0 ? 0 : (this.pageNumber() - 1) * this.pageSize + 1,
-  );
-  readonly pageEnd = computed(() => Math.min(this.pageNumber() * this.pageSize, this.totalItems()));
   readonly visibleTracks = computed(() => this.pageTracks());
+  readonly hasMore = computed(() => this.visibleTracks().length < this.totalItems());
   readonly errorMessage = computed(() => this.store.pageErrors().tracks || this.pageError());
   readonly formatTime = formatTime;
 
@@ -74,7 +69,7 @@ export class TracksPage {
           this.lastSearchQuery = query;
           this.lastFolderSourceRootId = folderSourceRootId;
           this.lastFolderPath = folderPath;
-          this.currentPage.set(this.store.currentPages().tracks);
+          this.currentPage.set(1);
           void this.loadLibrary();
         }
         return;
@@ -119,18 +114,15 @@ export class TracksPage {
     }
   }
 
-  previousPage(): void {
-    const page = Math.max(1, this.currentPage() - 1);
-    void this.loadTrackPage(page);
-  }
-
-  nextPage(): void {
-    const page = Math.min(this.totalPages(), this.currentPage() + 1);
-    void this.loadTrackPage(page);
-  }
-
-  private async loadTrackPage(page: number): Promise<void> {
-    await this.store.loadTrackPage(this.searchQuery(), page, this.pageSize, this.folderScope());
+  async loadMore(): Promise<void> {
+    const page = this.currentPage() + 1;
+    await this.store.loadTrackPage(
+      this.searchQuery(),
+      page,
+      this.pageSize,
+      this.folderScope(),
+      true,
+    );
     this.currentPage.set(this.store.currentPages().tracks);
   }
 

@@ -101,6 +101,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             {
                 group.Key.Album,
                 group.Key.Artist,
+                ReleaseYear = group.Max(item => item.Track.Year),
                 TrackCount = group.Count(),
                 DurationSeconds = group.Sum(item => item.Track.DurationSeconds),
                 CoverTrackId = group.Min(item => item.Track.Id),
@@ -125,6 +126,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         var items = albumPage.Select(item => new AlbumSummaryResponse(
             item.Album,
             item.Artist,
+            item.ReleaseYear == 0 ? null : item.ReleaseYear,
             item.TrackCount,
             item.DurationSeconds,
             item.CoverTrackId,

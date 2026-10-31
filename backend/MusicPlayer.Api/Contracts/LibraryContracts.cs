@@ -64,6 +64,7 @@ public sealed record PagedResponse<T>(
 public sealed record AlbumSummaryResponse(
     string Album,
     string Artist,
+    uint? ReleaseYear,
     int TrackCount,
     double DurationSeconds,
     int CoverTrackId,

@@ -19,12 +19,7 @@ export class ArtistsPage {
   readonly visibleArtists = this.store.pageArtists;
   readonly totalItems = this.store.totalArtistCount;
   readonly errorMessage = computed(() => this.store.pageErrors().artists);
-  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalItems() / this.pageSize)));
-  readonly pageNumber = computed(() => Math.min(this.currentPage(), this.totalPages()));
-  readonly pageStart = computed(() =>
-    this.totalItems() === 0 ? 0 : (this.pageNumber() - 1) * this.pageSize + 1,
-  );
-  readonly pageEnd = computed(() => Math.min(this.pageNumber() * this.pageSize, this.totalItems()));
+  readonly hasMore = computed(() => this.visibleArtists().length < this.totalItems());
   private loaded = false;
   private lastRefreshTrigger = 0;
   private lastSearchQuery = '';
@@ -38,7 +33,7 @@ export class ArtistsPage {
         this.lastRefreshTrigger = refreshTrigger;
         if (active && this.loaded) {
           this.lastSearchQuery = query;
-          this.currentPage.set(this.store.currentPages().artists);
+          this.currentPage.set(1);
           void this.loadPage();
         }
         return;
@@ -65,18 +60,9 @@ export class ArtistsPage {
     this.currentPage.set(this.store.currentPages().artists);
   }
 
-  previousPage(): void {
-    const page = Math.max(1, this.currentPage() - 1);
-    void this.loadPageNumber(page);
-  }
-
-  nextPage(): void {
-    const page = Math.min(this.totalPages(), this.currentPage() + 1);
-    void this.loadPageNumber(page);
-  }
-
-  private async loadPageNumber(page: number): Promise<void> {
-    await this.store.loadCollectionPage('artists', this.searchQuery(), page, this.pageSize);
+  async loadMore(): Promise<void> {
+    const page = this.currentPage() + 1;
+    await this.store.loadCollectionPage('artists', this.searchQuery(), page, this.pageSize, true);
     this.currentPage.set(this.store.currentPages().artists);
   }
 }

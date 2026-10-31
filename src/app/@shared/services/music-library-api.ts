@@ -40,6 +40,7 @@ export interface PagedTracks {
 export interface AlbumSummary {
   album: string;
   artist: string;
+  releaseYear: number | null;
   trackCount: number;
   durationSeconds: number;
   coverTrackId: number;
