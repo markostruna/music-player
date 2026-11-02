@@ -50,7 +50,11 @@ export class AlbumsPage {
       if (active && !this.loaded) {
         this.loaded = true;
         this.lastSearchQuery = query;
-        void this.loadPage();
+        if (this.store.hasCachedCollectionPage('albums', query)) {
+          this.currentPage.set(this.store.currentPages().albums);
+        } else {
+          void this.loadPage();
+        }
       } else if (active && query !== this.lastSearchQuery) {
         this.lastSearchQuery = query;
         this.currentPage.set(1);

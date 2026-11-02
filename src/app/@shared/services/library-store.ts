@@ -17,6 +17,13 @@ export class LibraryStore {
   private loaded = false;
   private pendingTracks: Promise<void> | null = null;
   private pageRequestId = 0;
+  private readonly cachedCollectionQueries: Record<
+    Exclude<LibraryView, 'tracks' | 'folders'>,
+    string | null
+  > = {
+    albums: null,
+    artists: null,
+  };
   private readonly pageRequestIds: Record<LibraryView, number> = {
     tracks: 0,
     albums: 0,
@@ -54,7 +61,10 @@ export class LibraryStore {
   readonly collectionView = signal<LibraryView>('albums');
   readonly searchQuery = signal('');
   readonly currentPage = signal(1);
-  scrollTop = 0;
+
+  hasCachedCollectionPage(view: Exclude<LibraryView, 'tracks' | 'folders'>, query: string): boolean {
+    return this.cachedCollectionQueries[view] === query;
+  }
 
   ensureLoaded(): Promise<void> {
     if (this.loaded) return Promise.resolve();
@@ -99,6 +109,7 @@ export class LibraryStore {
       if (view === 'albums') {
         const result = await this.api.listAlbumPage(query, page, pageSize);
         if (requestId !== this.pageRequestIds[view]) return;
+        this.cachedCollectionQueries[view] = query;
         const shouldAppend =
           append && result.page === page && this.currentPages()[view] + 1 === page;
         this.pageAlbums.update((items) => (shouldAppend ? [...items, ...result.items] : result.items));
@@ -107,6 +118,7 @@ export class LibraryStore {
       } else {
         const result = await this.api.listArtistPage(query, page, pageSize);
         if (requestId !== this.pageRequestIds[view]) return;
+        this.cachedCollectionQueries[view] = query;
         const shouldAppend =
           append && result.page === page && this.currentPages()[view] + 1 === page;
         this.pageArtists.update((items) => (shouldAppend ? [...items, ...result.items] : result.items));
@@ -179,6 +191,8 @@ export class LibraryStore {
 
   invalidate(): void {
     this.loaded = false;
+    this.cachedCollectionQueries.albums = null;
+    this.cachedCollectionQueries.artists = null;
   }
 
   clear(): void {
@@ -192,14 +206,15 @@ export class LibraryStore {
     this.totalTrackCount.set(0);
     this.pageAlbums.set([]);
     this.totalAlbumCount.set(0);
+    this.cachedCollectionQueries.albums = null;
     this.pageArtists.set([]);
     this.totalArtistCount.set(0);
+    this.cachedCollectionQueries.artists = null;
     this.pageLoading.set({ tracks: false, albums: false, artists: false, folders: false });
     this.pageErrors.set({ tracks: '', albums: '', artists: '', folders: '' });
     this.currentPages.set({ tracks: 1, albums: 1, artists: 1, folders: 1 });
     this.searchQuery.set('');
     this.currentPage.set(1);
     this.collectionView.set('albums');
-    this.scrollTop = 0;
   }
 }

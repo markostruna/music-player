@@ -52,7 +52,11 @@ export class ArtistsPage {
       if (active && !this.loaded) {
         this.loaded = true;
         this.lastSearchQuery = query;
-        void this.loadPage();
+        if (this.store.hasCachedCollectionPage('artists', query)) {
+          this.currentPage.set(this.store.currentPages().artists);
+        } else {
+          void this.loadPage();
+        }
       } else if (active && query !== this.lastSearchQuery) {
         this.lastSearchQuery = query;
         this.currentPage.set(1);

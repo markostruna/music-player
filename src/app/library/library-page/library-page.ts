@@ -1,9 +1,7 @@
 import {
-  AfterViewInit,
   Component,
   ElementRef,
   inject,
-  OnDestroy,
   signal,
   ViewChild,
 } from '@angular/core';
@@ -22,7 +20,7 @@ import { TracksPage } from './tracks-page/tracks-page';
   imports: [TracksPage, AlbumsPage, ArtistsPage, FoldersPage],
   templateUrl: './library-page.html',
 })
-export class LibraryPage implements AfterViewInit, OnDestroy {
+export class LibraryPage {
   private readonly tabViews: LibraryView[] = ['albums', 'artists', 'tracks', 'folders'];
   private readonly library = inject(MusicLibraryApi);
   private readonly store = inject(LibraryStore);
@@ -41,14 +39,6 @@ export class LibraryPage implements AfterViewInit, OnDestroy {
 
   @ViewChild('collectionPanelContainer')
   private collectionPanelContainer?: ElementRef<HTMLElement>;
-
-  ngAfterViewInit(): void {
-    if (this.store.scrollTop > 0) window.scrollTo(0, this.store.scrollTop);
-  }
-
-  ngOnDestroy(): void {
-    this.store.scrollTop = window.scrollY;
-  }
 
   selectTab(view: LibraryView): void {
     const currentView = this.collectionView();
