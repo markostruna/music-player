@@ -12,9 +12,9 @@
     </div>
     <label class="settings-theme-picker">
       <span>Theme</span>
-      <select [value]="user()?.theme ?? 'Light'" (change)="changeTheme($event)">
+      <select (change)="changeTheme($event)">
         @for (theme of themeOptions; track theme) {
-          <option [value]="theme">{{ theme }}</option>
+          <option [value]="theme" [selected]="theme === (user()?.theme ?? 'Light')">{{ theme }}</option>
         }
       </select>
     </label>
@@ -23,8 +23,39 @@
   @if (errorMessage()) {
     <p class="settings-error" role="alert">{{ errorMessage() }}</p>
   }
+  @if (statusMessage()) {
+    <p class="settings-status" role="status">{{ statusMessage() }}</p>
+  }
 
   @if (isAdmin()) {
+    <section class="settings-card" aria-labelledby="default-provider-title">
+      <div>
+        <h2 id="default-provider-title">Default metadata provider</h2>
+        <p>Used when refreshing album metadata and when identifying an album.</p>
+      </div>
+      <label class="settings-theme-picker">
+        <span>Provider</span>
+        <select
+          [disabled]="isSavingDefaultProvider() || providers().length === 0"
+          (change)="changeDefaultProvider($event)"
+        >
+          @for (provider of providers(); track provider.id) {
+            <option [value]="provider.id" [selected]="provider.id === defaultProviderId()">
+              {{ provider.name }}
+            </option>
+          }
+        </select>
+      </label>
+    </section>
+
+    <section class="settings-card" aria-labelledby="provider-settings-title">
+      <div>
+        <h2 id="provider-settings-title">Provider integrations</h2>
+        <p>Configure API credentials used by the music metadata providers.</p>
+      </div>
+      <a class="settings-action" routerLink="/settings/providers">Configure providers</a>
+    </section>
+
     <section class="settings-card" aria-labelledby="library-settings-title">
       <div>
         <h2 id="library-settings-title">Music library</h2>

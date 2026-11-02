@@ -1,12 +1,15 @@
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Services;
+using MusicPlayer.Api.Services.Identification;
 
 namespace MusicPlayer.Api.Tests;
 
@@ -16,6 +19,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     private MusicDbContext database = null!;
     private MusicLibraryService library = null!;
     private StubMusicBrainzClient musicBrainz = null!;
+    private ProviderSettingsService providerSettings = null!;
     private string testDirectory = null!;
     private string sourceDirectory = null!;
 
@@ -33,7 +37,18 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         sourceDirectory = Path.Combine(testDirectory, "music");
         Directory.CreateDirectory(sourceDirectory);
         musicBrainz = new StubMusicBrainzClient();
-        library = new MusicLibraryService(database, new TestWebHostEnvironment(), musicBrainz, NullLogger<MusicLibraryService>.Instance);
+        providerSettings = new ProviderSettingsService(
+            database,
+            new EphemeralDataProtectionProvider(),
+            new ConfigurationBuilder().AddInMemoryCollection().Build());
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database),
+            [],
+            providerSettings);
     }
 
     public async Task DisposeAsync()
@@ -129,6 +144,214 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ArtistAndAlbumLookupsFindTracksWithUnicodeArtistNames()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Unicode Artist Album");
+        Directory.CreateDirectory(albumDirectory);
+        var audioPath = Path.Combine(albumDirectory, "track.wav");
+        await CreateWaveFileAsync(audioPath);
+        using (var audio = TagLib.File.Create(audioPath))
+        {
+            audio.Tag.Title = "Unicode Artist Track";
+            audio.Tag.Performers = ["Motörhead"];
+            audio.Tag.AlbumArtists = ["Motörhead"];
+            audio.Tag.Album = "After Hours";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Unicode Artist Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        Assert.Single(await library.GetArtistTracksAsync("Motörhead", CancellationToken.None));
+        Assert.Single(await library.GetAlbumTracksAsync("Motörhead", "After Hours", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TrackPageFiltersAndLimitsResults()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Paged Album");
+        Directory.CreateDirectory(albumDirectory);
+        var firstTrack = Path.Combine(albumDirectory, "first.wav");
+        var secondTrack = Path.Combine(albumDirectory, "second.wav");
+        var secondAlbumDirectory = Path.Combine(sourceDirectory, "Second Album");
+        Directory.CreateDirectory(secondAlbumDirectory);
+        var thirdTrack = Path.Combine(secondAlbumDirectory, "third.wav");
+        await CreateWaveFileAsync(firstTrack);
+        await CreateWaveFileAsync(secondTrack);
+        await CreateWaveFileAsync(thirdTrack);
+        using (var audio = TagLib.File.Create(firstTrack))
+        {
+            audio.Tag.Title = "Matching Track";
+            audio.Tag.Performers = ["Page Artist"];
+            audio.Tag.Album = "Paged Album";
+            audio.Save();
+        }
+
+        using (var audio = TagLib.File.Create(secondTrack))
+        {
+            audio.Tag.Title = "Other Track";
+            audio.Tag.Performers = ["Page Artist"];
+            audio.Tag.Album = "Paged Album";
+            audio.Save();
+        }
+
+        using (var audio = TagLib.File.Create(thirdTrack))
+        {
+            audio.Tag.Title = "Third Track";
+            audio.Tag.Performers = ["Second Artist"];
+            audio.Tag.Album = "Second Album";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Paged Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        var result = await library.GetTracksPageAsync("matching", page: 1, pageSize: 1, CancellationToken.None);
+        var folderPage = await library.GetTracksPageAsync(
+            null,
+            page: 1,
+            pageSize: 10,
+            CancellationToken.None,
+            folderId: result.Items.Single().FolderId);
+        var folderTracks = await library.SearchTracksAsync(
+            null,
+            CancellationToken.None,
+            result.Items.Single().FolderId);
+        var pathTracks = await library.GetTracksPageAsync(
+            null,
+            page: 1,
+            pageSize: 10,
+            CancellationToken.None,
+            sourceRootId: result.Items.Single().SourceRootId,
+            folderPath: "Paged Album");
+        var albums = await library.GetAlbumsPageAsync("Paged", page: 1, pageSize: 1, CancellationToken.None);
+        var artists = await library.GetArtistsPageAsync("Page", page: 1, pageSize: 1, CancellationToken.None);
+        var artistTracks = await library.GetArtistTracksAsync("Page Artist", CancellationToken.None);
+        var albumTracksByTrackId = await library.GetAlbumTracksByTrackIdAsync(
+            result.Items.Single().Id,
+            CancellationToken.None);
+        var albumTracks = await library.GetAlbumTracksAsync("Page Artist", "Paged Album", CancellationToken.None);
+        var firstAlbumPage = await library.GetAlbumsPageAsync(null, page: 1, pageSize: 1, CancellationToken.None);
+        var secondAlbumPage = await library.GetAlbumsPageAsync(null, page: 2, pageSize: 1, CancellationToken.None);
+        var firstArtistPage = await library.GetArtistsPageAsync(null, page: 1, pageSize: 1, CancellationToken.None);
+        var secondArtistPage = await library.GetArtistsPageAsync(null, page: 2, pageSize: 1, CancellationToken.None);
+        var randomTracks = await library.GetTracksPageAsync(null, page: 1, pageSize: 6, CancellationToken.None, random: true);
+        var randomAlbums = await library.GetAlbumsPageAsync(null, page: 1, pageSize: 6, CancellationToken.None, random: true);
+        var randomArtists = await library.GetArtistsPageAsync(null, page: 1, pageSize: 6, CancellationToken.None, random: true);
+
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(1, result.Page);
+        Assert.Single(result.Items);
+        Assert.Equal("Matching Track", result.Items[0].Title);
+        Assert.Equal(2, folderPage.TotalCount);
+        Assert.Equal(2, folderTracks.Count);
+        Assert.All(folderTracks, track => Assert.Equal(result.Items[0].FolderId, track.FolderId));
+        Assert.Equal(2, pathTracks.TotalCount);
+        Assert.Equal(1, albums.TotalCount);
+        Assert.Equal(2, albums.Items.Single().TrackCount);
+        Assert.Equal("Paged Album", albums.Items.Single().Album);
+        Assert.Equal(1, artists.TotalCount);
+        Assert.Equal(2, artists.Items.Single().TrackCount);
+        Assert.Equal(1, artists.Items.Single().AlbumCount);
+        Assert.Equal(2, artistTracks.Count);
+        Assert.All(artistTracks, track => Assert.Equal("Page Artist", track.Artist));
+        Assert.Equal(2, albumTracksByTrackId.Count);
+        Assert.Equal(2, albumTracks.Count);
+        Assert.Equal(2, firstAlbumPage.TotalCount);
+        Assert.Equal("Paged Album", firstAlbumPage.Items.Single().Album);
+        Assert.Equal("Second Album", secondAlbumPage.Items.Single().Album);
+        Assert.Equal(2, firstArtistPage.TotalCount);
+        Assert.Equal("Page Artist", firstArtistPage.Items.Single().Artist);
+        Assert.Equal("Second Artist", secondArtistPage.Items.Single().Artist);
+        Assert.Equal(3, randomTracks.Items.Count);
+        Assert.Equal(2, randomAlbums.Items.Count);
+        Assert.Equal(2, randomArtists.Items.Count);
+    }
+
+    [Fact]
+    public async Task ArtistPageGroupsTracksByAlbumArtistInsteadOfPerTrackCredits()
+    {
+        var albumDirectory = Path.Combine(sourceDirectory, "Featured Album");
+        Directory.CreateDirectory(albumDirectory);
+        var performers = new[]
+        {
+            "Cojones feat. Pavel Miholjević",
+            "Cojones feat. Guest Singer",
+            "Cojones",
+        };
+        for (var index = 0; index < performers.Length; index++)
+        {
+            var audioPath = Path.Combine(albumDirectory, $"track-{index}.wav");
+            await CreateWaveFileAsync(audioPath);
+            using var audio = TagLib.File.Create(audioPath);
+            audio.Tag.Title = $"Track {index}";
+            audio.Tag.Performers = [performers[index]];
+            audio.Tag.AlbumArtists = ["Cojones"];
+            audio.Tag.Album = "Featured Album";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Featured Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        var artists = await library.GetArtistsPageAsync(null, 1, 10, CancellationToken.None);
+        var albumArtistTracks = await library.GetArtistTracksAsync("Cojones", CancellationToken.None);
+        var performerArtists = await library.GetArtistsPageAsync("Pavel", 1, 10, CancellationToken.None);
+
+        var artist = Assert.Single(artists.Items);
+        Assert.Equal("Cojones", artist.Artist);
+        Assert.Equal(3, artist.TrackCount);
+        Assert.Equal(1, artist.AlbumCount);
+        Assert.Equal(3, albumArtistTracks.Count);
+        Assert.All(albumArtistTracks, track => Assert.Equal("Cojones", track.AlbumArtist));
+        Assert.Empty(performerArtists.Items);
+    }
+
+    [Fact]
+    public async Task FolderBrowserListsPhysicalDirectoriesAndFilesBeforeScanning()
+    {
+        var artistDirectory = Path.Combine(sourceDirectory, "Artist");
+        var albumDirectory = Path.Combine(artistDirectory, "Album");
+        Directory.CreateDirectory(albumDirectory);
+        await System.IO.File.WriteAllTextAsync(Path.Combine(sourceDirectory, "readme.txt"), "music library");
+        await System.IO.File.WriteAllTextAsync(Path.Combine(albumDirectory, "track.mp3"), "unscanned track");
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Browse Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+
+        var folderRoots = await library.GetLibraryFolderRootsAsync(CancellationToken.None);
+        var rootContents = await library.BrowseLibraryFolderAsync(root.Id, "", CancellationToken.None);
+        var artistContents = await library.BrowseLibraryFolderAsync(root.Id, "Artist", CancellationToken.None);
+        var albumContents = await library.BrowseLibraryFolderAsync(root.Id, "Artist/Album", CancellationToken.None);
+
+        Assert.Equal("Browse Music", Assert.Single(folderRoots).Name);
+        Assert.NotNull(rootContents);
+        Assert.Equal("Artist", Assert.Single(rootContents.Folders).Name);
+        Assert.Equal("readme.txt", Assert.Single(rootContents.Files).Name);
+        Assert.NotNull(artistContents);
+        Assert.Equal("Album", Assert.Single(artistContents.Folders).Name);
+        Assert.NotNull(albumContents);
+        Assert.Equal("track.mp3", Assert.Single(albumContents.Files).Name);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            library.BrowseLibraryFolderAsync(root.Id, "../outside", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ScanPreservesSlashesInMultiValueArtistTags()
     {
         var albumDirectory = Path.Combine(sourceDirectory, "Back in Black");
@@ -157,7 +380,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ArtistAndAlbumDescriptionsAndImagesCanBeEditedAndPersisted()
+    public async Task ArtistDescriptionAndImagesCanBeEditedAndPersisted()
     {
         var albumDirectory = Path.Combine(sourceDirectory, "Metadata Album");
         Directory.CreateDirectory(albumDirectory);
@@ -179,20 +402,34 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         }, CancellationToken.None);
         await library.ScanAsync(root.Id, CancellationToken.None);
 
-        await library.UpdateMetadataDescriptionAsync(new MetadataDescriptionRequest
+        await library.UpdateArtistDescriptionAsync(new MetadataDescriptionRequest
         {
             Artist = "Metadata Artist",
             Description = "  Artist biography.  ",
-        }, album: false, CancellationToken.None);
-        await library.UpdateMetadataDescriptionAsync(new MetadataDescriptionRequest
+        }, CancellationToken.None);
+        var track = Assert.Single(await library.GetTracksAsync(CancellationToken.None));
+        Assert.Equal("Metadata Track", track.Title);
+        var artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
+        Assert.Equal("Artist biography.", artistMetadata.Description);
+        Assert.True(artistMetadata.ImageMissing);
+
+        database.Tracks.Add(new MusicTrack
+        {
+            SourceRootId = root.Id,
+            FolderId = track.FolderId,
+            RelativePath = "Metadata Album/reference.wav",
+            Title = "Reference Track",
+            Artist = "Referenced Artist",
+            Album = "Reference Album",
+        });
+        await database.SaveChangesAsync();
+        await library.UpdateArtistDescriptionAsync(new MetadataDescriptionRequest
         {
             Artist = "Metadata Artist",
-            Album = "Metadata Album",
-            Description = "  Album notes.  ",
-        }, album: true, CancellationToken.None);
-        var track = Assert.Single(await library.GetTracksAsync(CancellationToken.None));
-        Assert.Equal("Artist biography.", track.ArtistDescription);
-        Assert.Equal("Album notes.", track.AlbumDescription);
+            Description = "Bio [a=Referenced Artist] [a=Missing Artist]",
+        }, CancellationToken.None);
+        artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
+        Assert.Equal(["Referenced Artist"], artistMetadata.ReferencedArtists);
 
         var imageBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a+2QAAAAASUVORK5CYII=");
         var cleanupPaths = new List<string>();
@@ -220,6 +457,9 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
                 "Afterhours", "metadata", "albums", album.ImageFileName!));
             Assert.False(artist.ImageMissing);
             Assert.False(album.ImageMissing);
+            artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
+            Assert.False(artistMetadata.ImageMissing);
+            Assert.Contains("/api/library/artists/", artistMetadata.ImageUrl);
             Assert.Equal(imageBytes, (await library.ResolveArtistImageAsync(artist.Key, CancellationToken.None))?.Data);
             Assert.Equal(imageBytes, (await library.ResolveCoverAsync(track.Id, CancellationToken.None))?.Data);
         }
@@ -250,7 +490,6 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal("artist-mbid", artist.MusicBrainzId);
         Assert.Equal("Fresh artist description.", artist.Description);
         Assert.Equal("album-mbid", album.MusicBrainzId);
-        Assert.Equal("Fresh album description.", album.Description);
         Assert.Equal(1, musicBrainz.ArtistLookups);
         Assert.Equal(1, musicBrainz.AlbumLookups);
     }
@@ -291,6 +530,104 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal(2, musicBrainz.ArtistLookups);
         Assert.Equal(1, musicBrainz.AlbumLookups);
         Assert.Equal((3, 3), progress[^1]);
+    }
+
+    [Fact]
+    public async Task AlbumMetadataRefreshUsesTheConfiguredProviderToResolveAlbumNames()
+    {
+        var provider = new StubAlbumProvider();
+        await providerSettings.UpdateAsync(
+            "discogs",
+            new Dictionary<string, string?> { ["token"] = "test-token" },
+            CancellationToken.None);
+        await providerSettings.UpdateDefaultAlbumProviderAsync("discogs", CancellationToken.None);
+        musicBrainz.AlbumResult = new MusicBrainzResult("resolved-mbid", "Resolved description.", null, null);
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database),
+            [provider],
+            providerSettings);
+
+        var result = await library.RefreshAlbumMetadataAsync(
+            "Tagged Artist",
+            "Tagged Album",
+            CancellationToken.None);
+
+        Assert.True(result.Found);
+        Assert.Equal(1, provider.SearchCount);
+        Assert.Equal("Matched Artist", musicBrainz.LastAlbumArtist);
+        Assert.Equal("Matched Album", musicBrainz.LastAlbumTitle);
+    }
+
+    [Fact]
+    public async Task SelectedAlbumCandidateCanBePreviewedBeforeItIsSaved()
+    {
+        var provider = new StubAlbumProvider();
+        await providerSettings.UpdateAsync(
+            "discogs",
+            new Dictionary<string, string?> { ["token"] = "test-token" },
+            CancellationToken.None);
+        musicBrainz.AlbumResult = new MusicBrainzResult("resolved-mbid", "Candidate description.", null, null);
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database),
+            [provider],
+            providerSettings);
+
+        var preview = await library.PreviewAlbumMetadataAsync(
+            "Tagged Artist",
+            "Tagged Album",
+            "discogs",
+            "match-id",
+            CancellationToken.None);
+
+        Assert.True(preview.Found);
+        Assert.Equal("Candidate description.", preview.Description);
+        Assert.Empty(await database.AlbumMetadata.ToListAsync());
+
+        var saved = await library.RefreshAlbumMetadataAsync(
+            "Tagged Artist",
+            "Tagged Album",
+            "discogs",
+            "match-id",
+            CancellationToken.None);
+
+        Assert.True(saved.Found);
+        Assert.Equal("Candidate description.", saved.Description);
+        Assert.Equal(2, provider.GetCount);
+    }
+
+    [Fact]
+    public async Task ArtistRefreshSavesTheExplicitlySelectedProviderCandidate()
+    {
+        var provider = new StubArtistProvider();
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            musicBrainz,
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database),
+            [],
+            null,
+            null,
+            [provider]);
+
+        var result = await library.RefreshArtistMetadataAsync(
+            "Tagged Artist",
+            "discogs",
+            "artist-id",
+            CancellationToken.None);
+
+        Assert.True(result.Found);
+        Assert.Equal("Selected artist profile.", result.Description);
+        Assert.Equal("Selected artist profile.", (await database.ArtistMetadata.SingleAsync()).Description);
+        Assert.Equal(0, musicBrainz.ArtistLookups);
     }
 
     [Fact]
@@ -399,5 +736,57 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         public string EnvironmentName { get; set; } = "Testing";
         public string ContentRootPath { get; set; } = Path.GetTempPath();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class StubAlbumProvider : IAlbumProvider
+    {
+        public string Id => "discogs";
+        public string Name => "Discogs";
+        public bool IsConfigured => true;
+        public int SearchCount { get; private set; }
+        public int GetCount { get; private set; }
+
+        private AlbumMatchResponse Match =>
+            new(Id, "match-id", "Matched Artist", "Matched Album", 2024, 10, null, null);
+
+        public Task<IReadOnlyList<AlbumMatchResponse>> SearchAsync(
+            string? artist,
+            string? album,
+            int? year,
+            CancellationToken cancellationToken)
+        {
+            SearchCount++;
+            return Task.FromResult<IReadOnlyList<AlbumMatchResponse>>([Match]);
+        }
+
+        public Task<AlbumMatchDetailResponse?> GetAsync(string id, CancellationToken cancellationToken)
+        {
+            GetCount++;
+            return Task.FromResult<AlbumMatchDetailResponse?>(
+                new AlbumMatchDetailResponse(Match, "Rock", null, []));
+        }
+    }
+
+    private sealed class StubArtistProvider : IArtistProvider
+    {
+        public string Id => "discogs";
+        public string Name => "Discogs";
+        public bool IsConfigured => true;
+
+        public Task<IReadOnlyList<ArtistMatchResponse>> SearchArtistsAsync(
+            string artist,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<ArtistMatchResponse>>(
+                [new ArtistMatchResponse(Id, "artist-id", "Selected Artist", null, null)]);
+
+        public Task<ArtistProviderDetail?> GetArtistAsync(string id, CancellationToken cancellationToken) =>
+            Task.FromResult<ArtistProviderDetail?>(
+                new ArtistProviderDetail(
+                    new ArtistMatchResponse(Id, id, "Selected Artist", null, null),
+                    "Selected artist profile.",
+                    null,
+                    null,
+                    null,
+                    null));
     }
 }

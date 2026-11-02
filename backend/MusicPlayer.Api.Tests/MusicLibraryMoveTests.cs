@@ -5,6 +5,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Services;
+using MusicPlayer.Api.Services.Identification;
 
 namespace MusicPlayer.Api.Tests;
 
@@ -65,7 +66,12 @@ public sealed class MusicLibraryMoveTests : IAsyncLifetime
         database.Tracks.Add(track);
         await database.SaveChangesAsync();
         trackId = track.Id;
-        library = new MusicLibraryService(database, new TestWebHostEnvironment(), new StubMusicBrainzClient(), NullLogger<MusicLibraryService>.Instance);
+        library = new MusicLibraryService(
+            database,
+            new TestWebHostEnvironment(),
+            new StubMusicBrainzClient(),
+            NullLogger<MusicLibraryService>.Instance,
+            new MusicLibraryBrowseService(database));
     }
 
     public async Task DisposeAsync()
@@ -144,6 +150,23 @@ public sealed class MusicLibraryMoveTests : IAsyncLifetime
         Assert.False(await database.Tracks.AnyAsync(track => track.SourceRootId == sourceRootId));
         Assert.True(System.IO.File.Exists(rootFile));
         Assert.Equal(audioBytes, await System.IO.File.ReadAllBytesAsync(rootFile));
+    }
+
+    [Fact]
+    public async Task FailedDirectoryCopyDoesNotDeleteAnExistingDestination()
+    {
+        var source = Path.Combine(testDirectory, "copy-source");
+        var destination = Path.Combine(testDirectory, "copy-destination");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(destination);
+        await System.IO.File.WriteAllTextAsync(Path.Combine(source, "source.txt"), "source");
+        var existingFile = Path.Combine(destination, "existing.txt");
+        await System.IO.File.WriteAllTextAsync(existingFile, "keep");
+
+        Assert.Throws<IOException>(() => AlbumIdentificationService.CopyDirectory(source, destination));
+
+        Assert.Equal("keep", await System.IO.File.ReadAllTextAsync(existingFile));
+        Assert.Empty(Directory.GetDirectories(testDirectory, "copy-destination.copying-*"));
     }
 
     private sealed class TestWebHostEnvironment : IWebHostEnvironment

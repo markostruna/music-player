@@ -1,5 +1,6 @@
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
+using MusicPlayer.Api.Services;
 using MusicPlayer.Api.Services.Identification;
 
 namespace MusicPlayer.Api.Endpoints;
@@ -15,6 +16,66 @@ public static class IdentifyEndpoints
         identify.MapGet("/providers", (IAlbumIdentificationService service) => TypedResults.Ok(service.GetProviders()))
             .WithName("ListIdentifyProviders")
             .WithSummary("Lists album identification providers and whether they are configured.");
+
+        identify.MapPost("/artists/search", (
+            ArtistSearchRequest request,
+            IEnumerable<IArtistProvider> providers,
+            CancellationToken ct) =>
+                Run(async () =>
+                {
+                    var provider = GetArtistProvider(providers, request.Provider);
+                    return TypedResults.Ok(await provider.SearchArtistsAsync(request.Artist, ct));
+                }))
+            .AddEndpointFilter<CsrfEndpointFilter>()
+            .WithName("SearchArtistMatches")
+            .WithSummary("Searches an artist metadata provider for matching candidates.");
+
+        identify.MapGet("/artists/matches/{provider}/{id}", (
+            string provider,
+            string id,
+            IEnumerable<IArtistProvider> providers,
+            IMusicBrainzClient musicBrainz,
+            CancellationToken ct) =>
+                Run(async () =>
+                {
+                    var detail = await GetArtistProvider(providers, provider).GetArtistAsync(id, ct);
+                    if (detail is null)
+                    {
+                        return TypedResults.NotFound();
+                    }
+
+                    var description = detail.Description;
+                    var previewImage = detail.Image;
+                    var previewContentType = detail.ImageContentType;
+                    var imageProvider = detail.ImageProvider;
+                    if (string.IsNullOrWhiteSpace(description)
+                        && !provider.Equals("musicbrainz", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var linked = await musicBrainz.FindArtistAsync(detail.Match.Name, ct);
+                        if (linked is not null)
+                        {
+                            description = linked.Description;
+                            if (string.IsNullOrWhiteSpace(detail.ImageUrl))
+                            {
+                                previewImage ??= linked.Image;
+                                previewContentType ??= linked.ImageContentType;
+                                imageProvider ??= linked.ImageProvider;
+                            }
+                        }
+                    }
+
+                    var imageDataUrl = previewImage is not null && previewContentType is not null
+                        ? $"data:{previewContentType};base64,{Convert.ToBase64String(previewImage)}"
+                        : null;
+                    return TypedResults.Ok(new ArtistMatchDetailResponse(
+                        detail.Match,
+                        description,
+                        detail.ImageUrl,
+                        imageDataUrl,
+                        imageProvider));
+                }))
+            .WithName("GetArtistMatch")
+            .WithSummary("Gets description and image details for one artist match.");
 
         identify.MapPost("/suggestions", (AlbumSuggestionsRequest request, IAlbumIdentificationService service, CancellationToken ct) =>
                 Run(async () => TypedResults.Ok(await service.SuggestAsync(request, ct))))
@@ -103,4 +164,9 @@ public static class IdentifyEndpoints
                 statusCode: StatusCodes.Status409Conflict);
         }
     }
+
+    private static IArtistProvider GetArtistProvider(IEnumerable<IArtistProvider> providers, string id) =>
+        providers.FirstOrDefault(provider => provider.Id.Equals(id, StringComparison.OrdinalIgnoreCase)
+            && provider.IsConfigured)
+        ?? throw new ArgumentException("The selected artist provider is unknown or not configured.");
 }

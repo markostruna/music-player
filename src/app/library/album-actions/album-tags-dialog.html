@@ -1,0 +1,97 @@
+<div class="dialog-backdrop" (click)="close()"></div>
+<div
+  class="dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="tags-dialog-title"
+  (keydown.escape)="close()"
+>
+  <header class="dialog-header">
+    <div>
+      <h2 id="tags-dialog-title">Edit tags</h2>
+      <p>{{ album().title }} · {{ album().artist }}</p>
+    </div>
+    <button type="button" class="icon-button" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  @if (error()) {
+    <p class="dialog-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="dialog-body">
+    @if (showLookup()) {
+      <h3>Fill tags from a provider</h3>
+      <app-album-match-picker
+        [trackIds]="trackIds()"
+        [artist]="album().artist"
+        [album]="album().title"
+        actionLabel="Use these tags"
+        [disabled]="busy()"
+        (picked)="applyMatch($event)"
+      />
+      <div class="actions">
+        <button type="button" class="secondary" (click)="showLookup.set(false)">
+          Back to editing
+        </button>
+      </div>
+    } @else {
+      <div class="review-grid">
+        <label class="field"
+          ><span>Album title</span><input [(ngModel)]="albumTitle" maxlength="1024"
+        /></label>
+        <label class="field"
+          ><span>Album artist</span><input [(ngModel)]="albumArtist" maxlength="1024"
+        /></label>
+        <label class="field"
+          ><span>Year</span><input type="number" min="0" max="3000" [(ngModel)]="year"
+        /></label>
+        <label class="field"
+          ><span>Genre</span><input [(ngModel)]="genre" maxlength="256"
+        /></label>
+      </div>
+      <div class="table-wrap">
+        <table class="track-table">
+          <thead>
+            <tr>
+              <th>Disc</th>
+              <th>#</th>
+              <th>Title</th>
+              <th>Artist</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.id; let i = $index) {
+              <tr>
+                <td>
+                  <input type="number" min="0" [ngModel]="row.discNumber" (ngModelChange)="updateRow(i, 'discNumber', $event)" />
+                </td>
+                <td>
+                  <input type="number" min="0" [ngModel]="row.trackNumber" (ngModelChange)="updateRow(i, 'trackNumber', $event)" />
+                </td>
+                <td>
+                  <input [ngModel]="row.title" (ngModelChange)="updateRow(i, 'title', $event)" maxlength="1024" [attr.aria-label]="'Title of ' + row.fileName" />
+                </td>
+                <td>
+                  <input [ngModel]="row.artist" (ngModelChange)="updateRow(i, 'artist', $event)" maxlength="1024" />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">Saving writes these tags to the audio files.</p>
+      <div class="actions">
+        <button type="button" class="secondary" [disabled]="!tracks().length || busy()" (click)="showLookup.set(true)">
+          Fill from provider…
+        </button>
+        <button type="button" class="secondary" [disabled]="busy()" (click)="close()">Cancel</button>
+        <button type="button" [disabled]="!tracks().length || busy()" (click)="save()">
+          Save tags
+        </button>
+      </div>
+    }
+    @if (busy()) {
+      <p class="hint" aria-live="polite">Working…</p>
+    }
+  </div>
+</div>

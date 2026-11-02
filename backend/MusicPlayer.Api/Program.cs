@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using MusicPlayer.Api.Data;
@@ -12,6 +13,8 @@ using MusicPlayer.Api.Services.Identification;
 var builder = WebApplication.CreateBuilder(args);
 var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterhours");
 Directory.CreateDirectory(dataDirectory);
+var dataProtectionDirectory = Path.Combine(dataDirectory, "keys");
+Directory.CreateDirectory(dataProtectionDirectory);
 builder.Configuration
     .AddJsonFile(Path.Combine(dataDirectory, "appsettings.json"), optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
@@ -19,7 +22,12 @@ var databasePath = Environment.GetEnvironmentVariable("MUSICPLAYER_DATABASE_PATH
 
 builder.WebHost.UseUrls(builder.Configuration["Api:Url"] ?? "http://127.0.0.1:5080");
 builder.Services.AddDbContext<MusicDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
+builder.Services.AddDataProtection()
+    .SetApplicationName("Afterhours")
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionDirectory));
+builder.Services.AddScoped<IProviderSettingsService, ProviderSettingsService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<MusicLibraryBrowseService>();
 builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
 builder.Services.AddSingleton<LibraryOperationManager>();
 builder.Services.AddHostedService<LibraryOperationManager>(provider =>
@@ -34,6 +42,10 @@ builder.Services.AddHttpClient<SpotifyAlbumProvider>(client => client.Timeout = 
 builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<MusicBrainzAlbumProvider>());
 builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<DiscogsAlbumProvider>());
 builder.Services.AddTransient<IAlbumProvider>(provider => provider.GetRequiredService<SpotifyAlbumProvider>());
+builder.Services.AddTransient<IArtistProvider>(provider =>
+    (IArtistProvider)provider.GetRequiredService<IMusicBrainzClient>());
+builder.Services.AddTransient<IArtistProvider>(provider => provider.GetRequiredService<DiscogsAlbumProvider>());
+builder.Services.AddTransient<IArtistProvider>(provider => provider.GetRequiredService<SpotifyAlbumProvider>());
 builder.Services.AddSingleton<SafeImageFetcher>();
 builder.Services.AddHttpClient<IAlbumIdentificationService, AlbumIdentificationService>(client =>
     client.Timeout = TimeSpan.FromSeconds(15));
@@ -116,35 +128,9 @@ if (app.Environment.IsDevelopment())
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var database = scope.ServiceProvider.GetRequiredService<MusicDbContext>();
-    await database.Database.EnsureCreatedAsync();
-    await database.Database.ExecuteSqlRawAsync("""
-        CREATE TABLE IF NOT EXISTS "ArtistMetadata" (
-            "Key" TEXT NOT NULL CONSTRAINT "PK_ArtistMetadata" PRIMARY KEY,
-            "Artist" TEXT NOT NULL,
-            "Description" TEXT NOT NULL,
-            "DescriptionEdited" INTEGER NOT NULL,
-            "MusicBrainzId" TEXT NOT NULL,
-            "ImageFileName" TEXT NULL,
-            "ImageSourceRootId" INTEGER NULL,
-            "ImageRelativePath" TEXT NULL,
-            "ImageMissing" INTEGER NOT NULL,
-            "UpdatedAt" TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS "AlbumMetadata" (
-            "Key" TEXT NOT NULL CONSTRAINT "PK_AlbumMetadata" PRIMARY KEY,
-            "Artist" TEXT NOT NULL,
-            "Album" TEXT NOT NULL,
-            "Description" TEXT NOT NULL,
-            "DescriptionEdited" INTEGER NOT NULL,
-            "MusicBrainzId" TEXT NOT NULL,
-            "ImageFileName" TEXT NULL,
-            "ImageSourceRootId" INTEGER NULL,
-            "ImageRelativePath" TEXT NULL,
-            "ImageMissing" INTEGER NOT NULL,
-            "UpdatedAt" TEXT NOT NULL
-        );
-        """);
-    await EnsureMetadataImageColumnsAsync(database);
+    await DatabaseMigrationInitializer.MigrateAsync(database, app.Lifetime.ApplicationStopping);
+    var providerSettings = scope.ServiceProvider.GetRequiredService<IProviderSettingsService>();
+    await providerSettings.LoadOverridesAsync(app.Lifetime.ApplicationStopping);
     var accounts = scope.ServiceProvider.GetRequiredService<IAccountService>();
     await accounts.BootstrapAdminAsync(
         Environment.GetEnvironmentVariable("MUSICPLAYER_BOOTSTRAP_EMAIL"),
@@ -157,53 +143,10 @@ app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" }))
     .WithSummary("Checks whether the music API is available.");
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapProviderSettingsEndpoints();
 app.MapLibraryEndpoints();
 app.MapIdentifyEndpoints();
 
 app.Run();
-
-static async Task EnsureMetadataImageColumnsAsync(MusicDbContext database)
-{
-    var connection = database.Database.GetDbConnection();
-    var openedHere = connection.State != System.Data.ConnectionState.Open;
-    if (openedHere) await connection.OpenAsync();
-
-    try
-    {
-        foreach (var (table, column, definition) in new[]
-        {
-            ("ArtistMetadata", "ImageSourceRootId", "INTEGER NULL"),
-            ("ArtistMetadata", "ImageRelativePath", "TEXT NULL"),
-            ("AlbumMetadata", "ImageSourceRootId", "INTEGER NULL"),
-            ("AlbumMetadata", "ImageRelativePath", "TEXT NULL"),
-        })
-        {
-            await using var inspect = connection.CreateCommand();
-            inspect.CommandText = $"PRAGMA table_info(\"{table}\")";
-            await using var reader = await inspect.ExecuteReaderAsync();
-            var found = false;
-            while (await reader.ReadAsync())
-            {
-                if (string.Equals(reader.GetString(1), column, StringComparison.Ordinal))
-                {
-                    found = true;
-                    break;
-                }
-            }
-
-            await reader.DisposeAsync();
-            if (!found)
-            {
-                await using var alter = connection.CreateCommand();
-                alter.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {definition}";
-                await alter.ExecuteNonQueryAsync();
-            }
-        }
-    }
-    finally
-    {
-        if (openedHere) await connection.CloseAsync();
-    }
-}
 
 public partial class Program;

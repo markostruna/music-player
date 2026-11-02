@@ -13,11 +13,6 @@ public sealed class MusicAlbumMetadata
     [MaxLength(1024)]
     public required string Album { get; set; }
 
-    [MaxLength(20000)]
-    public string Description { get; set; } = "";
-
-    public bool DescriptionEdited { get; set; }
-
     [MaxLength(64)]
     public string MusicBrainzId { get; set; } = "";
 

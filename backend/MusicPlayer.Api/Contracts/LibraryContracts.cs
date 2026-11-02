@@ -18,11 +18,23 @@ public sealed record SourceRootResponse(int Id, string Name, string Path, int Tr
 /// <summary>A browsable directory inside a configured source.</summary>
 public sealed record MusicFolderResponse(int Id, int SourceRootId, string Name, string RelativePath);
 
+public sealed record MusicFolderBrowseEntryResponse(int SourceRootId, string Name, string RelativePath);
+
+public sealed record MusicFolderFileResponse(string Name, string RelativePath);
+
+public sealed record MusicFolderContentsResponse(
+    int SourceRootId,
+    string RootName,
+    string RelativePath,
+    IReadOnlyList<MusicFolderBrowseEntryResponse> Folders,
+    IReadOnlyList<MusicFolderFileResponse> Files);
+
 /// <summary>A catalog entry available for browsing and playback.</summary>
 public sealed record TrackResponse(
     int Id,
     int SourceRootId,
     int FolderId,
+    string RelativePath,
     string Title,
     string Artist,
     string Album,
@@ -34,16 +46,47 @@ public sealed record TrackResponse(
     double DurationSeconds,
     string StreamUrl,
     string CoverUrl,
-    string FileExtension,
-    string AlbumDescription,
-    string ArtistDescription,
+    string FileExtension);
+
+public sealed record ArtistMetadataResponse(
+    string Description,
+    string? ImageUrl,
+    bool ImageMissing,
+    IReadOnlyList<string> ReferencedArtists);
+
+public sealed record PagedResponse<T>(
+    IReadOnlyList<T> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
+
+public sealed record AlbumSummaryResponse(
+    string Album,
+    string Artist,
+    uint? ReleaseYear,
+    int TrackCount,
+    double DurationSeconds,
+    int CoverTrackId,
+    string CoverUrl);
+
+public sealed record ArtistSummaryResponse(
+    string Artist,
+    int TrackCount,
+    int AlbumCount,
+    string CoverUrl,
     string ArtistImageUrl,
-    bool ArtistImageMissing,
-    string AlbumArtistDescription,
-    string AlbumArtistImageUrl,
-    bool AlbumArtistImageMissing);
+    bool ArtistImageMissing);
 
 public sealed record MetadataDescriptionRequest
+{
+    [Required, MaxLength(1024)]
+    public required string Artist { get; init; }
+
+    [MaxLength(20000)]
+    public string Description { get; init; } = "";
+}
+
+public sealed record MetadataRefreshRequest
 {
     [Required, MaxLength(1024)]
     public required string Artist { get; init; }
@@ -51,9 +94,19 @@ public sealed record MetadataDescriptionRequest
     [MaxLength(1024)]
     public string Album { get; init; } = "";
 
-    [MaxLength(20000)]
-    public string Description { get; init; } = "";
+    [MaxLength(40)]
+    public string ProviderId { get; init; } = "";
+
+    [MaxLength(128)]
+    public string CandidateId { get; init; } = "";
 }
+
+public sealed record MetadataRefreshPreviewResponse(
+    bool Found,
+    string MusicBrainzId,
+    string Description,
+    string? ImageDataUrl,
+    string? ImageProvider);
 
 public sealed record MetadataImageRequest
 {

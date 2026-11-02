@@ -5,6 +5,29 @@ namespace MusicPlayer.Api.Contracts;
 /// <summary>An album identification provider and whether its credentials are configured.</summary>
 public sealed record IdentifyProviderResponse(string Id, string Name, bool IsConfigured);
 
+public sealed record ArtistMatchResponse(
+    string Provider,
+    string Id,
+    string Name,
+    string? Detail,
+    string? ImageUrl);
+
+public sealed record ArtistMatchDetailResponse(
+    ArtistMatchResponse Match,
+    string Description,
+    string? ImageUrl,
+    string? ImageDataUrl,
+    string? ImageProvider);
+
+public sealed record ArtistSearchRequest
+{
+    [Required, MaxLength(40)]
+    public required string Provider { get; init; }
+
+    [Required, MaxLength(512)]
+    public required string Artist { get; init; }
+}
+
 /// <summary>A candidate album returned by an identification provider.</summary>
 public sealed record AlbumMatchResponse(
     string Provider,

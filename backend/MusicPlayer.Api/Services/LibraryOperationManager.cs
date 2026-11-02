@@ -15,23 +15,22 @@ public sealed class LibraryOperationManager(
     private readonly object sync = new();
     private readonly Dictionary<Guid, LibraryOperationStatus> history = [];
     private readonly Queue<Guid> historyOrder = new();
+    private readonly HashSet<int> rootsBeingRemoved = [];
     private LibraryOperationStatus? current;
 
-    public bool TryStart(
+    public LibraryOperationStatus? TryStart(
         int rootId,
         string rootName,
-        string operationType,
-        out LibraryOperationStatus status)
+        string operationType)
     {
         lock (sync)
         {
-            if (current is { State: "queued" or "running" })
+            if (current is { State: "queued" or "running" } || rootsBeingRemoved.Count > 0)
             {
-                status = current;
-                return false;
+                return null;
             }
 
-            status = new LibraryOperationStatus(
+            var status = new LibraryOperationStatus(
                 Guid.NewGuid(),
                 rootId,
                 rootName,
@@ -62,7 +61,28 @@ public sealed class LibraryOperationManager(
                 }
             }
 
+            return status;
+        }
+    }
+
+    public bool TryBeginRootRemoval(int rootId)
+    {
+        lock (sync)
+        {
+            if (current is { State: "queued" or "running" } || !rootsBeingRemoved.Add(rootId))
+            {
+                return false;
+            }
+
             return true;
+        }
+    }
+
+    public void EndRootRemoval(int rootId)
+    {
+        lock (sync)
+        {
+            rootsBeingRemoved.Remove(rootId);
         }
     }
 

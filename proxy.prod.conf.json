@@ -1,0 +1,10 @@
+{
+  "/music-api": {
+    "target": "https://tusvob.ddns.net",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/music-api": "/music-api"
+    }
+  }
+}

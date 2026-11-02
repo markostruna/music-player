@@ -1,0 +1,68 @@
+<div class="dialog-backdrop" (click)="close()"></div>
+<div
+  class="dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="move-dialog-title"
+  (keydown.escape)="close()"
+>
+  <header class="dialog-header">
+    <div>
+      <h2 id="move-dialog-title">Move album</h2>
+      <p>{{ album().title }} · {{ album().artist }}</p>
+    </div>
+    <button type="button" class="icon-button" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  @if (error()) {
+    <p class="dialog-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="dialog-body">
+    @if (result()) {
+      <p>{{ result() }}</p>
+      <div class="actions">
+        <button type="button" (click)="close()">Close</button>
+      </div>
+    } @else {
+      <p>
+        Move the album folder, with all tracks, pictures and subfolders, to
+        <code>&lt;artist&gt;/&lt;year&gt; - &lt;album&gt;</code>.
+      </p>
+      <label class="field">
+        <span>Destination library</span>
+        <select
+          [ngModel]="destinationRootId"
+          (ngModelChange)="changeDestination($event)"
+          [disabled]="busy() || !tracks().length"
+        >
+          @for (root of roots(); track root.id) {
+            <option [ngValue]="root.id">{{ root.name }} — {{ root.path }}</option>
+          }
+        </select>
+      </label>
+      @if (plan(); as plan) {
+        <dl class="move-plan">
+          @if (plan.sourcePath) {
+            <dt>From</dt>
+            <dd>{{ plan.sourcePath }}</dd>
+          }
+          <dt>To</dt>
+          <dd>{{ plan.destinationPath }}</dd>
+        </dl>
+        @if (!plan.canMove) {
+          <p class="dialog-error">{{ plan.reason }}</p>
+        }
+      }
+      <div class="actions">
+        <button type="button" class="secondary" [disabled]="busy()" (click)="close()">Cancel</button>
+        <button type="button" [disabled]="!plan()?.canMove || busy()" (click)="move()">
+          Move album
+        </button>
+      </div>
+    }
+    @if (busy()) {
+      <p class="hint" aria-live="polite">Working…</p>
+    }
+  </div>
+</div>

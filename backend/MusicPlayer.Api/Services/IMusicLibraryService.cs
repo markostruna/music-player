@@ -8,19 +8,82 @@ public interface IMusicLibraryService
     Task<SourceRootResponse> AddRootAsync(CreateSourceRootRequest request, CancellationToken cancellationToken);
     Task<bool> RemoveRootAsync(int rootId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MusicFolderResponse>> GetFoldersAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<MusicFolderBrowseEntryResponse>> GetLibraryFolderRootsAsync(
+        CancellationToken cancellationToken);
+    Task<MusicFolderContentsResponse?> BrowseLibraryFolderAsync(
+        int sourceRootId,
+        string? relativePath,
+        CancellationToken cancellationToken);
     Task<ScanResponse> ScanAsync(int rootId, CancellationToken cancellationToken);
     Task<RootMetadataRefreshResponse> RefreshRootMetadataAsync(
         int rootId,
         Action<int, int, string> reportProgress,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<TrackResponse>> SearchTracksAsync(
+        string? query,
+        CancellationToken cancellationToken,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null);
+    Task<PagedResponse<TrackResponse>> GetTracksPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool random = false,
+        int? folderId = null,
+        int? sourceRootId = null,
+        string? folderPath = null);
+    Task<PagedResponse<AlbumSummaryResponse>> GetAlbumsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool random = false);
+    Task<IReadOnlyList<TrackResponse>> GetArtistTracksAsync(
+        string artist,
+        CancellationToken cancellationToken);
+    Task<ArtistMetadataResponse> GetArtistMetadataAsync(
+        string artist,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<TrackResponse>> GetAlbumTracksByTrackIdAsync(
+        int trackId,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<TrackResponse>> GetAlbumTracksAsync(
+        string artist,
+        string album,
+        CancellationToken cancellationToken);
+    Task<PagedResponse<ArtistSummaryResponse>> GetArtistsPageAsync(
+        string? query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool random = false);
     Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken);
     Task<ResolvedMedia?> ResolveStreamAsync(int trackId, CancellationToken cancellationToken);
     Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken);
     Task<CoverImage?> ResolveArtistImageAsync(string key, CancellationToken cancellationToken);
     Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(string artist, CancellationToken cancellationToken);
+    Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(
+        string artist,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken);
     Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(string artist, string album, CancellationToken cancellationToken);
-    Task UpdateMetadataDescriptionAsync(MetadataDescriptionRequest request, bool album, CancellationToken cancellationToken);
+    Task<MetadataRefreshResponse> RefreshAlbumMetadataAsync(
+        string artist,
+        string album,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken);
+    Task<MetadataRefreshPreviewResponse> PreviewAlbumMetadataAsync(
+        string artist,
+        string album,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken);
+    Task UpdateArtistDescriptionAsync(MetadataDescriptionRequest request, CancellationToken cancellationToken);
     Task UpdateMetadataImageAsync(MetadataImageRequest request, bool album, CancellationToken cancellationToken);
     Task<BatchMutationResponse> UpdateMetadataAsync(int[] trackIds, MusicMetadataPatch changes, CancellationToken cancellationToken);
     Task<BatchMutationResponse> UpdateCoverAsync(int[] trackIds, byte[] image, CancellationToken cancellationToken);

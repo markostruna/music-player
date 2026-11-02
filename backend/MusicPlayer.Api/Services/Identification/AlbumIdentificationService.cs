@@ -152,10 +152,12 @@ public sealed partial class AlbumIdentificationService(
             candidates.Add(RemoteCandidate(
                 "caa", "Cover Art Archive", "Cover Art Archive front cover",
                 $"https://coverartarchive.org/release-group/{releaseGroupId}/front-500"));
-            var apiKey = configuration["FanartTv:ApiKey"] ?? configuration["FanartTv:ClientKey"];
+            var apiKey = string.IsNullOrWhiteSpace(configuration["FanartTv:ApiKey"])
+                ? configuration["FanartTv:ClientKey"]
+                : configuration["FanartTv:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                warnings.Add("fanart.tv covers are unavailable because FanartTv:ApiKey is not configured.");
+                warnings.Add("fanart.tv covers are unavailable because an API key is not configured.");
             }
             else
             {
@@ -366,14 +368,15 @@ public sealed partial class AlbumIdentificationService(
         }
     }
 
-    private static void CopyDirectory(string source, string destination)
+    internal static void CopyDirectory(string source, string destination)
     {
+        var stagingDirectory = $"{destination}.copying-{Guid.NewGuid():N}";
         try
         {
-            Directory.CreateDirectory(destination);
+            Directory.CreateDirectory(stagingDirectory);
             foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
             {
-                var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+                var target = Path.Combine(stagingDirectory, Path.GetRelativePath(source, file));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 File.Copy(file, target);
                 if (new FileInfo(file).Length != new FileInfo(target).Length)
@@ -384,12 +387,14 @@ public sealed partial class AlbumIdentificationService(
 
             foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
             {
-                Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+                Directory.CreateDirectory(Path.Combine(stagingDirectory, Path.GetRelativePath(source, directory)));
             }
+
+            Directory.Move(stagingDirectory, destination);
         }
         catch
         {
-            if (Directory.Exists(destination)) Directory.Delete(destination, recursive: true);
+            if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, recursive: true);
             throw;
         }
     }

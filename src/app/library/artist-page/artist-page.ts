@@ -1,34 +1,51 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Location } from '@angular/common';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore } from '@shared/services/library-store';
-import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
+import {
+  MetadataRefreshResult,
+  MusicLibraryApi,
+  MusicTrack,
+} from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
+import { AlbumActions, AlbumRef } from '../album-actions/album-actions';
+import { MetadataRefreshDialog } from '../metadata-refresh-dialog/metadata-refresh-dialog';
+import { distinctUntilChanged, map } from 'rxjs';
 
 @Component({
   selector: 'app-artist-page',
-  imports: [RouterLink],
+  imports: [MetadataRefreshDialog, RouterLink],
   templateUrl: './artist-page.html',
 })
-export class ArtistPage implements OnInit {
+export class ArtistPage {
   private readonly auth = inject(AuthState);
   private readonly store = inject(LibraryStore);
+  readonly albumActions = inject(AlbumActions);
+  private lastChangeCount = this.albumActions.changeCount();
   private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
   private readonly toast = inject(ToastService);
-  private readonly params = toSignal(inject(ActivatedRoute).paramMap);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
+  private readonly params = toSignal(this.route.paramMap);
+  private readonly artistTracks = signal<MusicTrack[]>([]);
+  private readonly artistMetadata = signal<{
+    artist: string;
+    description: string;
+    imageUrl: string | null;
+    imageMissing: boolean;
+    referencedArtists: string[];
+  } | null>(null);
+  private readonly loadingError = signal('');
+  private artistRequestId = 0;
 
   readonly isAdmin = this.auth.isAdmin;
-  readonly isRefreshingInformation = signal(false);
+  readonly isMetadataDialogOpen = signal(false);
   readonly editingDescriptionArtist = signal<string | null>(null);
-  readonly isPictureDialogOpen = signal(false);
-  readonly picturePreviewUrl = signal('');
-  readonly pictureError = signal('');
-  readonly isSavingPicture = signal(false);
-  private readonly selectedPicture = signal<File | null>(null);
-  private readonly maxPictureSize = 10 * 1024 * 1024;
   private readonly refreshedInformation = signal<{
     artist: string;
     description: string;
@@ -39,21 +56,20 @@ export class ArtistPage implements OnInit {
   } | null>(null);
   descriptionDraft: string | null = null;
   private descriptionDraftArtist: string | null = null;
-  readonly isLoading = this.store.isLoading;
+  readonly isLoading = signal(true);
   readonly errorMessage = computed(() => {
-    if (this.store.errorMessage()) return this.store.errorMessage();
-    return !this.store.isLoading() && !this.artist()
+    if (this.loadingError()) return this.loadingError();
+    return !this.isLoading() && !this.artist()
       ? 'This artist could not be found in your library.'
       : '';
   });
   readonly artist = computed(() => {
     const name = (this.params()?.get('name') ?? '').trim().toLowerCase();
-    const tracks = this.store
-      .tracks()
+    const tracks = this.artistTracks()
       .filter(
         (track) =>
-          (track.artist.trim() || 'Unknown artist').toLowerCase() === name ||
-          (track.albumArtist.trim() || track.artist).toLowerCase() === name,
+          (track.albumArtist.trim() || track.artist.trim() || 'Unknown artist').toLowerCase() ===
+          name,
       );
     if (!tracks.length) return null;
 
@@ -62,7 +78,7 @@ export class ArtistPage implements OnInit {
       { key: string; title: string; coverUrl: string; year: number; tracks: MusicTrack[] }
     >();
     for (const track of tracks) {
-      const key = `${(track.albumArtist.trim() || track.artist).toLowerCase()}\u0000${track.album.toLowerCase()}`;
+      const key = `${(track.albumArtist.trim() || track.artist.trim() || 'Unknown artist').toLowerCase()}\u0000${track.album.toLowerCase()}`;
       const group = groups.get(key);
       if (group) {
         group.tracks.push(track);
@@ -79,26 +95,17 @@ export class ArtistPage implements OnInit {
     }
 
     const first = tracks[0];
-    const displayName =
-      [first.artist, first.albumArtist]
-        .find((value) => value.trim().toLowerCase() === name)
-        ?.trim() ?? name;
-    const isTrackArtist = (first.artist.trim() || 'Unknown artist').toLowerCase() === name;
+    const displayName = first.albumArtist.trim() || first.artist.trim() || 'Unknown artist';
     const refreshed =
       this.refreshedInformation()?.artist === name ? this.refreshedInformation() : null;
+    const metadata =
+      this.artistMetadata()?.artist === name ? this.artistMetadata() : null;
     return {
       name: displayName,
-      coverUrl:
-        refreshed?.imageUrl ||
-        (isTrackArtist
-          ? first.artistImageUrl || first.coverUrl
-          : first.albumArtistImageUrl || first.coverUrl),
-      imageMissing:
-        refreshed?.imageMissing ??
-        (isTrackArtist ? first.artistImageMissing : first.albumArtistImageMissing),
-      description:
-        refreshed?.description ??
-        (isTrackArtist ? first.artistDescription : first.albumArtistDescription),
+      coverUrl: refreshed?.imageUrl || metadata?.imageUrl || first.coverUrl,
+      imageMissing: refreshed?.imageMissing ?? metadata?.imageMissing ?? true,
+      description: refreshed?.description ?? metadata?.description ?? '',
+      referencedArtists: metadata?.referencedArtists ?? [],
       musicBrainzId: refreshed?.musicBrainzId ?? '',
       informationUpdatedAt: refreshed?.updatedAt ?? '',
       trackCount: tracks.length,
@@ -107,12 +114,102 @@ export class ArtistPage implements OnInit {
       ),
     };
   });
-  ngOnInit(): void {
-    void this.store.ensureLoaded();
+
+  constructor() {
+    effect(() => {
+      const changeCount = this.albumActions.changeCount();
+      if (changeCount === this.lastChangeCount) return;
+      this.lastChangeCount = changeCount;
+      const name = untracked(() => this.params()?.get('name'));
+      if (name) untracked(() => void this.loadArtist(name));
+    });
+    this.route.paramMap
+      .pipe(
+        map((params) => params.get('name') ?? ''),
+        distinctUntilChanged(),
+        takeUntilDestroyed(),
+      )
+      .subscribe((artist) => void this.loadArtist(artist));
+  }
+
+  private async loadArtist(artist: string): Promise<void> {
+    const requestId = ++this.artistRequestId;
+    this.isLoading.set(true);
+    this.loadingError.set('');
+    this.artistTracks.set([]);
+    this.artistMetadata.set(null);
+    this.refreshedInformation.set(null);
+    try {
+      const [tracks, metadata] = await Promise.all([
+        this.libraryApi.listArtistTracks(artist),
+        this.libraryApi.getArtistMetadata(artist),
+      ]);
+      if (requestId === this.artistRequestId) {
+        this.artistTracks.set(tracks);
+        this.artistMetadata.set({
+          artist: artist.toLowerCase(),
+          description: metadata.description,
+          imageUrl: metadata.imageUrl,
+          imageMissing: metadata.imageMissing,
+          referencedArtists: metadata.referencedArtists,
+        });
+      }
+    } catch {
+      if (requestId === this.artistRequestId) {
+        this.loadingError.set('The artist could not be loaded. Check the music server connection.');
+      }
+    } finally {
+      if (requestId === this.artistRequestId) this.isLoading.set(false);
+    }
+  }
+
+  albumRef(album: { title: string; tracks: MusicTrack[] }): AlbumRef {
+    const track = album.tracks[0];
+    return { artist: track.albumArtist.trim() || track.artist.trim(), title: album.title };
   }
 
   descriptionValue(artist: string, description: string): string {
     return this.descriptionDraftArtist === artist ? (this.descriptionDraft ?? '') : description;
+  }
+
+  formatDescription(description: string, referencedArtists: string[]): string {
+    const knownArtists = new Map(
+      referencedArtists.map((artist) => [artist.toLocaleLowerCase(), artist]),
+    );
+    return description
+      ? description
+          .replace(/\[a=([^\]]+)\]/gi, (_reference, artist: string) => {
+            const name = artist.trim();
+            const knownArtist = knownArtists.get(name.toLocaleLowerCase());
+            if (!knownArtist) return this.escapeHtml(name);
+            const tree = this.router.createUrlTree(['/library/artist', knownArtist]);
+            const href = this.location.prepareExternalUrl(this.router.serializeUrl(tree));
+            return `<a href="${this.escapeHtml(href)}">${this.escapeHtml(name)}</a>`;
+          })
+          .replace(/\[b\]/gi, '<strong>')
+          .replace(/\[\/b\]/gi, '</strong>')
+          .replace(/\[i\]/gi, '<em>')
+          .replace(/\[\/i\]/gi, '</em>')
+          .replace(/\[s\]/gi, '<s>')
+          .replace(/\[\/s\]/gi, '</s>')
+      : 'No artist description is available.';
+  }
+
+  private escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (character) => {
+      switch (character) {
+        case '&':
+          return '&amp;';
+        case '<':
+          return '&lt;';
+        case '>':
+          return '&gt;';
+        case '"':
+          return '&quot;';
+        default:
+          return '&#39;';
+      }
+    });
   }
 
   isEditingDescription(artist: string): boolean {
@@ -142,109 +239,51 @@ export class ArtistPage implements OnInit {
         this.descriptionDraftArtist === artist
           ? (this.descriptionDraft ?? '')
           : (this.artist()?.description ?? '');
-      await this.libraryApi.updateDescription(artist, null, description);
+      await this.libraryApi.updateArtistDescription(artist, description);
       this.descriptionDraft = null;
       this.descriptionDraftArtist = null;
       this.editingDescriptionArtist.set(null);
-      await this.store.refresh();
+      await this.store.refreshTracks();
+      await this.loadArtist(artist);
       this.toast.show('Artist description saved.', 'success');
     } catch {
       this.toast.show('The artist description could not be saved.', 'error');
     }
   }
 
-  openPictureDialog(): void {
-    this.pictureError.set('');
-    this.isPictureDialogOpen.set(true);
+  refreshInformation(): void {
+    this.isMetadataDialogOpen.set(true);
   }
 
-  closePictureDialog(): void {
-    if (this.isSavingPicture()) return;
-    this.clearPictureSelection();
-    this.pictureError.set('');
-    this.isPictureDialogOpen.set(false);
+  closeMetadataDialog(): void {
+    this.isMetadataDialogOpen.set(false);
   }
 
-  selectPicture(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const image = input.files?.[0];
-    input.value = '';
-    if (!image) return;
-
-    this.clearPictureSelection();
-    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.type)) {
-      this.pictureError.set('Choose a PNG, JPEG, GIF, or WebP image.');
-      return;
-    }
-    if (image.size > this.maxPictureSize) {
-      this.pictureError.set('Choose an image under 10 MB.');
-      return;
-    }
-
-    this.selectedPicture.set(image);
-    this.picturePreviewUrl.set(URL.createObjectURL(image));
-    this.pictureError.set('');
-  }
-
-  async savePicture(artist: string): Promise<void> {
-    const image = this.selectedPicture();
-    if (!image || this.isSavingPicture()) return;
-    this.isSavingPicture.set(true);
-    this.pictureError.set('');
+  async saveRefreshedInformation(
+    artist: string,
+    selection: { result: MetadataRefreshResult; providerId: string },
+  ): Promise<void> {
+    const { result, providerId } = selection;
+    this.descriptionDraft = null;
+    this.descriptionDraftArtist = null;
+    this.editingDescriptionArtist.set(null);
+    this.refreshedInformation.set({
+      artist: artist.toLowerCase(),
+      description: result.description,
+      imageUrl: result.imageUrl,
+      imageMissing: result.imageMissing,
+      musicBrainzId: result.musicBrainzId,
+      updatedAt: result.updatedAt,
+    });
     try {
-      await this.libraryApi.updateEntityImage(artist, null, image);
-      await this.store.refresh();
-      this.toast.show('Artist picture saved.', 'success');
-      this.clearPictureSelection();
-      this.isPictureDialogOpen.set(false);
+      await this.loadArtistMetadata(artist);
     } catch {
-      this.pictureError.set('The artist picture could not be saved. Please try again.');
-    } finally {
-      this.isSavingPicture.set(false);
+      this.toast.show('Artist reference links could not be loaded.', 'error');
     }
-  }
-
-  private clearPictureSelection(): void {
-    const previewUrl = this.picturePreviewUrl();
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    this.picturePreviewUrl.set('');
-    this.selectedPicture.set(null);
-  }
-
-  async refreshInformation(artist: string): Promise<void> {
-    this.isRefreshingInformation.set(true);
-    try {
-      const result = await this.libraryApi.refreshInformation(artist, null);
-      if (!result.found) {
-        this.toast.show(
-          'No matching artist record was found. Existing information was left unchanged.',
-          'error',
-        );
-        return;
-      }
-      this.descriptionDraft = null;
-      this.descriptionDraftArtist = null;
-      this.editingDescriptionArtist.set(null);
-      this.refreshedInformation.set({
-        artist: artist.toLowerCase(),
-        description: result.description,
-        imageUrl: result.imageUrl,
-        imageMissing: result.imageMissing,
-        musicBrainzId: result.musicBrainzId,
-        updatedAt: result.updatedAt,
-      });
-      this.toast.show(
-        `Artist information refreshed from MusicBrainz (${result.musicBrainzId}). ${this.pictureRefreshStatus(result)} Updated ${new Date(result.updatedAt).toLocaleString()}.`,
-        'success',
-      );
-    } catch {
-      this.toast.show(
-        'Artist information could not be refreshed. Please try again later.',
-        'error',
-      );
-    } finally {
-      this.isRefreshingInformation.set(false);
-    }
+    this.toast.show(
+      `Artist information refreshed from ${providerId}. ${this.pictureRefreshStatus(result)} Updated ${new Date(result.updatedAt).toLocaleString()}.`,
+      'success',
+    );
   }
 
   private pictureRefreshStatus(
@@ -258,5 +297,17 @@ export class ArtistPage implements OnInit {
     return result.imageMissing
       ? 'Fanart.tv and linked sources returned no picture; the artist picture remains missing.'
       : 'No new picture was returned; the existing artist picture was kept.';
+  }
+
+  private async loadArtistMetadata(artist: string): Promise<void> {
+    const metadata = await this.libraryApi.getArtistMetadata(artist);
+    if (this.artistMetadata()?.artist !== artist.toLowerCase()) return;
+    this.artistMetadata.set({
+      artist: artist.toLowerCase(),
+      description: metadata.description,
+      imageUrl: metadata.imageUrl,
+      imageMissing: metadata.imageMissing,
+      referencedArtists: metadata.referencedArtists,
+    });
   }
 }

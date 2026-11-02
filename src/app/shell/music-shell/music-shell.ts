@@ -17,12 +17,13 @@ import { PlayerService } from '@shared/services/player.service';
 import { ShellHeader } from '../header/shell-header';
 import { MusicShellState } from './music-shell-state';
 import { SideMenu } from '../side-menu/side-menu';
+import { AlbumActionsHost } from '../../library/album-actions/album-actions-host';
 import { ToastMessageComponent } from '@shared/components/toast-message/toast-message';
 import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 
 @Component({
   selector: 'app-music-shell',
-  imports: [RouterOutlet, SideMenu, ShellHeader, ToastMessageComponent],
+  imports: [RouterOutlet, SideMenu, ShellHeader, ToastMessageComponent, AlbumActionsHost],
   templateUrl: './music-shell.html',
 })
 export class MusicShell {
@@ -52,10 +53,16 @@ export class MusicShell {
     this.navigationEnd();
     return this.route.firstChild?.snapshot.routeConfig?.path === 'library';
   });
+  readonly isHomePage = computed(() => {
+    this.navigationEnd();
+    return this.route.firstChild?.snapshot.routeConfig?.path === 'home';
+  });
   readonly pageTitle = computed(() => {
     this.navigationEnd();
     const childRoute = this.route.firstChild;
     switch (childRoute?.snapshot.routeConfig?.path) {
+      case 'home':
+        return 'Home';
       case 'library':
         return this.activeSection();
       case 'admin':
@@ -64,6 +71,8 @@ export class MusicShell {
         return 'Playlists';
       case 'settings':
         return 'Settings';
+      case 'settings/providers':
+        return 'Provider integrations';
       case 'library/album/:trackId': {
         const trackId = Number(childRoute.snapshot.paramMap.get('trackId'));
         return this.library.tracks().find((track) => track.id === trackId)?.album ?? 'Album';
@@ -121,6 +130,18 @@ export class MusicShell {
     } else if (scrollDelta > 0) {
       this.lastScrollY = currentScrollY;
     }
+  }
+
+  @HostListener('document:click', ['$event'])
+  hideMenuOnOutsideClick(event: MouseEvent): void {
+    if (!this.menuVisible()) {
+      return;
+    }
+    const target = event.target as Element | null;
+    if (target?.closest('#side-menu, [aria-controls="side-menu"]')) {
+      return;
+    }
+    this.menuVisible.set(false);
   }
 
   constructor() {

@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, output } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
 @Component({
@@ -7,7 +7,5 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   templateUrl: './side-menu.html',
 })
 export class SideMenu {
-  readonly isLibraryPage = input.required<boolean>();
-  readonly activeSection = input.required<string>();
   readonly activeSectionChange = output<string>();
 }

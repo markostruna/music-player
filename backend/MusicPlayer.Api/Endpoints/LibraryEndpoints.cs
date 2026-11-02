@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Services;
+using MusicPlayer.Api.Services.Identification;
 
 namespace MusicPlayer.Api.Endpoints;
 
@@ -14,6 +15,187 @@ public static class LibraryEndpoints
                 TypedResults.Ok(await music.GetTracksAsync(cancellationToken)))
             .WithName("ListTracks")
             .WithSummary("Lists playable tracks in configured music sources.");
+        library.MapGet("/tracks/search", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
+            string? query,
+            int? folderId,
+            int? sourceRootId,
+            string? folderPath,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (query?.Length > 256 ||
+                folderId < 1 ||
+                sourceRootId < 1 ||
+                folderPath?.Length > 2048 ||
+                sourceRootId.HasValue != (folderPath is not null))
+            {
+                return TypedResults.BadRequest("Search text or folder filter is invalid.");
+            }
+
+            return TypedResults.Ok(await music.SearchTracksAsync(
+                query,
+                cancellationToken,
+                folderId,
+                sourceRootId,
+                folderPath));
+        })
+        .WithName("SearchTracks")
+        .WithSummary("Returns all matching tracks for playback queues.");
+        library.MapGet("/tracks/page", async Task<Results<Ok<PagedResponse<TrackResponse>>, BadRequest<string>>> (
+            string? query,
+            int page,
+            int pageSize,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken,
+            bool random = false,
+            int? folderId = null,
+            int? sourceRootId = null,
+            string? folderPath = null) =>
+        {
+            if (page < 1 ||
+                pageSize is < 1 or > 200 ||
+                query?.Length > 256 ||
+                folderId < 1 ||
+                sourceRootId < 1 ||
+                folderPath?.Length > 2048 ||
+                sourceRootId.HasValue != (folderPath is not null))
+            {
+                return TypedResults.BadRequest("Page, page size, search text, or folder filter is invalid.");
+            }
+
+            return TypedResults.Ok(await music.GetTracksPageAsync(
+                query,
+                page,
+                pageSize,
+                cancellationToken,
+                random,
+                folderId,
+                sourceRootId,
+                folderPath));
+        })
+        .WithName("ListTrackPage")
+        .WithSummary("Searches and returns one page of playable tracks.");
+        library.MapGet("/albums/page", async Task<Results<Ok<PagedResponse<AlbumSummaryResponse>>, BadRequest<string>>> (
+            string? query,
+            int page,
+            int pageSize,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken,
+            bool random = false) =>
+        {
+            if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
+            {
+                return TypedResults.BadRequest("Page, page size, or search text is invalid.");
+            }
+
+            return TypedResults.Ok(await music.GetAlbumsPageAsync(query, page, pageSize, cancellationToken, random));
+        })
+        .WithName("ListAlbumPage")
+        .WithSummary("Searches and returns one page of album summaries.");
+        library.MapGet("/albums/tracks", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
+            string artist,
+            string album,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (artist.Length > 1024 || album.Length > 1024)
+            {
+                return TypedResults.BadRequest("Album artist and title cannot exceed 1024 characters.");
+            }
+
+            return TypedResults.Ok(await music.GetAlbumTracksAsync(artist, album, cancellationToken));
+        })
+        .WithName("ListAlbumTracks")
+        .WithSummary("Lists tracks for one album.");
+        library.MapGet("/albums/by-track/{trackId:int}/tracks", async (
+            int trackId,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+                TypedResults.Ok(await music.GetAlbumTracksByTrackIdAsync(trackId, cancellationToken)))
+            .WithName("ListAlbumTracksByTrackId")
+            .WithSummary("Lists album tracks based on one catalogued track.");
+        library.MapGet("/artists/page", async Task<Results<Ok<PagedResponse<ArtistSummaryResponse>>, BadRequest<string>>> (
+            string? query,
+            int page,
+            int pageSize,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken,
+            bool random = false) =>
+        {
+            if (page < 1 || pageSize is < 1 or > 200 || query?.Length > 256)
+            {
+                return TypedResults.BadRequest("Page, page size, or search text is invalid.");
+            }
+
+            return TypedResults.Ok(await music.GetArtistsPageAsync(query, page, pageSize, cancellationToken, random));
+        })
+        .WithName("ListArtistPage")
+        .WithSummary("Searches and returns one page of artist summaries.");
+        library.MapGet("/artists/tracks", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
+            string artist,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (artist.Length > 1024)
+            {
+                return TypedResults.BadRequest("Artist name cannot exceed 1024 characters.");
+            }
+
+            return TypedResults.Ok(await music.GetArtistTracksAsync(artist, cancellationToken));
+        })
+        .WithName("ListArtistTracks")
+        .WithSummary("Lists tracks for one artist.");
+        library.MapGet("/artists/metadata", async Task<Results<Ok<ArtistMetadataResponse>, BadRequest<string>>> (
+            string artist,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(artist) || artist.Length > 1024)
+            {
+                return TypedResults.BadRequest("Artist name is required and cannot exceed 1024 characters.");
+            }
+
+            return TypedResults.Ok(await music.GetArtistMetadataAsync(artist, cancellationToken));
+        })
+        .WithName("GetArtistMetadata")
+        .WithSummary("Gets description and image details for one artist.");
+        library.MapGet("/folders", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
+                TypedResults.Ok(await music.GetLibraryFolderRootsAsync(cancellationToken)))
+            .WithName("ListLibraryFolders")
+            .WithSummary("Lists configured music folders for browsing.");
+        library.MapGet("/folders/{sourceRootId:int}", async Task<Results<
+            Ok<MusicFolderContentsResponse>,
+            NotFound,
+            BadRequest<string>,
+            Conflict<string>>> (
+            int sourceRootId,
+            string? path,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (sourceRootId < 1 || path?.Length > 2048)
+            {
+                return TypedResults.BadRequest("The source folder or relative path is invalid.");
+            }
+
+            try
+            {
+                var contents = await music.BrowseLibraryFolderAsync(sourceRootId, path, cancellationToken);
+                return contents is null
+                    ? TypedResults.NotFound()
+                    : TypedResults.Ok(contents);
+            }
+            catch (ArgumentException exception)
+            {
+                return TypedResults.BadRequest(exception.Message);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return TypedResults.Conflict(exception.Message);
+            }
+        })
+        .WithName("BrowseLibraryFolder")
+        .WithSummary("Lists physical subfolders and files in a configured music folder.");
         library.MapGet("/albums", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
                 TypedResults.Ok(await music.GetAlbumsAsync(cancellationToken)))
             .WithName("ListAlbums")
@@ -32,23 +214,35 @@ public static class LibraryEndpoints
         .WithSummary("Streams a catalogued track with HTTP range support.");
         library.MapGet("/tracks/{trackId:int}/cover", async Task<Results<FileContentHttpResult, NotFound>> (
             int trackId,
+            HttpContext context,
             IMusicLibraryService music,
             CancellationToken cancellationToken) =>
         {
             var image = await music.ResolveCoverAsync(trackId, cancellationToken);
-            return image is null ? TypedResults.NotFound() : TypedResults.File(image.Data, image.ContentType);
+            if (image is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            context.Response.Headers.CacheControl = "private, max-age=2592000";
+            return TypedResults.File(image.Data, image.ContentType);
         })
         .WithName("GetTrackCover")
         .WithSummary("Returns the embedded cover art for a track.");
         library.MapGet("/artists/{key}/image", async Task<Results<FileContentHttpResult, NotFound>> (
             string key,
+            HttpContext context,
             IMusicLibraryService music,
             CancellationToken cancellationToken) =>
         {
             var image = await music.ResolveArtistImageAsync(key, cancellationToken);
-            return image is null
-                ? TypedResults.NotFound()
-                : TypedResults.File(image.Data, image.ContentType);
+            if (image is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            context.Response.Headers.CacheControl = "private, max-age=2592000";
+            return TypedResults.File(image.Data, image.ContentType);
         })
         .WithName("GetArtistImage")
         .WithSummary("Returns an artist image stored in the application data folder.");
@@ -89,13 +283,26 @@ public static class LibraryEndpoints
         roots.MapDelete("/{rootId:int}", async Task<Results<NoContent, NotFound, Conflict<string>>> (
             int rootId,
             IMusicLibraryService music,
+            LibraryOperationManager operations,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                return await music.RemoveRootAsync(rootId, cancellationToken)
-                    ? TypedResults.NoContent()
-                    : TypedResults.NotFound();
+                if (!operations.TryBeginRootRemoval(rootId))
+                {
+                    return TypedResults.Conflict("A library operation is running, so the source root cannot be removed.");
+                }
+
+                try
+                {
+                    return await music.RemoveRootAsync(rootId, cancellationToken)
+                        ? TypedResults.NoContent()
+                        : TypedResults.NotFound();
+                }
+                finally
+                {
+                    operations.EndRootRemoval(rootId);
+                }
             }
             catch (InvalidOperationException exception)
             {
@@ -118,7 +325,8 @@ public static class LibraryEndpoints
                 return TypedResults.NotFound();
             }
 
-            if (!operations.TryStart(rootId, root.Name, LibraryOperationManager.ScanOperation, out var operation))
+            var operation = operations.TryStart(rootId, root.Name, LibraryOperationManager.ScanOperation);
+            if (operation is null)
             {
                 return TypedResults.Conflict("Another library operation is already running.");
             }
@@ -141,11 +349,11 @@ public static class LibraryEndpoints
                 return TypedResults.NotFound();
             }
 
-            if (!operations.TryStart(
+            var operation = operations.TryStart(
                 rootId,
                 root.Name,
-                LibraryOperationManager.MetadataRefreshOperation,
-                out var operation))
+                LibraryOperationManager.MetadataRefreshOperation);
+            if (operation is null)
             {
                 return TypedResults.Conflict("Another library operation is already running.");
             }
@@ -236,7 +444,7 @@ public static class LibraryEndpoints
         .WithTags("Metadata management")
         .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
         adminMetadata.MapPost("/artists/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
-        MetadataDescriptionRequest request,
+        MetadataRefreshRequest request,
         IMusicLibraryService music,
         CancellationToken cancellationToken) =>
         {
@@ -245,13 +453,27 @@ public static class LibraryEndpoints
             return TypedResults.BadRequest("Artist is required.");
         }
 
-        return TypedResults.Ok(await music.RefreshArtistMetadataAsync(request.Artist, cancellationToken));
+        if (string.IsNullOrWhiteSpace(request.CandidateId))
+        {
+            return TypedResults.Ok(await music.RefreshArtistMetadataAsync(request.Artist, cancellationToken));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ProviderId))
+        {
+            return TypedResults.BadRequest("Provider and candidate are required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshArtistMetadataAsync(
+            request.Artist,
+            request.ProviderId,
+            request.CandidateId,
+            cancellationToken));
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("RefreshArtistMetadata")
         .WithSummary("Refreshes one artist's description and image from linked metadata providers.");
         adminMetadata.MapPost("/albums/refresh", async Task<Results<Ok<MetadataRefreshResponse>, BadRequest<string>>> (
-        MetadataDescriptionRequest request,
+        MetadataRefreshRequest request,
         IMusicLibraryService music,
         CancellationToken cancellationToken) =>
         {
@@ -260,25 +482,67 @@ public static class LibraryEndpoints
             return TypedResults.BadRequest("Artist and album are required.");
         }
 
-        return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(request.Artist, request.Album, cancellationToken));
+        if (string.IsNullOrWhiteSpace(request.CandidateId))
+        {
+            return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(request.Artist, request.Album, cancellationToken));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ProviderId))
+        {
+            return TypedResults.BadRequest("Provider and candidate are required.");
+        }
+
+        return TypedResults.Ok(await music.RefreshAlbumMetadataAsync(
+            request.Artist,
+            request.Album,
+            request.ProviderId,
+            request.CandidateId,
+            cancellationToken));
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("RefreshAlbumMetadata")
         .WithSummary("Refreshes one album's description and artwork from linked metadata providers.");
+        adminMetadata.MapPost("/albums/preview", async Task<Results<Ok<MetadataRefreshPreviewResponse>, BadRequest<string>, ProblemHttpResult>> (
+            MetadataRefreshRequest request,
+            IMusicLibraryService music,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Artist)
+                || string.IsNullOrWhiteSpace(request.Album)
+                || string.IsNullOrWhiteSpace(request.ProviderId)
+                || string.IsNullOrWhiteSpace(request.CandidateId))
+            {
+                return TypedResults.BadRequest("Artist, album, provider, and candidate are required.");
+            }
+
+            try
+            {
+                return TypedResults.Ok(await music.PreviewAlbumMetadataAsync(
+                    request.Artist,
+                    request.Album,
+                    request.ProviderId,
+                    request.CandidateId,
+                    cancellationToken));
+            }
+            catch (AlbumProviderException exception)
+            {
+                return TypedResults.Problem(exception.Message, statusCode: StatusCodes.Status502BadGateway);
+            }
+            catch (ArgumentException exception)
+            {
+                return TypedResults.BadRequest(exception.Message);
+            }
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("PreviewAlbumMetadataCandidate")
+        .WithSummary("Previews metadata for a selected album provider candidate without saving it.");
         adminMetadata.MapPut("/artists/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
         {
-            await music.UpdateMetadataDescriptionAsync(request, album: false, cancellationToken);
+            await music.UpdateArtistDescriptionAsync(request, cancellationToken);
             return TypedResults.NoContent();
         })
         .AddEndpointFilter<CsrfEndpointFilter>()
         .WithName("UpdateArtistDescription");
-        adminMetadata.MapPut("/albums/description", async (MetadataDescriptionRequest request, IMusicLibraryService music, CancellationToken cancellationToken) =>
-        {
-            await music.UpdateMetadataDescriptionAsync(request, album: true, cancellationToken);
-            return TypedResults.NoContent();
-        })
-        .AddEndpointFilter<CsrfEndpointFilter>()
-        .WithName("UpdateAlbumDescription");
         adminMetadata.MapPut("/artists/image", async Task<Results<NoContent, BadRequest<string>>> (
         MetadataImageRequest request,
         IMusicLibraryService music,

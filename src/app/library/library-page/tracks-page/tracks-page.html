@@ -1,0 +1,137 @@
+@if (isAdmin() && hasSelection()) {
+  <div class="admin-toolbar">
+    <span>{{ selectedTrackIds().size }} selected</span>
+    <form class="metadata-editor" (ngSubmit)="saveMetadata()">
+      <input aria-label="Title" placeholder="Title" name="title" [(ngModel)]="metadata.title" />
+      <input aria-label="Artist" placeholder="Artist" name="artist" [(ngModel)]="metadata.artist" />
+      <input aria-label="Album" placeholder="Album" name="album" [(ngModel)]="metadata.album" />
+      <input
+        aria-label="Album artist"
+        placeholder="Album artist"
+        name="albumArtist"
+        [(ngModel)]="metadata.albumArtist"
+      />
+      <input
+        aria-label="Track number"
+        placeholder="Track #"
+        name="trackNumber"
+        type="number"
+        min="1"
+        [(ngModel)]="metadata.trackNumber"
+      />
+      <input
+        aria-label="Disc number"
+        placeholder="Disc #"
+        name="discNumber"
+        type="number"
+        min="1"
+        [(ngModel)]="metadata.discNumber"
+      />
+      <input
+        aria-label="Year"
+        placeholder="Year"
+        name="year"
+        type="number"
+        min="1"
+        [(ngModel)]="metadata.year"
+      />
+      <input aria-label="Genre" placeholder="Genre" name="genre" [(ngModel)]="metadata.genre" />
+      <button class="small-action" type="submit">Save tags</button>
+    </form>
+    <input
+      #coverInput
+      class="visually-hidden"
+      type="file"
+      accept="image/png,image/jpeg,image/gif,image/webp"
+      (change)="updateCover($event)"
+    />
+    <button class="small-action" type="button" (click)="coverInput.click()">Change cover</button>
+    <select
+      aria-label="Destination folder"
+      [value]="destinationFolderId ?? ''"
+      (change)="setDestinationFolder($event)"
+    >
+      <option value="">Move to folder…</option>
+      @for (folder of folders; track folder.id) {
+        <option [value]="folder.id">
+          {{ folder.name }}{{ folder.relativePath ? ' / ' + folder.relativePath : '' }}
+        </option>
+      }
+    </select>
+    <button
+      class="small-action"
+      type="button"
+      [disabled]="!destinationFolderId"
+      (click)="moveSelected()"
+    >
+      Move
+    </button>
+  </div>
+  @if (operationMessage) {
+    <p class="operation-message" role="status">{{ operationMessage }}</p>
+  }
+}
+
+@if (isLoading() && !visibleTracks().length) {
+  <p class="empty-state">Loading your music…</p>
+} @else if (errorMessage() && !visibleTracks().length) {
+  <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+} @else {
+  <div class="track-table">
+    <div class="track-head">
+      <span></span><span>#</span><span>TITLE</span><span>ALBUM</span><span>TIME</span><span></span>
+    </div>
+    @for (track of visibleTracks(); track track.id; let index = $index) {
+      <div class="track-row" [class.now-playing]="currentTrack()?.id === track.id && isPlaying()">
+        <label class="selection-cell">
+          @if (isAdmin()) {
+            <input
+              type="checkbox"
+              [checked]="selectedTrackIds().has(track.id)"
+              [attr.aria-label]="'Select ' + track.title"
+              (change)="toggleSelection(track.id, $event)"
+            />
+          }
+        </label>
+        <span class="track-number">{{
+          currentTrack()?.id === track.id && isPlaying()
+            ? '♫'
+            : index + 1
+        }}</span>
+        <button class="track-title-cell track-select" (click)="chooseTrack(track)">
+          <img
+            [src]="track.coverUrl"
+            [alt]="track.album + ' artwork'"
+            (error)="$any($event.target).style.visibility = 'hidden'"
+          /><span
+            ><strong>{{ track.title }}</strong
+            ><small>{{ track.artist }}</small></span
+          >
+        </button>
+        <span class="track-album">{{ track.album }}</span>
+        <span class="track-duration">{{ formatTime(track.durationSeconds) }}</span>
+        <button class="row-play" aria-label="Play track" (click)="chooseTrack(track)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7V5Z" /></svg>
+        </button>
+      </div>
+    } @empty {
+      <p class="empty-state">
+        {{
+          searchQuery()
+            ? 'No tracks match that search.'
+            : 'No tracks yet. An administrator can add a music folder and scan it.'
+        }}
+      </p>
+    }
+  </div>
+}
+
+@if (errorMessage() && visibleTracks().length) {
+  <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+}
+
+@if (hasMore()) {
+  <button class="load-more" type="button" [disabled]="isLoading()" (click)="loadMore()">
+    {{ isLoading() ? 'Loading…' : 'Load more' }}
+  </button>
+}

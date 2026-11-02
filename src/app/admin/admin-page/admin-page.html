@@ -40,7 +40,7 @@
           maxlength="2048"
           placeholder="Folder location"
       /></label>
-      <button type="submit">Add folder</button>
+      <button type="submit" [disabled]="operations.isRunning()">Add folder</button>
     </form>
     <div class="admin-list">
       @for (root of roots(); track root.id) {

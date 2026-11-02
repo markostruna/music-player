@@ -1,0 +1,164 @@
+<div
+  class="metadata-dialog-backdrop"
+  (click)="close()"
+  (keydown.escape)="close()"
+>
+  <section
+    class="metadata-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="metadata-dialog-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="metadata-dialog-header">
+      <div>
+        <span class="eyebrow">METADATA</span>
+        <h2 id="metadata-dialog-title">
+          Refresh {{ isAlbum() ? 'album' : 'artist' }} information
+        </h2>
+        <p>Choose a provider and candidate, preview the details, then save them to your library.</p>
+      </div>
+      <button type="button" class="metadata-dialog-close" aria-label="Close dialog" (click)="close()">
+        ×
+      </button>
+    </header>
+
+    <label class="metadata-provider-picker">
+      <span>Provider</span>
+      <select
+        [disabled]="isSearching() || isSaving()"
+        (change)="changeProvider($any($event.target).value)"
+      >
+        @for (provider of providers(); track provider.id) {
+          <option [value]="provider.id" [selected]="provider.id === providerId()">
+            {{ provider.name }}
+          </option>
+        }
+      </select>
+    </label>
+
+    @if (errorMessage()) {
+      <p class="metadata-dialog-error" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <div class="metadata-dialog-content">
+      <section class="metadata-candidate-list" aria-label="Potential matches">
+        <h3>Potential matches</h3>
+        @if (isSearching()) {
+          <p class="metadata-dialog-muted">Searching…</p>
+        } @else if (isAlbum()) {
+          @for (candidate of albumCandidates(); track candidate.id) {
+            <button
+              type="button"
+              class="metadata-candidate"
+              [class.metadata-candidate-selected]="selectedAlbumCandidate()?.id === candidate.id"
+              (click)="selectAlbumCandidate(candidate)"
+            >
+              <span>{{ candidate.title }}</span>
+              <small>{{ candidate.artist }}{{ candidate.year ? ' · ' + candidate.year : '' }}</small>
+            </button>
+          } @empty {
+            <p class="metadata-dialog-muted">No album candidates were found.</p>
+          }
+        } @else {
+          @for (candidate of artistCandidates(); track candidate.id) {
+            <button
+              type="button"
+              class="metadata-candidate"
+              [class.metadata-candidate-selected]="selectedArtistCandidate()?.id === candidate.id"
+              (click)="selectArtistCandidate(candidate)"
+            >
+              <span>{{ candidate.name }}</span>
+              @if (candidate.detail) {
+                <small>{{ candidate.detail }}</small>
+              }
+            </button>
+          } @empty {
+            <p class="metadata-dialog-muted">No artist candidates were found.</p>
+          }
+        }
+      </section>
+
+      <section class="metadata-candidate-preview" aria-label="Candidate preview">
+        <h3>Preview</h3>
+        @if (isLoadingPreview()) {
+          <p class="metadata-dialog-muted">Loading preview…</p>
+        } @else if (isAlbum() && albumPreview(); as preview) {
+          <div class="metadata-preview-heading">
+            @if (previewImageUrl()) {
+              <img [src]="previewImageUrl()" alt="Candidate album artwork" />
+            }
+            <div>
+              <strong>{{ preview.match.title }}</strong>
+              <span>{{ preview.match.artist }}</span>
+              <small>
+                {{ preview.match.year ?? 'Year unknown' }}
+                @if (preview.match.trackCount) {
+                  · {{ preview.match.trackCount }} tracks
+                }
+              </small>
+            </div>
+          </div>
+          @if (preview.genre) {
+            <p><strong>Genre:</strong> {{ preview.genre }}</p>
+          }
+          @if (preview.match.detail) {
+            <p class="metadata-dialog-muted">{{ preview.match.detail }}</p>
+          }
+          @if (albumMetadataPreview()?.description) {
+            <p class="metadata-preview-description">{{ albumMetadataPreview()?.description }}</p>
+          }
+          @if (albumMetadataPreview()?.imageProvider) {
+            <p class="metadata-dialog-muted">
+              Artwork source: {{ albumMetadataPreview()?.imageProvider }}
+            </p>
+          }
+          @if (preview.tracks.length) {
+            <ol class="metadata-preview-tracks">
+              @for (track of preview.tracks; track track.discNumber + '-' + track.trackNumber) {
+                <li>{{ track.title }} <small>{{ track.artist }}</small></li>
+              }
+            </ol>
+          }
+        } @else if (artistPreview(); as preview) {
+          <div class="metadata-preview-heading">
+            @if (previewImageUrl()) {
+              <img [src]="previewImageUrl()" [alt]="preview.match.name + ' candidate image'" />
+            }
+            <div>
+              <strong>{{ preview.match.name }}</strong>
+              <span>{{ preview.match.detail || preview.imageProvider || 'Artist match' }}</span>
+              @if (preview.imageProvider) {
+                <small>Image: {{ preview.imageProvider }}</small>
+              }
+            </div>
+          </div>
+          <p class="metadata-preview-description">
+            {{ preview.description || 'This provider did not return an artist description.' }}
+          </p>
+        } @else {
+          <p class="metadata-dialog-muted">Select a candidate to preview the information before saving.</p>
+        }
+      </section>
+    </div>
+
+    <footer class="metadata-dialog-actions">
+      <button
+        type="button"
+        class="metadata-dialog-cancel"
+        [disabled]="isSaving()"
+        (click)="close()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="metadata-dialog-save"
+        [disabled]="isSaving() || isLoadingPreview() || !canSave()"
+        (click)="save()"
+      >
+        {{ isSaving() ? 'Saving…' : 'Save metadata' }}
+      </button>
+    </footer>
+  </section>
+</div>

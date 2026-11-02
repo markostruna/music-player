@@ -1,0 +1,58 @@
+@if (isLoading() && !visibleAlbums().length) {
+  <p class="empty-state">Loading your music…</p>
+} @else if (errorMessage() && !visibleAlbums().length) {
+  <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+} @else if (visibleAlbums().length) {
+  <div class="collection-grid">
+    @for (album of visibleAlbums(); track album.coverTrackId) {
+      <a
+        class="collection-tile"
+        [routerLink]="['/library/album', album.coverTrackId]"
+        [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
+        [title]="'View album: ' + album.album"
+      >
+        <span class="tile-art">
+          <span class="tile-placeholder" aria-hidden="true">♫</span>
+          <img
+            [src]="album.coverUrl"
+            [alt]="album.album + ' artwork'"
+            (error)="$any($event.target).style.visibility = 'hidden'"
+          />
+          <button
+            class="tile-play tile-menu-button"
+            type="button"
+            aria-haspopup="menu"
+            [attr.aria-expanded]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
+            [attr.aria-label]="'Actions for ' + album.album"
+            [class.menu-open]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
+            (click)="albumActions.openMenu({ artist: album.artist, title: album.album }, $event)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg>
+          </button>
+        </span>
+        <span class="tile-title">{{ album.album }}</span>
+        <span class="tile-detail">
+          {{ album.artist }}@if (album.releaseYear) { · {{ album.releaseYear }} }
+        </span>
+      </a>
+    }
+  </div>
+} @else {
+  <p class="empty-state">
+    {{ searchQuery() ? 'No albums match that search.' : 'No albums in your library yet.' }}
+  </p>
+}
+
+@if (errorMessage() && visibleAlbums().length) {
+  <p class="empty-state" role="alert">{{ errorMessage() }}</p>
+}
+
+@if (hasMore()) {
+  <button class="load-more" type="button" [disabled]="isLoading()" (click)="loadMore()">
+    {{ isLoading() ? 'Loading…' : 'Load more' }}
+  </button>
+}

@@ -6,10 +6,12 @@ using MusicPlayer.Api.Contracts;
 
 namespace MusicPlayer.Api.Services.Identification;
 
-public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configuration) : IAlbumProvider
+public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configuration) : IAlbumProvider, IArtistProvider
 {
     private static readonly SemaphoreSlim TokenGate = new(1, 1);
     private static string? accessToken;
+    private static string? accessTokenClientId;
+    private static string? accessTokenClientSecret;
     private static DateTimeOffset accessTokenExpiry;
 
     private string? ClientId => configuration["Spotify:ClientId"];
@@ -32,7 +34,7 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
         if (year is > 0) terms.Add($"year:{year}");
 
         using var document = await GetJsonAsync(
-            $"search?type=album&limit=12&q={Uri.EscapeDataString(string.Join(' ', terms))}",
+            $"search?type=album&limit=10&q={Uri.EscapeDataString(string.Join(' ', terms))}",
             cancellationToken);
         var items = document?.RootElement.GetPropertyOrNull("albums")?.GetPropertyOrNull("items");
         if (items is not { ValueKind: JsonValueKind.Array }) return [];
@@ -71,6 +73,74 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
         return match is null ? null : new AlbumMatchDetailResponse(match, genre, null, tracks);
     }
 
+    public async Task<IReadOnlyList<ArtistMatchResponse>> SearchArtistsAsync(
+        string artist,
+        CancellationToken cancellationToken)
+    {
+        using var document = await GetJsonAsync(
+            $"search?type=artist&limit=10&q={Uri.EscapeDataString(artist)}",
+            cancellationToken);
+        var items = document?.RootElement.GetPropertyOrNull("artists")?.GetPropertyOrNull("items");
+        if (items is not { ValueKind: JsonValueKind.Array })
+        {
+            return [];
+        }
+
+        return items.Value.EnumerateArray()
+            .Select(ToArtistMatch)
+            .Where(item => item is not null)
+            .Select(item => item!)
+            .ToArray();
+    }
+
+    public async Task<ArtistProviderDetail?> GetArtistAsync(string id, CancellationToken cancellationToken)
+    {
+        if (id.Length is 0 or > 64 || !id.All(char.IsAsciiLetterOrDigit))
+        {
+            return null;
+        }
+
+        using var document = await GetJsonAsync($"artists/{id}", cancellationToken);
+        if (document is null)
+        {
+            return null;
+        }
+
+        var artist = document.RootElement;
+        var match = ToArtistMatch(artist);
+        if (match is null)
+        {
+            return null;
+        }
+
+        return new ArtistProviderDetail(
+            match,
+            "",
+            match.ImageUrl,
+            null,
+            null,
+            match.ImageUrl is null ? null : Name);
+    }
+
+    private ArtistMatchResponse? ToArtistMatch(JsonElement artist)
+    {
+        var id = artist.GetStringOrNull("id");
+        var name = artist.GetStringOrNull("name");
+        if (id is null || name is null)
+        {
+            return null;
+        }
+
+        var imageUrl = artist.GetPropertyOrNull("images") is { ValueKind: JsonValueKind.Array } images
+            ? images.EnumerateArray().Select(item => item.GetStringOrNull("url"))
+                .FirstOrDefault(url => !string.IsNullOrWhiteSpace(url))
+            : null;
+        var genres = artist.GetPropertyOrNull("genres") is { ValueKind: JsonValueKind.Array } values
+            ? values.EnumerateArray().Select(item => item.GetString()).Where(value => !string.IsNullOrWhiteSpace(value))
+            : [];
+        return new ArtistMatchResponse(Id, id, name, string.Join(", ", genres), imageUrl);
+    }
+
     private AlbumMatchResponse? ToMatch(JsonElement album, int? trackCount)
     {
         var id = album.GetStringOrNull("id");
@@ -93,7 +163,7 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
     {
         if (!IsConfigured)
         {
-            throw new AlbumProviderException("Spotify is not configured. Set Spotify:ClientId and Spotify:ClientSecret on the server.");
+            throw new AlbumProviderException("Spotify is not configured. Add a Client ID and Client secret in Provider integrations.");
         }
 
         try
@@ -102,7 +172,17 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await GetTokenAsync(cancellationToken));
             using var response = await http.SendAsync(request, cancellationToken);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
-            response.EnsureSuccessStatusCode();
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                throw new AlbumProviderException(
+                    $"Spotify rejected the API request (HTTP {(int)response.StatusCode}). Verify the app credentials and API access.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new AlbumProviderException($"Spotify API request failed with HTTP {(int)response.StatusCode}.");
+            }
+
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         }
@@ -118,7 +198,12 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
         await TokenGate.WaitAsync(cancellationToken);
         try
         {
-            if (accessToken is not null && accessTokenExpiry > DateTimeOffset.UtcNow.AddMinutes(1))
+            var clientId = ClientId;
+            var clientSecret = ClientSecret;
+            if (accessToken is not null
+                && accessTokenClientId == clientId
+                && accessTokenClientSecret == clientSecret
+                && accessTokenExpiry > DateTimeOffset.UtcNow.AddMinutes(1))
             {
                 return accessToken;
             }
@@ -129,13 +214,25 @@ public sealed class SpotifyAlbumProvider(HttpClient http, IConfiguration configu
             };
             request.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic",
-                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{ClientId}:{ClientSecret}")));
+                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}")));
             using var response = await http.SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.BadRequest)
+            {
+                throw new AlbumProviderException(
+                    "Spotify rejected the Client ID or Client secret. Check both values in Provider integrations.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new AlbumProviderException($"Spotify token request failed with HTTP {(int)response.StatusCode}.");
+            }
+
             using var document = await JsonDocument.ParseAsync(
                 await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
             accessToken = document.RootElement.GetStringOrNull("access_token")
                 ?? throw new JsonException("The Spotify token response was invalid.");
+            accessTokenClientId = clientId;
+            accessTokenClientSecret = clientSecret;
             var seconds = document.RootElement.GetPropertyOrNull("expires_in") is { ValueKind: JsonValueKind.Number } expires
                 ? expires.GetInt32()
                 : 3600;

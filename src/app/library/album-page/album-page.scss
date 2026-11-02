@@ -235,32 +235,32 @@
   margin: 0 auto 58px;
 }
 
-.album-track-section {
-  max-width: 920px;
-  margin: 0 auto;
-}
 .metadata-description {
   max-width: 920px;
   margin: 0 auto 48px;
 }
+
 .metadata-description .eyebrow {
   color: var(--muted);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 1.3px;
 }
+
 .description-heading {
   display: flex;
   align-items: center;
   gap: 12px;
   margin: 5px 0 12px;
 }
+
 .metadata-description h2 {
   margin: 0;
   font:
     700 20px 'Manrope',
     sans-serif;
 }
+
 .description-edit {
   display: inline-flex;
   align-items: center;
@@ -274,21 +274,32 @@
   font-size: 12px;
   font-weight: 700;
 }
+
 .description-edit svg {
   width: 14px;
   height: 14px;
 }
+
 .description-edit:hover {
   text-decoration: underline;
 }
-.metadata-description p {
+
+.description-content {
   max-width: 780px;
-  margin: 0;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.7;
   white-space: pre-line;
 }
+
+.description-content > :first-child {
+  margin-top: 0;
+}
+
+.description-content > :last-child {
+  margin-bottom: 0;
+}
+
 .metadata-description textarea {
   display: block;
   width: 100%;
@@ -303,19 +314,27 @@
   line-height: 1.6;
   resize: vertical;
 }
+
 .metadata-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
 }
+
 .metadata-controls .album-play-button {
   min-height: 36px;
   font-size: 11px;
 }
+
 .metadata-controls .secondary-action {
   background: var(--surface-hover);
   color: var(--ink);
+}
+
+.album-track-section {
+  max-width: 920px;
+  margin: 0 auto;
 }
 .missing-image-label {
   display: inline-block;

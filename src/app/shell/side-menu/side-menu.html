@@ -17,11 +17,11 @@
       </svg>
       Now playing
     </a>
-    <button
-      type="button"
+    <a
       class="nav-item"
-      [class.selected]="isLibraryPage() && activeSection() === 'Discover'"
-      (click)="activeSectionChange.emit('Discover')"
+      routerLink="/home"
+      routerLinkActive="selected"
+      [routerLinkActiveOptions]="{ exact: true }"
     >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6" />
@@ -33,7 +33,7 @@
         />
       </svg>
       Discover
-    </button>
+    </a>
     <a
       class="nav-item"
       routerLink="/library"

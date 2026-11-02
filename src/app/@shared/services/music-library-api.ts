@@ -8,6 +8,7 @@ export interface MusicTrack {
   id: number;
   sourceRootId: number;
   folderId: number;
+  relativePath: string;
   title: string;
   artist: string;
   album: string;
@@ -20,13 +21,46 @@ export interface MusicTrack {
   streamUrl: string;
   coverUrl: string;
   fileExtension: string;
-  albumDescription: string;
-  artistDescription: string;
+}
+
+export interface ArtistMetadata {
+  description: string;
+  imageUrl: string | null;
+  imageMissing: boolean;
+  referencedArtists: string[];
+}
+
+export interface PagedTracks {
+  items: MusicTrack[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AlbumSummary {
+  album: string;
+  artist: string;
+  releaseYear: number | null;
+  trackCount: number;
+  durationSeconds: number;
+  coverTrackId: number;
+  coverUrl: string;
+}
+
+export interface ArtistSummary {
+  artist: string;
+  trackCount: number;
+  albumCount: number;
+  coverUrl: string;
   artistImageUrl: string;
   artistImageMissing: boolean;
-  albumArtistDescription: string;
-  albumArtistImageUrl: string;
-  albumArtistImageMissing: boolean;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface MusicFolder {
@@ -34,6 +68,30 @@ export interface MusicFolder {
   sourceRootId: number;
   name: string;
   relativePath: string;
+}
+
+export interface MusicFolderBrowseEntry {
+  sourceRootId: number;
+  name: string;
+  relativePath: string;
+}
+
+export interface MusicFolderFile {
+  name: string;
+  relativePath: string;
+}
+
+export interface MusicFolderContents {
+  sourceRootId: number;
+  rootName: string;
+  relativePath: string;
+  folders: MusicFolderBrowseEntry[];
+  files: MusicFolderFile[];
+}
+
+export interface TrackFolderScope {
+  sourceRootId: number;
+  path: string;
 }
 
 export interface SourceRoot {
@@ -71,6 +129,14 @@ export interface MetadataRefreshResult {
   imageProvider: string | null;
 }
 
+export interface MetadataRefreshPreview {
+  found: boolean;
+  musicBrainzId: string;
+  description: string;
+  imageDataUrl: string | null;
+  imageProvider: string | null;
+}
+
 export interface MutationResult {
   trackId: number;
   succeeded: boolean;
@@ -104,17 +170,139 @@ export class MusicLibraryApi {
   listTracks(): Promise<MusicTrack[]> {
     return firstValueFrom(
       this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks`, { withCredentials: true }),
-    ).then((tracks) =>
-      tracks.map((track) => ({
-        ...track,
-        streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
-        coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
-        artistImageUrl: track.artistImageUrl ? `${MUSIC_API_PREFIX}${track.artistImageUrl}` : '',
-        albumArtistImageUrl: track.albumArtistImageUrl
-          ? `${MUSIC_API_PREFIX}${track.albumArtistImageUrl}`
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  searchTracks(query: string, folderScope?: TrackFolderScope | null): Promise<MusicTrack[]> {
+    const params = new URLSearchParams({ query });
+    if (folderScope) {
+      params.set('sourceRootId', String(folderScope.sourceRootId));
+      params.set('folderPath', folderScope.path);
+    }
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks/search?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  listTrackPage(
+    query: string,
+    page: number,
+    pageSize: number,
+    random = false,
+    folderScope?: TrackFolderScope | null,
+  ): Promise<PagedTracks> {
+    const params = new URLSearchParams({
+      query,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (random) params.set('random', 'true');
+    if (folderScope) {
+      params.set('sourceRootId', String(folderScope.sourceRootId));
+      params.set('folderPath', folderScope.path);
+    }
+    return firstValueFrom(
+      this.http.get<PagedTracks>(`${MUSIC_API_BASE}/library/tracks/page?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((result) => ({
+      ...result,
+      items: this.mapTracks(result.items),
+    }));
+  }
+
+  listAlbumPage(
+    query: string,
+    page: number,
+    pageSize: number,
+    random = false,
+  ): Promise<PagedResult<AlbumSummary>> {
+    const params = new URLSearchParams({
+      query,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (random) params.set('random', 'true');
+    return firstValueFrom(
+      this.http.get<PagedResult<AlbumSummary>>(`${MUSIC_API_BASE}/library/albums/page?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((result) => ({
+      ...result,
+      items: result.items.map((album) => ({
+        ...album,
+        coverUrl: `${MUSIC_API_PREFIX}${album.coverUrl}`,
+      })),
+    }));
+  }
+
+  listAlbumTracks(artist: string, album: string): Promise<MusicTrack[]> {
+    const params = new URLSearchParams({ artist, album });
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/albums/tracks?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  listAlbumTracksByTrackId(trackId: number): Promise<MusicTrack[]> {
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(
+        `${MUSIC_API_BASE}/library/albums/by-track/${trackId}/tracks`,
+        { withCredentials: true },
+      ),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  listArtistTracks(artist: string): Promise<MusicTrack[]> {
+    const params = new URLSearchParams({ artist });
+    return firstValueFrom(
+      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/artists/tracks?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
+  getArtistMetadata(artist: string): Promise<ArtistMetadata> {
+    const params = new URLSearchParams({ artist });
+    return firstValueFrom(
+      this.http.get<ArtistMetadata>(`${MUSIC_API_BASE}/library/artists/metadata?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((metadata) => ({
+      ...metadata,
+      imageUrl: metadata.imageUrl ? `${MUSIC_API_PREFIX}${metadata.imageUrl}` : null,
+    }));
+  }
+
+  listArtistPage(
+    query: string,
+    page: number,
+    pageSize: number,
+    random = false,
+  ): Promise<PagedResult<ArtistSummary>> {
+    const params = new URLSearchParams({
+      query,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (random) params.set('random', 'true');
+    return firstValueFrom(
+      this.http.get<PagedResult<ArtistSummary>>(`${MUSIC_API_BASE}/library/artists/page?${params}`, {
+        withCredentials: true,
+      }),
+    ).then((result) => ({
+      ...result,
+      items: result.items.map((artist) => ({
+        ...artist,
+        coverUrl: `${MUSIC_API_PREFIX}${artist.coverUrl}`,
+        artistImageUrl: artist.artistImageUrl
+          ? `${MUSIC_API_PREFIX}${artist.artistImageUrl}`
           : '',
       })),
-    );
+    }));
   }
 
   listRoots(): Promise<SourceRoot[]> {
@@ -123,11 +311,29 @@ export class MusicLibraryApi {
     );
   }
 
-  listFolders(): Promise<MusicFolder[]> {
+  listTrackMoveFolders(): Promise<MusicFolder[]> {
     return firstValueFrom(
       this.http.get<MusicFolder[]>(`${MUSIC_API_BASE}/admin/roots/folders`, {
         withCredentials: true,
       }),
+    );
+  }
+
+  listLibraryFolderRoots(): Promise<MusicFolderBrowseEntry[]> {
+    return firstValueFrom(
+      this.http.get<MusicFolderBrowseEntry[]>(`${MUSIC_API_BASE}/library/folders`, {
+        withCredentials: true,
+      }),
+    );
+  }
+
+  browseLibraryFolder(sourceRootId: number, path: string): Promise<MusicFolderContents> {
+    const params = new URLSearchParams({ path });
+    return firstValueFrom(
+      this.http.get<MusicFolderContents>(
+        `${MUSIC_API_BASE}/library/folders/${sourceRootId}?${params}`,
+        { withCredentials: true },
+      ),
     );
   }
 
@@ -207,27 +413,27 @@ export class MusicLibraryApi {
     return response.results;
   }
 
-  async updateDescription(
-    artist: string,
-    album: string | null,
-    description: string,
-  ): Promise<void> {
-    const path = album === null ? 'artists' : 'albums';
+  async updateArtistDescription(artist: string, description: string): Promise<void> {
     await firstValueFrom(
       this.http.put<void>(
-        `${MUSIC_API_BASE}/admin/metadata/${path}/description`,
-        { artist, album: album ?? '', description },
+        `${MUSIC_API_BASE}/admin/metadata/artists/description`,
+        { artist, description },
         await this.writeOptions(),
       ),
     );
   }
 
-  async refreshInformation(artist: string, album: string | null): Promise<MetadataRefreshResult> {
+  async refreshInformation(
+    artist: string,
+    album: string | null,
+    providerId?: string,
+    candidateId?: string,
+  ): Promise<MetadataRefreshResult> {
     const path = album === null ? 'artists' : 'albums';
     const result = await firstValueFrom(
       this.http.post<MetadataRefreshResult>(
         `${MUSIC_API_BASE}/admin/metadata/${path}/refresh`,
-        { artist, album: album ?? '' },
+        { artist, album: album ?? '', providerId: providerId ?? '', candidateId: candidateId ?? '' },
         await this.writeOptions(),
       ),
     );
@@ -235,6 +441,21 @@ export class MusicLibraryApi {
       ...result,
       imageUrl: result.imageUrl ? `${MUSIC_API_PREFIX}${result.imageUrl}` : null,
     };
+  }
+
+  async previewAlbumMetadata(
+    artist: string,
+    album: string,
+    providerId: string,
+    candidateId: string,
+  ): Promise<MetadataRefreshPreview> {
+    return firstValueFrom(
+      this.http.post<MetadataRefreshPreview>(
+        `${MUSIC_API_BASE}/admin/metadata/albums/preview`,
+        { artist, album, providerId, candidateId },
+        await this.writeOptions(),
+      ),
+    );
   }
 
   async updateEntityImage(artist: string, album: string | null, image: File): Promise<void> {
@@ -321,5 +542,13 @@ export class MusicLibraryApi {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
     }
     return btoa(binary);
+  }
+
+  private mapTracks(tracks: MusicTrack[]): MusicTrack[] {
+    return tracks.map((track) => ({
+      ...track,
+      streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
+      coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
+    }));
   }
 }

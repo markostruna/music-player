@@ -1,0 +1,96 @@
+<div class="dialog-backdrop" (click)="close()"></div>
+<div
+  class="dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="cover-dialog-title"
+  (keydown.escape)="close()"
+>
+  <header class="dialog-header">
+    <div>
+      <h2 id="cover-dialog-title">Change cover</h2>
+      <p>{{ album().title }} · {{ album().artist }}</p>
+    </div>
+    <button type="button" class="icon-button" aria-label="Close" (click)="close()">×</button>
+  </header>
+
+  @if (error()) {
+    <p class="dialog-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="dialog-body">
+    @for (warning of warnings(); track warning) {
+      <p class="hint">{{ warning }}</p>
+    }
+    <h3>Current and folder images</h3>
+    <div class="cover-grid">
+      @for (cover of covers(); track cover.id) {
+        <button
+          type="button"
+          class="cover-option"
+          [class.selected]="selectedCover()?.id === cover.id"
+          (click)="chooseCover(cover)"
+        >
+          <img [src]="cover.previewUrl" [alt]="cover.label" loading="lazy" />
+          <span>{{ cover.source }}</span>
+          <small>{{ cover.label }}</small>
+        </button>
+      }
+    </div>
+
+    <div class="custom-cover">
+      <label class="field">
+        <span>Upload image</span>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          (change)="chooseUpload($event)"
+        />
+      </label>
+      <div class="field">
+        <span>Image address</span>
+        <div class="inline">
+          <input [(ngModel)]="customUrl" placeholder="https://…" />
+          <button type="button" class="secondary" (click)="previewUrl()">Preview</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="search-panel">
+      @if (showSearch()) {
+        <h3>Find covers from a provider</h3>
+        @if (tracks().length) {
+          <app-album-match-picker
+            [trackIds]="trackIds()"
+            [artist]="album().artist"
+            [album]="album().title"
+            actionLabel="Show covers"
+            [disabled]="busy()"
+            (picked)="searchedMatch($event)"
+          />
+        }
+      } @else {
+        <button type="button" class="secondary" [disabled]="!tracks().length" (click)="showSearch.set(true)">
+          Search providers for covers…
+        </button>
+      }
+    </div>
+
+    @if (selectedCover(); as selected) {
+      <figure class="cover-preview">
+        <img [src]="selected.previewUrl" alt="Selected cover preview" />
+        <figcaption>Preview</figcaption>
+      </figure>
+    }
+
+    <div class="actions">
+      <button type="button" class="secondary" [disabled]="busy()" (click)="close()">Cancel</button>
+      <button type="button" [disabled]="!selectedCover() || busy()" (click)="save()">
+        Use this cover
+      </button>
+    </div>
+    @if (busy()) {
+      <p class="hint" aria-live="polite">Working…</p>
+    }
+  </div>
+</div>

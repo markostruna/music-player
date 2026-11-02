@@ -1,42 +1,115 @@
 using System.Text.Json;
+using MusicPlayer.Api.Contracts;
+using MusicPlayer.Api.Services.Identification;
 
 namespace MusicPlayer.Api.Services;
 
 public sealed class MusicBrainzClient(
     HttpClient http,
     ILogger<MusicBrainzClient> logger,
-    IConfiguration configuration) : IMusicBrainzClient
+    IConfiguration configuration) : IMusicBrainzClient, IArtistProvider
 {
     private const int MaximumImageSize = 10 * 1024 * 1024;
     private readonly string? fanartApiKey = configuration["FanartTv:ApiKey"];
     private readonly string? fanartClientKey = configuration["FanartTv:ClientKey"];
 
+    public string Id => "musicbrainz";
+    public string Name => "MusicBrainz";
+    public bool IsConfigured => true;
+
     public async Task<MusicBrainzResult?> FindArtistAsync(string artist, CancellationToken cancellationToken)
     {
-        using var search = await GetMusicBrainzJsonAsync(
-            $"artist/?query={Uri.EscapeDataString($"artist:\"{EscapeTerm(artist)}\"")}&fmt=json&limit=1",
-            cancellationToken);
-        var id = FirstEntityId(search, "artists");
-        if (string.IsNullOrWhiteSpace(id)) return null;
+        var matches = await SearchArtistsAsync(artist, cancellationToken);
+        return matches.Count == 0
+            ? null
+            : ToMusicBrainzResult(await GetArtistAsync(matches[0].Id, cancellationToken));
+    }
 
-        var result = await ResolveEntityAsync("artist", id, cancellationToken);
-        var fanartImage = await GetFanartArtistImageAsync(id, cancellationToken);
-        if (result is null)
+    public async Task<IReadOnlyList<ArtistMatchResponse>> SearchArtistsAsync(
+        string artist,
+        CancellationToken cancellationToken)
+    {
+        using var search = await GetMusicBrainzJsonAsync(
+            $"artist/?query={Uri.EscapeDataString($"artist:\"{EscapeTerm(artist)}\"")}&fmt=json&limit=12",
+            cancellationToken);
+        var items = search?.RootElement.GetPropertyOrNull("artists");
+        if (items is not { ValueKind: JsonValueKind.Array })
         {
-            return fanartImage is null
-                ? null
-                : new MusicBrainzResult(id, "", fanartImage.Value.Data, fanartImage.Value.ContentType, "Fanart.tv");
+            return [];
         }
 
-        return fanartImage is null
-            ? result
-            : result with
+        return items.Value.EnumerateArray()
+            .Select(item =>
             {
-                Image = fanartImage.Value.Data,
-                ImageContentType = fanartImage.Value.ContentType,
-                ImageProvider = "Fanart.tv",
-            };
+                var id = item.GetStringOrNull("id");
+                var name = item.GetStringOrNull("name");
+                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name))
+                {
+                    return null;
+                }
+
+                var detail = new[]
+                {
+                    item.GetStringOrNull("type"),
+                    item.GetStringOrNull("country"),
+                    item.GetStringOrNull("disambiguation"),
+                }.Where(value => !string.IsNullOrWhiteSpace(value));
+                return new ArtistMatchResponse(Id, id, name, string.Join(" · ", detail), null);
+            })
+            .Where(item => item is not null)
+            .Select(item => item!)
+            .ToArray();
     }
+
+    public async Task<ArtistProviderDetail?> GetArtistAsync(string id, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(id, out _))
+        {
+            return null;
+        }
+
+        using var entity = await GetMusicBrainzJsonAsync(
+            $"artist/{Uri.EscapeDataString(id)}?inc=url-rels&fmt=json",
+            cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        var name = entity.RootElement.GetStringOrNull("name") ?? "";
+        var result = await ResolveEntityAsync("artist", id, entity, cancellationToken);
+        var fanartImage = await GetFanartArtistImageAsync(id, cancellationToken);
+        if (fanartImage is not null)
+        {
+            result = result is null
+                ? new MusicBrainzResult(id, "", fanartImage.Value.Data, fanartImage.Value.ContentType, "Fanart.tv")
+                : result with
+                {
+                    Image = fanartImage.Value.Data,
+                    ImageContentType = fanartImage.Value.ContentType,
+                    ImageProvider = "Fanart.tv",
+                };
+        }
+
+        var match = new ArtistMatchResponse(Id, id, name, null, null);
+        return new ArtistProviderDetail(
+            match,
+            result?.Description ?? "",
+            null,
+            result?.Image,
+            result?.ImageContentType,
+            result?.ImageProvider);
+    }
+
+    private static MusicBrainzResult? ToMusicBrainzResult(ArtistProviderDetail? detail) =>
+        detail is null
+            ? null
+            : new MusicBrainzResult(
+                detail.Match.Id,
+                detail.Description,
+                detail.Image,
+                detail.ImageContentType,
+                detail.ImageProvider);
 
     private async Task<(byte[] Data, string ContentType)?> GetFanartArtistImageAsync(
         string musicBrainzId,
@@ -129,6 +202,15 @@ public sealed class MusicBrainzClient(
             return null;
         }
 
+        return await ResolveEntityAsync(entityType, id, entity, cancellationToken);
+    }
+
+    private async Task<MusicBrainzResult?> ResolveEntityAsync(
+        string entityType,
+        string id,
+        JsonDocument entity,
+        CancellationToken cancellationToken)
+    {
         var relations = entity.RootElement.GetPropertyOrNull("relations")?.EnumerateArray().ToArray() ?? [];
         var wikipediaUrl = relations
             .Where(relation => string.Equals(relation.GetStringOrNull("type"), "wikipedia", StringComparison.OrdinalIgnoreCase))

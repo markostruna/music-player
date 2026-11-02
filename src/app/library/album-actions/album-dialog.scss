@@ -1,13 +1,13 @@
 :host {
   display: contents;
 }
-.identify-backdrop {
+.dialog-backdrop {
   position: fixed;
   z-index: 60;
   inset: 0;
   background: rgb(0 0 0 / 55%);
 }
-.identify-dialog {
+.dialog {
   position: fixed;
   z-index: 61;
   top: 50%;
@@ -23,17 +23,17 @@
   box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   transform: translate(-50%, -50%);
 }
-.identify-header {
+.dialog-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   padding: 16px 18px 8px;
 }
-.identify-header h2 {
+.dialog-header h2 {
   margin: 0;
   font-size: 18px;
 }
-.identify-header p {
+.dialog-header p {
   margin: 2px 0 0;
   font-size: 12px;
   opacity: 0.7;
@@ -46,41 +46,11 @@
   font-size: 24px;
   line-height: 1;
 }
-.stepper {
-  display: flex;
-  gap: 8px;
-  margin: 0;
-  padding: 0 18px 10px;
-  list-style: none;
-  font-size: 12px;
-}
-.stepper li {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  padding-bottom: 6px;
-  border-bottom: 2px solid var(--line);
-  opacity: 0.55;
-}
-.stepper li span {
-  display: inline-grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--surface-hover);
-}
-.stepper li.active,
-.stepper li.complete {
-  border-color: #6f8b32;
-  opacity: 1;
-}
-.identify-body {
+.dialog-body {
   overflow: auto;
   padding: 4px 18px 18px;
 }
-.identify-error {
+.dialog-error {
   margin: 0 18px 8px;
   padding: 8px 10px;
   border-radius: 6px;
@@ -91,6 +61,10 @@
 .hint {
   font-size: 12px;
   opacity: 0.7;
+}
+h3 {
+  margin: 14px 0 8px;
+  font-size: 14px;
 }
 .field {
   display: grid;
@@ -187,12 +161,6 @@ button:disabled {
 .match-text small {
   opacity: 0.7;
 }
-.review-cover {
-  float: right;
-  width: 96px;
-  margin: 0 0 8px 12px;
-  border-radius: 6px;
-}
 .table-wrap {
   max-height: 300px;
   overflow: auto;
@@ -277,8 +245,10 @@ button:disabled {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.done {
-  font-weight: 600;
+.search-panel {
+  margin-top: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
 }
 @media (max-width: 560px) {
   .search-form,

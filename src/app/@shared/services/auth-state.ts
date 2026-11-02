@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MUSIC_API_BASE } from '../utils/api-path';
@@ -30,9 +30,13 @@ export class AuthState {
       );
       this.applyUser(user);
       return true;
-    } catch {
-      this.applyUser(null);
-      return false;
+    } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 401) {
+        this.applyUser(null);
+        return false;
+      }
+
+      throw error;
     }
   }
 
