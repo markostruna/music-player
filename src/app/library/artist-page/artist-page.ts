@@ -188,6 +188,8 @@ export class ArtistPage {
           })
           .replace(/\[b\]/gi, '<strong>')
           .replace(/\[\/b\]/gi, '</strong>')
+          .replace(/\[i\]/gi, '<em>')
+          .replace(/\[\/i\]/gi, '</em>')
           .replace(/\[s\]/gi, '<s>')
           .replace(/\[\/s\]/gi, '</s>')
       : 'No artist description is available.';
