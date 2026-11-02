@@ -26,6 +26,11 @@
             "inlineStyleLanguage": "scss",
             "assets": [
               {
+                "glob": ".htaccess",
+                "input": "public",
+                "output": "/"
+              },
+              {
                 "glob": "**/*",
                 "input": "public"
               }

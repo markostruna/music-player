@@ -214,23 +214,35 @@ public static class LibraryEndpoints
         .WithSummary("Streams a catalogued track with HTTP range support.");
         library.MapGet("/tracks/{trackId:int}/cover", async Task<Results<FileContentHttpResult, NotFound>> (
             int trackId,
+            HttpContext context,
             IMusicLibraryService music,
             CancellationToken cancellationToken) =>
         {
             var image = await music.ResolveCoverAsync(trackId, cancellationToken);
-            return image is null ? TypedResults.NotFound() : TypedResults.File(image.Data, image.ContentType);
+            if (image is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            context.Response.Headers.CacheControl = "private, max-age=2592000";
+            return TypedResults.File(image.Data, image.ContentType);
         })
         .WithName("GetTrackCover")
         .WithSummary("Returns the embedded cover art for a track.");
         library.MapGet("/artists/{key}/image", async Task<Results<FileContentHttpResult, NotFound>> (
             string key,
+            HttpContext context,
             IMusicLibraryService music,
             CancellationToken cancellationToken) =>
         {
             var image = await music.ResolveArtistImageAsync(key, cancellationToken);
-            return image is null
-                ? TypedResults.NotFound()
-                : TypedResults.File(image.Data, image.ContentType);
+            if (image is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            context.Response.Headers.CacheControl = "private, max-age=2592000";
+            return TypedResults.File(image.Data, image.ContentType);
         })
         .WithName("GetArtistImage")
         .WithSummary("Returns an artist image stored in the application data folder.");

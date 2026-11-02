@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { requireAuth } from '@shared/guards/auth.guard';
 import { requireAdmin } from '@shared/guards/admin.guard';
 import { adminRoutes } from '../admin/admin.routes';
+import { HomePage } from '../home/home-page';
 import { libraryRoutes } from '../library/library.routes';
 import { nowPlayingRoutes } from '../now-playing/now-playing.routes';
 import { MusicShell } from './music-shell/music-shell';
@@ -14,7 +15,7 @@ export const shellRoutes: Routes = [
     children: [
       {
         path: 'home',
-        loadComponent: () => import('../home/home-page').then((module) => module.HomePage),
+        component: HomePage,
       },
       ...libraryRoutes,
       ...nowPlayingRoutes,

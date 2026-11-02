@@ -100,6 +100,7 @@ Build the Angular application and copy the **contents** of `dist/music-player/br
 DocumentRoot "C:/xampp/htdocs/afterhours"
 <Directory "C:/xampp/htdocs/afterhours">
 	Options -Indexes +FollowSymLinks
+	AllowOverride All
 	Require all granted
 	FallbackResource /index.html
 </Directory>
@@ -110,6 +111,8 @@ ProxyPass        /music-api/ http://127.0.0.1:5080/ retry=0
 ProxyPassReverse /music-api/ http://127.0.0.1:5080/
 RequestHeader set X-Forwarded-Proto "https"
 ```
+
+The Angular build includes an `.htaccess` file that gives fingerprinted JavaScript and CSS bundles a one-year immutable cache and keeps `index.html` revalidated. `AllowOverride All` lets Apache apply these per-directory rules. If your server doesn't allow `.htaccess`, put the same `FilesMatch` and `Files` header rules directly in the HTTPS virtual host instead.
 
 Use a trusted TLS certificate before exposing the site to the internet. Run the API as a Windows service or a Task Scheduler task under a dedicated, non-interactive account that can read the configured music folders and write the database directory. Keep port `5080` private; only Apache should accept public connections. In Production, authentication and CSRF cookies are always marked Secure, so sign-in requires HTTPS. Development adapts cookie security to the local request to support `http://localhost:4200`. Back up the SQLite database and music files separately.
 
