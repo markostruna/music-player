@@ -10,6 +10,7 @@ using MusicPlayer.Api.Contracts;
 using MusicPlayer.Api.Data;
 using MusicPlayer.Api.Services;
 using MusicPlayer.Api.Services.Identification;
+using SkiaSharp;
 
 namespace MusicPlayer.Api.Tests;
 
@@ -20,6 +21,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     private MusicLibraryService library = null!;
     private StubMusicBrainzClient musicBrainz = null!;
     private ProviderSettingsService providerSettings = null!;
+    private ImageWebpService imageWebp = null!;
     private string testDirectory = null!;
     private string sourceDirectory = null!;
 
@@ -36,6 +38,9 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         testDirectory = Path.Combine(Path.GetTempPath(), $"afterhours-scan-{Guid.NewGuid():N}");
         sourceDirectory = Path.Combine(testDirectory, "music");
         Directory.CreateDirectory(sourceDirectory);
+        imageWebp = new ImageWebpService(
+            NullLogger<ImageWebpService>.Instance,
+            Path.Combine(testDirectory, "webp-cache"));
         musicBrainz = new StubMusicBrainzClient();
         providerSettings = new ProviderSettingsService(
             database,
@@ -47,6 +52,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             musicBrainz,
             NullLogger<MusicLibraryService>.Instance,
             new MusicLibraryBrowseService(database),
+            imageWebp,
             [],
             providerSettings);
     }
@@ -121,26 +127,22 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         var rescannedTrack = Assert.Single(await library.GetTracksAsync(CancellationToken.None));
         Assert.Equal("Edited Title", rescannedTrack.Title);
         Assert.Equal("Jazz", rescannedTrack.Genre);
-        var coverBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a+2QAAAAASUVORK5CYII=");
+        var coverBytes = CreatePngImage();
         var coverUpdate = await library.UpdateCoverAsync(new[] { rescannedTrack.Id }, coverBytes, CancellationToken.None);
         var cover = await library.ResolveCoverAsync(rescannedTrack.Id, CancellationToken.None);
 
         Assert.True(coverUpdate.Results.Single().Succeeded);
-        Assert.Equal("image/png", cover?.ContentType);
-        Assert.Equal(coverBytes, cover?.Data);
+        AssertWebp(cover);
 
-        byte[] folderCoverBytes = [.. coverBytes, 1];
         var folderCoverPath = Path.Combine(albumDirectory, "Folder.jpg");
-        await System.IO.File.WriteAllBytesAsync(folderCoverPath, folderCoverBytes);
+        await System.IO.File.WriteAllBytesAsync(folderCoverPath, coverBytes);
         var folderCover = await library.ResolveCoverAsync(rescannedTrack.Id, CancellationToken.None);
-        Assert.Equal("image/png", folderCover?.ContentType);
-        Assert.Equal(folderCoverBytes, folderCover?.Data);
+        AssertWebp(folderCover);
 
         System.IO.File.Delete(folderCoverPath);
-        byte[] alternateCoverBytes = [.. coverBytes, 2];
-        await System.IO.File.WriteAllBytesAsync(Path.Combine(albumDirectory, "cover.png"), alternateCoverBytes);
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(albumDirectory, "cover.png"), coverBytes);
         var alternateCover = await library.ResolveCoverAsync(rescannedTrack.Id, CancellationToken.None);
-        Assert.Equal(alternateCoverBytes, alternateCover?.Data);
+        AssertWebp(alternateCover);
     }
 
     [Fact]
@@ -431,7 +433,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
         Assert.Equal(["Referenced Artist"], artistMetadata.ReferencedArtists);
 
-        var imageBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a+2QAAAAASUVORK5CYII=");
+        var imageBytes = CreatePngImage();
         var cleanupPaths = new List<string>();
         try
         {
@@ -455,13 +457,16 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             cleanupPaths.Add(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Afterhours", "metadata", "albums", album.ImageFileName!));
+            cleanupPaths.AddRange(cleanupPaths.ToArray().Select(path => Path.ChangeExtension(path, ".webp")));
             Assert.False(artist.ImageMissing);
             Assert.False(album.ImageMissing);
             artistMetadata = await library.GetArtistMetadataAsync("Metadata Artist", CancellationToken.None);
             Assert.False(artistMetadata.ImageMissing);
             Assert.Contains("/api/library/artists/", artistMetadata.ImageUrl);
-            Assert.Equal(imageBytes, (await library.ResolveArtistImageAsync(artist.Key, CancellationToken.None))?.Data);
-            Assert.Equal(imageBytes, (await library.ResolveCoverAsync(track.Id, CancellationToken.None))?.Data);
+            AssertWebp(await library.ResolveArtistImageAsync(artist.Key, CancellationToken.None));
+            AssertWebp(await library.ResolveCoverAsync(track.Id, CancellationToken.None));
+            Assert.Equal(imageBytes, await System.IO.File.ReadAllBytesAsync(cleanupPaths[0]));
+            AssertWebpBytes(await System.IO.File.ReadAllBytesAsync(cleanupPaths[2]));
         }
         finally
         {
@@ -548,6 +553,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             musicBrainz,
             NullLogger<MusicLibraryService>.Instance,
             new MusicLibraryBrowseService(database),
+            imageWebp,
             [provider],
             providerSettings);
 
@@ -577,6 +583,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             musicBrainz,
             NullLogger<MusicLibraryService>.Instance,
             new MusicLibraryBrowseService(database),
+            imageWebp,
             [provider],
             providerSettings);
 
@@ -613,6 +620,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             musicBrainz,
             NullLogger<MusicLibraryService>.Instance,
             new MusicLibraryBrowseService(database),
+            imageWebp,
             [],
             null,
             null,
@@ -655,7 +663,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             Path = sourceDirectory,
         }, CancellationToken.None);
         await library.ScanAsync(root.Id, CancellationToken.None);
-        var image = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a+2QAAAAASUVORK5CYII=");
+        var image = CreatePngImage();
         musicBrainz.ArtistResult = new MusicBrainzResult("artist-mbid", "Artist description", image, "image/png");
         musicBrainz.AlbumResult = new MusicBrainzResult("album-mbid", "Album description", image, "image/png");
 
@@ -668,10 +676,10 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal($"{artistName}/{albumName}/Cover-MusicBrainz.png", album.ImageRelativePath);
         Assert.True(System.IO.File.Exists(Path.Combine(artistDirectory, "ArtistCover-MusicBrainz.png")));
         Assert.True(System.IO.File.Exists(Path.Combine(albumDirectory, "Cover-MusicBrainz.png")));
-        Assert.Equal(image, (await library.ResolveArtistImageAsync(artist.Key, CancellationToken.None))?.Data);
-        Assert.Equal(image, (await library.ResolveCoverAsync(
+        AssertWebp(await library.ResolveArtistImageAsync(artist.Key, CancellationToken.None));
+        AssertWebp(await library.ResolveCoverAsync(
             Assert.Single(await library.GetTracksAsync(CancellationToken.None)).Id,
-            CancellationToken.None))?.Data);
+            CancellationToken.None));
     }
 
     [Fact]
@@ -696,7 +704,7 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
             Path = sourceDirectory,
         }, CancellationToken.None);
         await library.ScanAsync(root.Id, CancellationToken.None);
-        var image = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a+2QAAAAASUVORK5CYII=");
+        var image = CreatePngImage();
         musicBrainz.ArtistResult = new MusicBrainzResult("artist-mbid", "Artist description", image, "image/png");
 
         await library.RefreshArtistMetadataAsync(artistName, CancellationToken.None);
@@ -726,6 +734,30 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         writer.Write(samples.Length);
         writer.Write(samples);
         await file.FlushAsync();
+    }
+
+    private static void AssertWebp(MusicPlayer.Api.Contracts.CoverImage? image)
+    {
+        Assert.NotNull(image);
+        Assert.Equal("image/webp", image.ContentType);
+        AssertWebpBytes(image.Data);
+    }
+
+    private static void AssertWebpBytes(byte[] image)
+    {
+        Assert.True(image.Length >= 12);
+        Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(image, 0, 4));
+        Assert.Equal("WEBP", System.Text.Encoding.ASCII.GetString(image, 8, 4));
+        using var bitmap = SKBitmap.Decode(image);
+        Assert.NotNull(bitmap);
+    }
+
+    private static byte[] CreatePngImage()
+    {
+        using var bitmap = new SKBitmap(2, 2);
+        bitmap.Erase(SKColors.Crimson);
+        using var encoded = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+        return encoded?.ToArray() ?? throw new InvalidOperationException("The test PNG could not be encoded.");
     }
 
     private sealed class TestWebHostEnvironment : IWebHostEnvironment

@@ -21,6 +21,7 @@ builder.Configuration
 var databasePath = Environment.GetEnvironmentVariable("MUSICPLAYER_DATABASE_PATH") ?? Path.Combine(dataDirectory, "music-library.db");
 
 builder.WebHost.UseUrls(builder.Configuration["Api:Url"] ?? "http://127.0.0.1:5080");
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 builder.Services.AddDbContext<MusicDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
 builder.Services.AddDataProtection()
     .SetApplicationName("Afterhours")
@@ -28,6 +29,7 @@ builder.Services.AddDataProtection()
 builder.Services.AddScoped<IProviderSettingsService, ProviderSettingsService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<MusicLibraryBrowseService>();
+builder.Services.AddSingleton<ImageWebpService>();
 builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
 builder.Services.AddSingleton<LibraryOperationManager>();
 builder.Services.AddHostedService<LibraryOperationManager>(provider =>
@@ -116,6 +118,7 @@ forwardedHeaders.KnownProxies.Add(IPAddress.IPv6Loopback);
 var app = builder.Build();
 app.UseForwardedHeaders(forwardedHeaders);
 app.UseExceptionHandler();
+app.UseResponseCompression();
 app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();

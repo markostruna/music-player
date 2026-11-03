@@ -35,6 +35,7 @@ public static class IdentifyEndpoints
             string id,
             IEnumerable<IArtistProvider> providers,
             IMusicBrainzClient musicBrainz,
+            ImageWebpService imageWebp,
             CancellationToken ct) =>
                 Run(async () =>
                 {
@@ -64,8 +65,11 @@ public static class IdentifyEndpoints
                         }
                     }
 
-                    var imageDataUrl = previewImage is not null && previewContentType is not null
-                        ? $"data:{previewContentType};base64,{Convert.ToBase64String(previewImage)}"
+                    var optimizedImage = previewImage is not null && previewContentType is not null
+                        ? await imageWebp.ConvertOrOriginalAsync(previewImage, previewContentType, ct)
+                        : null;
+                    var imageDataUrl = optimizedImage is not null
+                        ? $"data:{optimizedImage.ContentType};base64,{Convert.ToBase64String(optimizedImage.Data)}"
                         : null;
                     return TypedResults.Ok(new ArtistMatchDetailResponse(
                         detail.Match,
@@ -102,17 +106,18 @@ public static class IdentifyEndpoints
             .WithName("ListAlbumCoverCandidates")
             .WithSummary("Lists local and online cover candidates for an album.");
 
-        identify.MapGet("/image", (string url, HttpContext context, SafeImageFetcher fetcher, CancellationToken ct) =>
+        identify.MapGet("/image", (string url, HttpContext context, SafeImageFetcher fetcher, ImageWebpService imageWebp, CancellationToken ct) =>
             Run(async () =>
             {
                 var image = await fetcher.FetchAsync(url, ct);
+                var optimizedImage = await imageWebp.ConvertOrOriginalAsync(image.Data, image.ContentType, ct);
                 context.Response.Headers.CacheControl = "private, max-age=3600";
-                return TypedResults.File(image.Data, image.ContentType);
+                return TypedResults.File(optimizedImage.Data, optimizedImage.ContentType);
             }))
             .WithName("ProxyRemoteImage")
             .WithSummary("Downloads a remote image for preview without exposing internal networks.");
 
-        identify.MapGet("/local-image", (int rootId, string path, HttpContext context, IAlbumIdentificationService service, CancellationToken ct) =>
+        identify.MapGet("/local-image", (int rootId, string path, HttpContext context, IAlbumIdentificationService service, ImageWebpService imageWebp, CancellationToken ct) =>
             Run(async () =>
             {
                 if (await service.ReadLocalImageAsync(rootId, path, ct) is not { } image)
@@ -120,8 +125,9 @@ public static class IdentifyEndpoints
                     return TypedResults.NotFound();
                 }
 
+                var optimizedImage = await imageWebp.ConvertOrOriginalAsync(image.Data, image.ContentType, ct);
                 context.Response.Headers.CacheControl = "private, max-age=300";
-                return (IResult)TypedResults.File(image.Data, image.ContentType);
+                return (IResult)TypedResults.File(optimizedImage.Data, optimizedImage.ContentType);
             }))
             .WithName("GetLocalAlbumImage")
             .WithSummary("Returns an image stored inside a configured source root.");

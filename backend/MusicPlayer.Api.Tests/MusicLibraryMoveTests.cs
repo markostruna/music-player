@@ -71,7 +71,10 @@ public sealed class MusicLibraryMoveTests : IAsyncLifetime
             new TestWebHostEnvironment(),
             new StubMusicBrainzClient(),
             NullLogger<MusicLibraryService>.Instance,
-            new MusicLibraryBrowseService(database));
+            new MusicLibraryBrowseService(database),
+            new ImageWebpService(
+                NullLogger<ImageWebpService>.Instance,
+                Path.Combine(testDirectory, "webp-cache")));
     }
 
     public async Task DisposeAsync()

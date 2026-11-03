@@ -30,8 +30,12 @@ export class HomePage implements OnInit {
   readonly albums = signal<AlbumSummary[]>([]);
   readonly artists = signal<ArtistSummary[]>([]);
   readonly tracks = signal<MusicTrack[]>([]);
-  readonly isLoading = signal(true);
-  readonly errorMessage = signal('');
+  readonly albumsLoading = signal(true);
+  readonly artistsLoading = signal(true);
+  readonly tracksLoading = signal(true);
+  readonly albumsError = signal('');
+  readonly artistsError = signal('');
+  readonly tracksError = signal('');
 
   constructor() {
     effect(() => {
@@ -47,21 +51,46 @@ export class HomePage implements OnInit {
   }
 
   async loadHomeCollections(): Promise<void> {
-    this.isLoading.set(true);
-    this.errorMessage.set('');
+    await this.loadAlbums();
+    await Promise.all([this.loadArtists(), this.loadTracks()]);
+  }
+
+  private async loadAlbums(): Promise<void> {
+    this.albumsLoading.set(true);
+    this.albumsError.set('');
     try {
-      const [albumPage, artistPage, trackPage] = await Promise.all([
-        this.library.listAlbumPage('', 1, HOME_COLLECTION_SIZE, true),
-        this.library.listArtistPage('', 1, HOME_COLLECTION_SIZE, true),
-        this.library.listTrackPage('', 1, HOME_COLLECTION_SIZE, true),
-      ]);
+      const albumPage = await this.library.listAlbumPage('', 1, HOME_COLLECTION_SIZE, true);
       this.albums.set(albumPage.items);
+    } catch {
+      this.albumsError.set('Albums could not be loaded. Check the music server connection.');
+    } finally {
+      this.albumsLoading.set(false);
+    }
+  }
+
+  private async loadArtists(): Promise<void> {
+    this.artistsLoading.set(true);
+    this.artistsError.set('');
+    try {
+      const artistPage = await this.library.listArtistPage('', 1, HOME_COLLECTION_SIZE, true);
       this.artists.set(artistPage.items);
+    } catch {
+      this.artistsError.set('Artists could not be loaded. Check the music server connection.');
+    } finally {
+      this.artistsLoading.set(false);
+    }
+  }
+
+  private async loadTracks(): Promise<void> {
+    this.tracksLoading.set(true);
+    this.tracksError.set('');
+    try {
+      const trackPage = await this.library.listTrackPage('', 1, HOME_COLLECTION_SIZE, true);
       this.tracks.set(trackPage.items);
     } catch {
-      this.errorMessage.set('Your collection could not be loaded. Check the music server connection.');
+      this.tracksError.set('Tracks could not be loaded. Check the music server connection.');
     } finally {
-      this.isLoading.set(false);
+      this.tracksLoading.set(false);
     }
   }
 
