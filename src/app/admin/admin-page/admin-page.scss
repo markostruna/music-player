@@ -33,7 +33,7 @@
 }
 .admin-section-heading > span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .admin-form {
   display: grid;
@@ -51,7 +51,7 @@
   display: grid;
   gap: 6px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 .admin-form input,
@@ -67,7 +67,7 @@
   background: var(--surface-raised);
   color: var(--ink);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
 }
 .admin-form button,
 .admin-list-row > button,
@@ -79,7 +79,7 @@
   background: var(--forest);
   color: #fff;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 .admin-list-row > button:disabled {
@@ -113,7 +113,7 @@
 .admin-row-main small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -130,7 +130,7 @@
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .role-field select {
   width: 100px;
@@ -140,7 +140,7 @@
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .enabled-field input {
@@ -166,7 +166,7 @@
 .admin-status {
   padding: 10px 12px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .admin-alert {
   background: #f8e8e5;

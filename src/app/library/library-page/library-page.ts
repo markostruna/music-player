@@ -6,10 +6,6 @@ import {
   ViewChild,
 } from '@angular/core';
 import { LibraryStore, LibraryView } from '@shared/services/library-store';
-import { MusicLibraryApi } from '@shared/services/music-library-api';
-import { PlayerService } from '@shared/services/player.service';
-import { ToastService } from '@shared/services/toast-service';
-import { MusicShellState } from '../../shell/music-shell/music-shell-state';
 import { AlbumsPage } from './albums-page/albums-page';
 import { ArtistsPage } from './artists-page/artists-page';
 import { FoldersPage } from './folders-page/folders-page';
@@ -22,11 +18,7 @@ import { TracksPage } from './tracks-page/tracks-page';
 })
 export class LibraryPage {
   private readonly tabViews: LibraryView[] = ['albums', 'artists', 'tracks', 'folders'];
-  private readonly library = inject(MusicLibraryApi);
   private readonly store = inject(LibraryStore);
-  private readonly player = inject(PlayerService);
-  private readonly toast = inject(ToastService);
-  readonly activeSection = inject(MusicShellState).activeSection;
   readonly collectionView = this.store.collectionView;
   readonly searchQuery = this.store.searchQuery;
   readonly refreshTrigger = signal(0);
@@ -96,17 +88,5 @@ export class LibraryPage {
 
   refreshLibrary(): void {
     this.refreshTrigger.update((trigger) => trigger + 1);
-  }
-
-  async playFirstTrack(): Promise<void> {
-    try {
-      const tracks =
-        this.collectionView() === 'tracks'
-          ? await this.library.searchTracks(this.searchQuery())
-          : await this.library.searchTracks('');
-      this.player.play(tracks, 0);
-    } catch {
-      this.toast.show('Tracks could not be loaded for playback.', 'error');
-    }
   }
 }

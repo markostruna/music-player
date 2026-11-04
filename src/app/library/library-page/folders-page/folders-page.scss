@@ -25,7 +25,7 @@
   color: var(--muted);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .folder-back:hover,
@@ -39,7 +39,7 @@
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .folder-breadcrumbs button:disabled {
@@ -72,7 +72,7 @@
 
 .folder-files h4 span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -85,7 +85,7 @@
   padding: 8px 4px;
   border-bottom: 1px solid var(--line);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .file-icon {
@@ -122,13 +122,13 @@
 }
 
 .file-details strong {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .file-details small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .file-play {
@@ -211,12 +211,12 @@
 }
 
 .folder-name {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .folder-path {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }

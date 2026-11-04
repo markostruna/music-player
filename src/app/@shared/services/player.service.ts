@@ -8,10 +8,14 @@ export class PlayerService {
 
   readonly queue = signal<MusicTrack[]>([]);
   readonly currentIndex = signal(-1);
+  readonly shuffle = signal(false);
+  readonly repeat = signal(false);
   readonly currentTrack = computed((): MusicTrack | null => this.queue()[this.currentIndex()] ?? null);
   readonly hasPrevious = computed(() => this.currentIndex() > 0);
   readonly hasNext = computed(
-    () => this.currentIndex() >= 0 && this.currentIndex() < this.queue().length - 1,
+    () =>
+      this.currentIndex() >= 0 &&
+      (this.shuffle() || this.currentIndex() < this.queue().length - 1),
   );
   readonly isPlaying = signal(false);
   readonly currentTime = signal(0);
@@ -27,7 +31,9 @@ export class PlayerService {
     this.audio.addEventListener('timeupdate', () => this.syncTime());
     this.audio.addEventListener('loadedmetadata', () => this.syncTime());
     this.audio.addEventListener('ended', () => {
-      if (this.hasNext()) this.next();
+      if (this.repeat()) this.startIndex(this.currentIndex());
+      else if (this.shuffle()) this.startRandomTrack();
+      else if (this.hasNext()) this.next();
       else this.isPlaying.set(false);
     });
   }
@@ -52,7 +58,8 @@ export class PlayerService {
   }
 
   next(): void {
-    if (this.hasNext()) this.startIndex(this.currentIndex() + 1);
+    if (this.shuffle()) this.startRandomTrack();
+    else if (this.hasNext()) this.startIndex(this.currentIndex() + 1);
   }
 
   previous(): void {
@@ -108,6 +115,15 @@ export class PlayerService {
       this.isPlaying.set(false);
       this.errorMessage.set('This track could not be played in this browser.');
     });
+  }
+
+  private startRandomTrack(): void {
+    const queue = this.queue();
+    if (!queue.length) return;
+    const currentIndex = this.currentIndex();
+    const candidates = queue.map((_, index) => index).filter((index) => index !== currentIndex);
+    const nextIndex = candidates[Math.floor(Math.random() * candidates.length)];
+    this.startIndex(nextIndex ?? currentIndex);
   }
 
   private syncTime(): void {

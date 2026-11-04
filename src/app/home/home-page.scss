@@ -4,11 +4,28 @@
 
 .home-page {
   margin-inline: auto;
-  padding-top: 24px;
+  padding-top: 0;
 }
 
 .home-banner {
   margin-bottom: 30px;
+  background-image: url('../assets/Neon Cyberpunk DJ Setup.webp');
+  background-position: center;
+  background-size: cover;
+}
+
+.home-banner .feature-shade {
+  background:
+    linear-gradient(90deg, var(--paper) 0%, transparent 16%),
+    linear-gradient(270deg, var(--paper) 0%, transparent 16%),
+    linear-gradient(0deg, var(--paper) 0%, transparent 16%),
+    linear-gradient(
+      90deg,
+      rgb(14 26 19 / 86%) 0%,
+      rgb(14 26 19 / 53%) 40%,
+      rgb(14 26 19 / 5%) 100%
+    );
+  pointer-events: none;
 }
 
 .home-banner h1 {
@@ -112,12 +129,12 @@
 }
 
 .home-track-copy strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .home-track-copy small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .home-track-tile > svg {
@@ -129,7 +146,7 @@
 
 @media (max-width: 680px) {
   .home-page {
-    padding-top: 18px;
+    padding-top: 0;
   }
 
   .home-banner {

@@ -51,7 +51,8 @@ export class MusicShell {
   private readonly headerScrollThreshold = 100;
   readonly isLibraryPage = computed(() => {
     this.navigationEnd();
-    return this.route.firstChild?.snapshot.routeConfig?.path === 'library';
+    const path = this.route.firstChild?.snapshot.routeConfig?.path;
+    return path === 'library' || (path?.startsWith('library/') ?? false);
   });
   readonly isHomePage = computed(() => {
     this.navigationEnd();
@@ -108,6 +109,12 @@ export class MusicShell {
   updateHeaderVisibility(): void {
     const currentScrollY = window.scrollY;
 
+    if (window.innerWidth > 680) {
+      this.headerVisible.set(true);
+      this.lastScrollY = currentScrollY;
+      return;
+    }
+
     if (currentScrollY <= 10) {
       this.headerVisible.set(true);
       this.lastScrollY = currentScrollY;
@@ -147,17 +154,17 @@ export class MusicShell {
   constructor() {
     if (typeof window !== 'undefined') {
       this.lastScrollY = window.scrollY;
-      inject(DestroyRef).onDestroy(() => document.body.classList.remove('player-hidden'));
     }
 
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mobile = window.matchMedia('(max-width: 680px)');
       const landscape = window.matchMedia('(orientation: landscape)');
       const updateMenuVisibility = () => {
-        if (landscape.matches) {
-          this.menuVisible.set(false);
-        } else if (mobile.matches) {
-          this.menuVisible.set(true);
+        const tabletWidth = !mobile.matches && window.innerWidth <= 900;
+        this.menuVisible.set(!landscape.matches && !tabletWidth);
+        if (!mobile.matches) {
+          this.headerVisible.set(true);
+          this.lastScrollY = window.scrollY;
         }
       };
       updateMenuVisibility();
@@ -175,9 +182,6 @@ export class MusicShell {
       this.headerVisible.set(true);
     });
 
-    effect(() => {
-      document.body.classList.toggle('player-hidden', !this.headerVisible());
-    });
   }
 
   setSearchQuery(query: string): void {

@@ -120,8 +120,12 @@ export class AlbumPage {
     }
   }
 
-  playTrack(tracks: MusicTrack[], index: number): void {
-    this.player.play(tracks, index);
+  playAlbum(tracks: MusicTrack[]): void {
+    this.player.play(tracks, 0);
+  }
+
+  playTrack(track: MusicTrack): void {
+    this.player.play([track], 0);
   }
 
   refreshInformation(): void {

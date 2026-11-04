@@ -99,7 +99,6 @@ export class HomePage implements OnInit {
   }
 
   playTrack(track: MusicTrack): void {
-    const queue = this.tracks();
-    this.player.play(queue, queue.findIndex((item) => item.id === track.id));
+    this.player.play([track], 0);
   }
 }
