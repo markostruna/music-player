@@ -70,7 +70,7 @@ export class AlbumPage {
     return {
       title: selectedTrack.album,
       artist,
-      coverUrl: refreshed?.imageUrl || selectedTrack.coverUrl,
+      coverUrl: refreshed?.imageUrl || selectedTrack.albumCoverUrl,
       musicBrainzId: refreshed?.musicBrainzId ?? '',
       informationUpdatedAt: refreshed?.updatedAt ?? '',
       releaseYear: albumTracks.find((track) => track.year > 0)?.year,

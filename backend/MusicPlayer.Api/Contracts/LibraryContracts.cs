@@ -29,6 +29,19 @@ public sealed record MusicFolderContentsResponse(
     IReadOnlyList<MusicFolderBrowseEntryResponse> Folders,
     IReadOnlyList<MusicFolderFileResponse> Files);
 
+public enum CoverImageVariant
+{
+    Tile,
+    Track,
+    Album,
+}
+
+public enum ArtistImageVariant
+{
+    Tile,
+    Page,
+}
+
 /// <summary>A catalog entry available for browsing and playback.</summary>
 public sealed record TrackResponse(
     int Id,

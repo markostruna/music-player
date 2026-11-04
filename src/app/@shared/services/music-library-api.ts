@@ -20,8 +20,12 @@ export interface MusicTrack {
   durationSeconds: number;
   streamUrl: string;
   coverUrl: string;
+  tileCoverUrl: string;
+  albumCoverUrl: string;
   fileExtension: string;
 }
+
+type CoverImageVariant = 'tile' | 'track' | 'album';
 
 export interface ArtistMetadata {
   description: string;
@@ -36,6 +40,9 @@ export interface PagedTracks {
   page: number;
   pageSize: number;
 }
+
+type MusicTrackResponse = Omit<MusicTrack, 'tileCoverUrl' | 'albumCoverUrl'>;
+type PagedTrackResponse = Omit<PagedTracks, 'items'> & { items: MusicTrackResponse[] };
 
 export interface AlbumSummary {
   album: string;
@@ -169,7 +176,9 @@ export class MusicLibraryApi {
 
   listTracks(): Promise<MusicTrack[]> {
     return firstValueFrom(
-      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks`, { withCredentials: true }),
+      this.http.get<MusicTrackResponse[]>(`${MUSIC_API_BASE}/library/tracks`, {
+        withCredentials: true,
+      }),
     ).then((tracks) => this.mapTracks(tracks));
   }
 
@@ -180,7 +189,7 @@ export class MusicLibraryApi {
       params.set('folderPath', folderScope.path);
     }
     return firstValueFrom(
-      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks/search?${params}`, {
+      this.http.get<MusicTrackResponse[]>(`${MUSIC_API_BASE}/library/tracks/search?${params}`, {
         withCredentials: true,
       }),
     ).then((tracks) => this.mapTracks(tracks));
@@ -204,7 +213,7 @@ export class MusicLibraryApi {
       params.set('folderPath', folderScope.path);
     }
     return firstValueFrom(
-      this.http.get<PagedTracks>(`${MUSIC_API_BASE}/library/tracks/page?${params}`, {
+      this.http.get<PagedTrackResponse>(`${MUSIC_API_BASE}/library/tracks/page?${params}`, {
         withCredentials: true,
       }),
     ).then((result) => ({
@@ -233,7 +242,7 @@ export class MusicLibraryApi {
       ...result,
       items: result.items.map((album) => ({
         ...album,
-        coverUrl: `${MUSIC_API_PREFIX}${album.coverUrl}`,
+        coverUrl: coverImageUrl(album.coverUrl, 'tile'),
       })),
     }));
   }
@@ -241,7 +250,7 @@ export class MusicLibraryApi {
   listAlbumTracks(artist: string, album: string): Promise<MusicTrack[]> {
     const params = new URLSearchParams({ artist, album });
     return firstValueFrom(
-      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/albums/tracks?${params}`, {
+      this.http.get<MusicTrackResponse[]>(`${MUSIC_API_BASE}/library/albums/tracks?${params}`, {
         withCredentials: true,
       }),
     ).then((tracks) => this.mapTracks(tracks));
@@ -249,7 +258,7 @@ export class MusicLibraryApi {
 
   listAlbumTracksByTrackId(trackId: number): Promise<MusicTrack[]> {
     return firstValueFrom(
-      this.http.get<MusicTrack[]>(
+      this.http.get<MusicTrackResponse[]>(
         `${MUSIC_API_BASE}/library/albums/by-track/${trackId}/tracks`,
         { withCredentials: true },
       ),
@@ -259,7 +268,7 @@ export class MusicLibraryApi {
   listArtistTracks(artist: string): Promise<MusicTrack[]> {
     const params = new URLSearchParams({ artist });
     return firstValueFrom(
-      this.http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/artists/tracks?${params}`, {
+      this.http.get<MusicTrackResponse[]>(`${MUSIC_API_BASE}/library/artists/tracks?${params}`, {
         withCredentials: true,
       }),
     ).then((tracks) => this.mapTracks(tracks));
@@ -297,7 +306,7 @@ export class MusicLibraryApi {
       ...result,
       items: result.items.map((artist) => ({
         ...artist,
-        coverUrl: `${MUSIC_API_PREFIX}${artist.coverUrl}`,
+        coverUrl: coverImageUrl(artist.coverUrl, 'tile'),
         artistImageUrl: artist.artistImageUrl
           ? `${MUSIC_API_PREFIX}${artist.artistImageUrl}`
           : '',
@@ -544,11 +553,23 @@ export class MusicLibraryApi {
     return btoa(binary);
   }
 
-  private mapTracks(tracks: MusicTrack[]): MusicTrack[] {
-    return tracks.map((track) => ({
-      ...track,
-      streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
-      coverUrl: `${MUSIC_API_PREFIX}${track.coverUrl}`,
-    }));
+  private mapTracks(tracks: MusicTrackResponse[]): MusicTrack[] {
+    return tracks.map((track) => {
+      const coverUrl = coverImageUrl(track.coverUrl, 'track');
+      return {
+        ...track,
+        streamUrl: `${MUSIC_API_PREFIX}${track.streamUrl}`,
+        coverUrl,
+        tileCoverUrl: coverImageUrl(track.coverUrl, 'tile'),
+        albumCoverUrl: coverImageUrl(track.coverUrl, 'album'),
+      };
+    });
   }
+}
+
+function coverImageUrl(url: string, variant: CoverImageVariant): string {
+  const [path, query = ''] = url.split('?', 2);
+  const params = new URLSearchParams(query);
+  params.set('variant', variant);
+  return `${MUSIC_API_PREFIX}${path}?${params.toString()}`;
 }

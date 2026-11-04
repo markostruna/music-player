@@ -87,7 +87,7 @@ export class ArtistPage {
         groups.set(key, {
           key,
           title: track.album,
-          coverUrl: track.coverUrl,
+          coverUrl: track.tileCoverUrl,
           year: track.year,
           tracks: [track],
         });
@@ -102,7 +102,7 @@ export class ArtistPage {
       this.artistMetadata()?.artist === name ? this.artistMetadata() : null;
     return {
       name: displayName,
-      coverUrl: refreshed?.imageUrl || metadata?.imageUrl || first.coverUrl,
+      coverUrl: refreshed?.imageUrl || metadata?.imageUrl || first.albumCoverUrl,
       imageMissing: refreshed?.imageMissing ?? metadata?.imageMissing ?? true,
       description: refreshed?.description ?? metadata?.description ?? '',
       referencedArtists: metadata?.referencedArtists ?? [],

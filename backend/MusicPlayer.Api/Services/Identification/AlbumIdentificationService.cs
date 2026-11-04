@@ -108,7 +108,7 @@ public sealed partial class AlbumIdentificationService(
         }
 
         candidates.Add(new CoverCandidateResponse(
-            "embedded", "Current cover", "Current album cover", $"/api/library/tracks/{tracks[0].Id}/cover?format=webp"));
+            "embedded", "Current cover", "Current album cover", $"/api/library/tracks/{tracks[0].Id}/cover?format=webp&variant=album"));
 
         string? releaseGroupId = null;
         if (!string.IsNullOrWhiteSpace(request.MatchId))

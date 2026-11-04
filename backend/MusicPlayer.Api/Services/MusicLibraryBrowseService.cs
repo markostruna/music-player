@@ -135,7 +135,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             item.TrackCount,
             item.DurationSeconds,
             item.CoverTrackId,
-            coversByTrackId[item.CoverTrackId].CoverUrl)).ToArray();
+            $"{coversByTrackId[item.CoverTrackId].CoverUrl}&variant=tile")).ToArray();
         return new PagedResponse<AlbumSummaryResponse>(items, totalCount, actualPage, pageSize);
     }
 
@@ -281,7 +281,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 item.Artist,
                 item.TrackCount,
                 albumCounts.GetValueOrDefault(item.Artist),
-                representative.CoverUrl,
+                $"{representative.CoverUrl}&variant=tile",
                 GetArtistImageUrl(metadata) ?? "",
                 IsArtistImageMissing(metadata));
         }).ToArray();
@@ -432,13 +432,13 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         track.DurationSeconds,
         $"/api/library/tracks/{track.Id}/stream",
         album?.ImageMissing == false && !string.IsNullOrWhiteSpace(album.ImageFileName)
-            ? $"/api/library/tracks/{track.Id}/cover?format=webp&v={album.UpdatedAt.ToUnixTimeMilliseconds()}"
-            : $"/api/library/tracks/{track.Id}/cover?format=webp",
+            ? $"/api/library/tracks/{track.Id}/cover?format=webp&variant=track&v={album.UpdatedAt.ToUnixTimeMilliseconds()}"
+            : $"/api/library/tracks/{track.Id}/cover?format=webp&variant=track",
             Path.GetExtension(track.RelativePath).TrimStart('.').ToLowerInvariant());
 
     private static string? GetArtistImageUrl(MusicArtistMetadata? metadata) =>
             metadata?.ImageMissing == false && !string.IsNullOrWhiteSpace(metadata.ImageFileName)
-                ? $"/api/library/artists/{metadata.Key}/image?format=webp&v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
+                ? $"/api/library/artists/{metadata.Key}/image?format=webp&variant=tile&v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
                 : null;
 
     private static bool IsArtistImageMissing(MusicArtistMetadata? metadata) =>
