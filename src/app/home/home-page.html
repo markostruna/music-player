@@ -1,5 +1,14 @@
 <div class="content-scroll home-page">
   <section class="feature-banner home-banner">
+    <img
+      src="media/home-hero-S5SUMED5.webp"
+      alt=""
+      aria-hidden="true"
+      width="1536"
+      height="1024"
+      fetchpriority="high"
+      decoding="async"
+    />
     <div class="feature-shade"></div>
     <div class="feature-content">
       <span class="feature-tag">WELCOME TO AFTERHOURS</span>
@@ -62,7 +71,15 @@
         }
       </div>
     } @else if (albumsLoading()) {
-      <p class="empty-state">Loading albums…</p>
+      <div class="home-collection-grid" role="status" aria-label="Loading albums">
+        @for (placeholder of skeletonItems; track $index) {
+          <div class="collection-tile home-skeleton-tile" aria-hidden="true">
+            <span class="tile-art"></span>
+            <span class="tile-title home-skeleton-line home-skeleton-title"></span>
+            <span class="tile-detail home-skeleton-line home-skeleton-detail"></span>
+          </div>
+        }
+      </div>
     } @else if (!albumsError()) {
       <p class="empty-state">No albums in your library yet.</p>
     }
@@ -122,7 +139,15 @@
         }
       </div>
     } @else if (artistsLoading()) {
-      <p class="empty-state">Loading artists…</p>
+      <div class="home-collection-grid" role="status" aria-label="Loading artists">
+        @for (placeholder of skeletonItems; track $index) {
+          <div class="collection-tile home-skeleton-tile" aria-hidden="true">
+            <span class="tile-art artist-art"></span>
+            <span class="tile-title home-skeleton-line home-skeleton-title"></span>
+            <span class="tile-detail home-skeleton-line home-skeleton-detail"></span>
+          </div>
+        }
+      </div>
     } @else if (!artistsError()) {
       <p class="empty-state">No artists in your library yet.</p>
     }
@@ -163,7 +188,18 @@
         }
       </div>
     } @else if (tracksLoading()) {
-      <p class="empty-state">Loading tracks…</p>
+      <div class="home-track-grid" role="status" aria-label="Loading tracks">
+        @for (placeholder of skeletonItems; track $index) {
+          <div class="home-track-tile home-skeleton-track-tile" aria-hidden="true">
+            <span class="home-track-art home-skeleton-track-art"></span>
+            <span class="home-track-copy">
+              <span class="home-skeleton-line home-skeleton-track-title"></span>
+              <span class="home-skeleton-line home-skeleton-track-detail"></span>
+            </span>
+            <span class="home-skeleton-play"></span>
+          </div>
+        }
+      </div>
     } @else if (!tracksError()) {
       <p class="empty-state">No tracks in your library yet.</p>
     }

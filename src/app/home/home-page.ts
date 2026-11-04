@@ -30,6 +30,7 @@ export class HomePage implements OnInit {
   readonly albums = signal<AlbumSummary[]>([]);
   readonly artists = signal<ArtistSummary[]>([]);
   readonly tracks = signal<MusicTrack[]>([]);
+  readonly skeletonItems = Array.from({ length: HOME_COLLECTION_SIZE });
   readonly albumsLoading = signal(true);
   readonly artistsLoading = signal(true);
   readonly tracksLoading = signal(true);
