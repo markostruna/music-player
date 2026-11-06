@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs><linearGradient id="a" x2="1" y2="1"><stop stop-color="#122344"/><stop offset="1" stop-color="#d76489"/></linearGradient><radialGradient id="b"><stop stop-color="#ffe4ba"/><stop offset="1" stop-color="#e58489"/></radialGradient></defs>
+  <rect width="600" height="600" fill="url(#a)"/><circle cx="300" cy="265" r="155" fill="url(#b)"/><path d="M0 400Q130 290 280 410T600 360V600H0Z" fill="#192b4d"/><path d="M0 475Q160 360 330 475T600 430V600H0Z" fill="#3e5270"/><path d="M0 530Q190 435 380 520T600 500V600H0Z" fill="#859f9b"/>
+  <text x="40" y="70" fill="#fff" font-family="sans-serif" font-size="24" letter-spacing="7">AURORA DRIVE</text><text x="40" y="560" fill="#fff" font-family="sans-serif" font-size="30" letter-spacing="5">FIRST LIGHT</text>
+</svg>

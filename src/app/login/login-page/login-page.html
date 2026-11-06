@@ -1,6 +1,13 @@
 <main class="login-layout">
   <section class="cover-panel" aria-label="Live music">
-    <div class="cover-image"></div>
+    <div
+      class="cover-image"
+      [style.background-image]="
+        demoMode
+          ? 'linear-gradient(90deg, rgb(12 22 17 / 74%), rgb(12 22 17 / 12%)), url(demo/night.svg)'
+          : null
+      "
+    ></div>
     <a class="wordmark wordmark-light" routerLink="/login" aria-label="Afterhours home">
       <span class="brand-mark" aria-hidden="true">a.</span>
       <span>afterhours</span>
@@ -78,7 +85,13 @@
         </button>
       </form>
 
-      <p class="demo-note">Accounts are managed by your library administrator.</p>
+      <p class="demo-note">
+        {{
+          demoMode
+            ? 'Demo mode: enter any email and password to continue.'
+            : 'Accounts are managed by your library administrator.'
+        }}
+      </p>
     </div>
     <footer class="login-footer">
       <span>© 2026 AFTERHOURS</span><a href="#privacy">Privacy</a><a href="#terms">Terms</a>

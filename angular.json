@@ -58,6 +58,33 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "demo": {
+              "fileReplacements": [
+                {
+                  "replace": "src/app/app.config.ts",
+                  "with": "src/demo/app.config.demo.ts"
+                },
+                {
+                  "replace": "src/app/@shared/utils/api-path.ts",
+                  "with": "src/demo/api-path.demo.ts"
+                },
+                {
+                  "replace": "src/app/app.routes.ts",
+                  "with": "src/demo/app.routes.demo.ts"
+                }
+              ],
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "src/demo/assets",
+                  "output": "demo"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -73,6 +100,9 @@
             },
             "development": {
               "buildTarget": "music-player:build:development"
+            },
+            "demo": {
+              "buildTarget": "music-player:build:development,demo"
             }
           },
           "defaultConfiguration": "development"

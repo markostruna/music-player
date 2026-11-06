@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthState, UserRole } from './auth-state';
-import { MUSIC_API_BASE, MUSIC_API_PREFIX } from '../utils/api-path';
+import { DEMO_MODE, MUSIC_API_BASE, MUSIC_API_PREFIX } from '../utils/api-path';
 
 export interface MusicTrack {
   id: number;
@@ -568,6 +568,7 @@ export class MusicLibraryApi {
 }
 
 function coverImageUrl(url: string, variant: CoverImageVariant): string {
+  if (DEMO_MODE) return url;
   const [path, query = ''] = url.split('?', 2);
   const params = new URLSearchParams(query);
   params.set('variant', variant);

@@ -9,6 +9,7 @@ import {
 import { MusicLibraryApi } from '@shared/services/music-library-api';
 import { ProviderSettingsApi } from '@shared/services/provider-settings-api';
 import { errorMessage } from './error-message';
+import { DEMO_MODE } from '@shared/utils/api-path';
 
 @Component({
   selector: 'app-artist-cover-dialog',
@@ -116,6 +117,10 @@ export class ArtistCoverDialog implements OnInit, OnDestroy {
   }
 
   previewUrl(): void {
+    if (DEMO_MODE) {
+      this.error.set('External image URLs are unavailable in the demo. Choose demo artwork or upload an image.');
+      return;
+    }
     const url = this.customUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
       this.error.set('Enter a valid http or https image address.');

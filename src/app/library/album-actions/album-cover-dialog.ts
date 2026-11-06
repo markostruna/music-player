@@ -5,6 +5,7 @@ import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api'
 import { AlbumMatchPicker } from './album-match-picker';
 import { AlbumRef } from './album-actions';
 import { errorMessage } from './error-message';
+import { DEMO_MODE } from '@shared/utils/api-path';
 
 @Component({
   selector: 'app-album-cover-dialog',
@@ -75,6 +76,10 @@ export class AlbumCoverDialog implements OnInit, OnDestroy {
   }
 
   previewUrl(): void {
+    if (DEMO_MODE) {
+      this.error.set('External image URLs are unavailable in the demo. Choose demo artwork or upload an image.');
+      return;
+    }
     const url = this.customUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
       this.error.set('Enter a valid http or https image address.');

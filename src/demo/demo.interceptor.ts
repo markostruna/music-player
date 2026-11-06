@@ -1,0 +1,710 @@
+import { DOCUMENT } from '@angular/common';
+import {
+  HttpErrorResponse,
+  HttpInterceptorFn,
+  HttpRequest,
+  HttpResponse,
+} from '@angular/common/http';
+import { inject, Injectable } from '@angular/core';
+import { of, throwError } from 'rxjs';
+import { AlbumMatch } from '@shared/services/album-identify-api';
+import { ThemeName, UserRole } from '@shared/services/auth-state';
+import {
+  LibraryOperationStatus,
+  ManagedUser,
+  MetadataPatch,
+  AlbumSummary,
+  ArtistSummary,
+  MusicFolder,
+  MusicTrack,
+  SourceRoot,
+} from '@shared/services/music-library-api';
+import { MUSIC_API_BASE } from '@shared/utils/api-path';
+
+interface DemoBody {
+  email: string;
+  role: UserRole;
+  theme: ThemeName;
+  name: string;
+  path: string;
+  isEnabled: boolean;
+  trackIds: number[];
+  changes: MetadataPatch;
+  image: string;
+  artist: string;
+  album: string;
+  description: string;
+  destinationFolderId: number;
+  provider: string;
+  year: number | null;
+  destinationRootId: number;
+  providerId: string;
+}
+
+interface DemoTrack extends MusicTrack {
+  artistDescription: string;
+  artistImageUrl: string;
+  artistImageMissing: boolean;
+}
+
+@Injectable({ providedIn: 'root' })
+export class DemoBackend {
+  private readonly document = inject(DOCUMENT);
+  private readonly now = new Date().toISOString();
+  private readonly audioUrls = new Map<number, string>();
+  private signedIn = true;
+  private user = {
+    id: 1,
+    email: 'demo@example.com',
+    role: 'Admin' as UserRole,
+    theme: 'Dark' as ThemeName,
+  };
+  private users: ManagedUser[] = [
+    { id: 1, email: 'demo@example.com', role: 'Admin', isEnabled: true, createdAt: this.now },
+    { id: 2, email: 'guest@example.com', role: 'Guest', isEnabled: true, createdAt: this.now },
+  ];
+  private roots: SourceRoot[] = [
+    { id: 1, name: 'Demo collection', path: 'Demo Music', trackCount: 16, isEnabled: true },
+  ];
+  private folders: MusicFolder[] = [
+    { id: 1, sourceRootId: 1, name: 'First Light', relativePath: 'Aurora Drive/First Light' },
+    { id: 2, sourceRootId: 1, name: 'Golden Hour', relativePath: 'Aurora Drive/Golden Hour' },
+    { id: 3, sourceRootId: 1, name: 'Slow Tides', relativePath: 'The Paper Sea/Slow Tides' },
+    { id: 4, sourceRootId: 1, name: 'Night Signals', relativePath: 'Luna North/Night Signals' },
+  ];
+  private tracks = this.createTracks();
+  private operation: LibraryOperationStatus | null = null;
+  private defaultProvider = 'demo';
+
+  handle(request: HttpRequest<unknown>): unknown {
+    const url = new URL(request.urlWithParams, this.document.baseURI);
+    const path = url.pathname.slice(MUSIC_API_BASE.length);
+    const method = request.method;
+    const body = request.body as DemoBody;
+
+    if (path === '/auth/csrf' && method === 'GET') return { token: 'demo-token' };
+    if (path === '/auth/login' && method === 'POST') {
+      this.signedIn = true;
+      return this.user;
+    }
+    if (path === '/auth/me' && method === 'GET') {
+      if (!this.signedIn) throw this.error(401, 'Sign in to the demo.');
+      return this.user;
+    }
+    if (!this.signedIn) throw this.error(401, 'Sign in to the demo.');
+    if (path === '/auth/logout' && method === 'POST') {
+      this.signedIn = false;
+      return null;
+    }
+    if (path === '/auth/refresh' && method === 'POST') return null;
+    if (path === '/auth/theme' && method === 'PUT') {
+      this.user = { ...this.user, theme: body.theme };
+      return this.user;
+    }
+    if (path === '/library/tracks' && method === 'GET') return this.tracks;
+    if (path === '/library/tracks/search' && method === 'GET') return this.filteredTracks(url);
+    if (path === '/library/tracks/page' && method === 'GET') {
+      return this.paginate(this.filteredTracks(url), url);
+    }
+    if (path === '/library/albums/page' && method === 'GET') {
+      const albums = new Map<string, AlbumSummary>();
+      for (const track of this.tracks) {
+        const key = `${track.albumArtist}\0${track.album}`;
+        const album = albums.get(key);
+        if (album) {
+          album.trackCount++;
+          album.durationSeconds += track.durationSeconds;
+        } else {
+          albums.set(key, {
+            artist: track.albumArtist,
+            album: track.album,
+            releaseYear: track.year,
+            trackCount: 1,
+            durationSeconds: track.durationSeconds,
+            coverTrackId: track.id,
+            coverUrl: track.coverUrl,
+          });
+        }
+      }
+      const query = (url.searchParams.get('query') ?? '').toLowerCase();
+      return this.paginate(
+        [...albums.values()].filter((album) =>
+          `${album.artist} ${album.album}`.toLowerCase().includes(query),
+        ),
+        url,
+      );
+    }
+    if (path === '/library/artists/page' && method === 'GET') {
+      const artists = new Map<string, ArtistSummary & { albums: Set<string> }>();
+      for (const track of this.tracks) {
+        let artist = artists.get(track.artist);
+        if (!artist) {
+          artist = {
+            artist: track.artist,
+            trackCount: 0,
+            albumCount: 0,
+            coverUrl: track.coverUrl,
+            artistImageUrl: track.artistImageUrl,
+            artistImageMissing: track.artistImageMissing,
+            albums: new Set<string>(),
+          };
+          artists.set(track.artist, artist);
+        }
+        artist.trackCount++;
+        artist.albums.add(track.album);
+        artist.albumCount = artist.albums.size;
+      }
+      const query = (url.searchParams.get('query') ?? '').toLowerCase();
+      return this.paginate(
+        [...artists.values()]
+          .filter((artist) => artist.artist.toLowerCase().includes(query))
+          .map(({ albums, ...artist }) => artist),
+        url,
+      );
+    }
+    if (path === '/library/albums/tracks' && method === 'GET') {
+      return this.tracks.filter(
+        (track) =>
+          track.albumArtist === url.searchParams.get('artist') &&
+          track.album === url.searchParams.get('album'),
+      );
+    }
+    const byTrack = /^\/library\/albums\/by-track\/(\d+)\/tracks$/.exec(path);
+    if (byTrack && method === 'GET') {
+      const track = this.tracks.find((item) => item.id === Number(byTrack[1]));
+      if (!track) throw this.error(404, 'Demo album not found.');
+      return this.tracks.filter(
+        (item) => item.albumArtist === track.albumArtist && item.album === track.album,
+      );
+    }
+    if (path === '/library/artists/tracks' && method === 'GET') {
+      return this.tracks.filter(
+        (track) =>
+          track.artist === url.searchParams.get('artist') ||
+          track.albumArtist === url.searchParams.get('artist'),
+      );
+    }
+    if (path === '/library/artists/metadata' && method === 'GET') {
+      const track = this.tracks.find((item) => item.artist === url.searchParams.get('artist'));
+      if (!track) throw this.error(404, 'Demo artist not found.');
+      return {
+        description: track.artistDescription,
+        imageUrl: track.artistImageUrl,
+        imageMissing: track.artistImageMissing,
+        referencedArtists: [],
+      };
+    }
+    if (path === '/library/folders' && method === 'GET') {
+      return this.roots.map((root) => ({
+        sourceRootId: root.id,
+        name: root.name,
+        relativePath: '',
+      }));
+    }
+    const folderPath = /^\/library\/folders\/(\d+)$/.exec(path);
+    if (folderPath && method === 'GET') {
+      const root = this.roots.find((item) => item.id === Number(folderPath[1]));
+      if (!root) throw this.error(404, 'Demo folder not found.');
+      const relativePath = url.searchParams.get('path') ?? '';
+      const prefix = relativePath ? `${relativePath}/` : '';
+      const children = new Set<string>();
+      for (const track of this.tracks.filter(
+        (item) => item.sourceRootId === root.id && item.relativePath.startsWith(prefix),
+      )) {
+        const remainder = track.relativePath.slice(prefix.length);
+        if (remainder.includes('/')) children.add(remainder.split('/')[0]);
+      }
+      return {
+        sourceRootId: root.id,
+        rootName: root.name,
+        relativePath,
+        folders: [...children].map((name) => ({
+          sourceRootId: root.id,
+          name,
+          relativePath: `${prefix}${name}`,
+        })),
+        files: this.tracks
+          .filter(
+            (track) =>
+              track.sourceRootId === root.id &&
+              track.relativePath.startsWith(prefix) &&
+              !track.relativePath.slice(prefix.length).includes('/'),
+          )
+          .map((track) => ({
+            name: track.relativePath.slice(prefix.length),
+            relativePath: track.relativePath,
+          })),
+      };
+    }
+    if (path === '/admin/providers/default-album-provider') {
+      if (method === 'PUT') this.defaultProvider = body.providerId;
+      if (method === 'GET' || method === 'PUT') return { providerId: this.defaultProvider };
+    }
+    if (path === '/admin/providers' && method === 'GET') return this.providers();
+    if (/^\/admin\/providers\/[^/]+$/.test(path) && method === 'PUT') {
+      throw this.error(501, 'Provider credentials are unavailable in the demo.');
+    }
+    if (path === '/admin/roots/folders' && method === 'GET') return this.folders;
+    if (path === '/admin/roots' && method === 'GET') return this.roots;
+    if (path === '/admin/roots' && method === 'POST') {
+      const root: SourceRoot = {
+        id: this.nextId(this.roots),
+        name: body.name,
+        path: body.path,
+        trackCount: 0,
+        isEnabled: true,
+      };
+      this.roots = [...this.roots, root];
+      return root;
+    }
+    const rootAction = /^\/admin\/roots\/(\d+)(?:\/(scan|metadata-refresh))?$/.exec(path);
+    if (rootAction) {
+      const id = Number(rootAction[1]);
+      const root = this.roots.find((item) => item.id === id);
+      if (!root) throw this.error(404, 'Demo folder not found.');
+      if (method === 'DELETE' && !rootAction[2]) {
+        this.roots = this.roots.filter((item) => item.id !== id);
+        this.folders = this.folders.filter((folder) => folder.sourceRootId !== id);
+        this.tracks = this.tracks.filter((track) => track.sourceRootId !== id);
+        return null;
+      }
+      if (method === 'POST' && rootAction[2]) {
+        this.operation = {
+          id: 'demo-operation',
+          sourceRootId: id,
+          rootName: root.name,
+          operationType: rootAction[2] === 'scan' ? 'scan' : 'metadata-refresh',
+          state: 'running',
+          message: 'Simulating a demo operation.',
+          completedUnits: 0,
+          totalUnits: 1,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+        };
+        return this.operation;
+      }
+    }
+    if (path === '/admin/operations/active' && method === 'GET') return null;
+    if (path === '/admin/operations/demo-operation' && method === 'GET' && this.operation) {
+      this.operation = {
+        ...this.operation,
+        state: 'completed',
+        message: 'Demo operation complete.',
+        completedUnits: 1,
+        finishedAt: new Date().toISOString(),
+      };
+      return this.operation;
+    }
+    if (path === '/admin/tracks/metadata' && method === 'POST') {
+      return this.updateTracks(body.trackIds, (track) => ({ ...track, ...body.changes }));
+    }
+    if (path === '/admin/tracks/cover' && method === 'POST') {
+      return this.updateTracks(body.trackIds, (track) => ({
+        ...track,
+        coverUrl: this.imageDataUrl(body.image),
+      }));
+    }
+    if (path === '/admin/tracks/move' && method === 'POST') {
+      const folder = this.folders.find((item) => item.id === body.destinationFolderId);
+      if (!folder) throw this.error(404, 'Demo destination not found.');
+      return this.updateTracks(body.trackIds, (track) => ({
+        ...track,
+        folderId: folder.id,
+        sourceRootId: folder.sourceRootId,
+      }));
+    }
+    if (
+      /^\/admin\/metadata\/(artists|albums)\/(description|image)$/.test(path) &&
+      method === 'PUT'
+    ) {
+      const album = path.includes('/albums/');
+      this.tracks = this.tracks.map((track) => {
+        if (
+          (album ? track.albumArtist : track.artist) !== body.artist ||
+          (album && track.album !== body.album)
+        )
+          return track;
+        if (path.endsWith('/description')) {
+          return album
+            ? { ...track, albumDescription: body.description }
+            : {
+                ...track,
+                artistDescription: body.description,
+                albumArtistDescription: body.description,
+              };
+        }
+        const image = this.imageDataUrl(body.image);
+        return album
+          ? { ...track, coverUrl: image }
+          : {
+              ...track,
+              artistImageUrl: image,
+              albumArtistImageUrl: image,
+              artistImageMissing: false,
+              albumArtistImageMissing: false,
+            };
+      });
+      return null;
+    }
+    if (/^\/admin\/metadata\/(artists|albums)\/refresh$/.test(path) && method === 'POST') {
+      throw this.error(501, 'External metadata refresh is unavailable in the demo.');
+    }
+    if (path === '/users' && method === 'GET') return this.users;
+    if (path === '/users' && method === 'POST') {
+      const user: ManagedUser = {
+        id: this.nextId(this.users),
+        email: body.email,
+        role: body.role,
+        isEnabled: true,
+        createdAt: new Date().toISOString(),
+      };
+      this.users = [...this.users, user];
+      return user;
+    }
+    const userAction = /^\/users\/(\d+)\/(role|enabled|password)$/.exec(path);
+    if (userAction && method === 'PUT') {
+      const id = Number(userAction[1]);
+      if (!this.users.some((item) => item.id === id)) throw this.error(404, 'Demo user not found.');
+      this.users = this.users.map((item) =>
+        item.id !== id
+          ? item
+          : {
+              ...item,
+              role: userAction[2] === 'role' ? body.role : item.role,
+              isEnabled: userAction[2] === 'enabled' ? body.isEnabled : item.isEnabled,
+            },
+      );
+      return null;
+    }
+    if (path.startsWith('/admin/identify/')) return this.identify(path, method, body);
+    throw this.error(501, `Demo API does not implement ${method} ${path}.`);
+  }
+
+  private identify(path: string, method: string, body: DemoBody): unknown {
+    if (path === '/admin/identify/providers' && method === 'GET') {
+      return [{ id: 'demo', name: 'Demo catalog', isConfigured: true }];
+    }
+    if (path === '/admin/identify/artists/search' && method === 'POST') {
+      const seen = new Set<string>();
+      return this.tracks
+        .filter((track) => {
+          if (
+            seen.has(track.artist) ||
+            !track.artist.toLowerCase().includes(body.artist.toLowerCase())
+          )
+            return false;
+          seen.add(track.artist);
+          return true;
+        })
+        .map((track) => ({
+          provider: 'demo',
+          id: String(track.id),
+          name: track.artist,
+          detail: 'Demo catalog',
+          imageUrl: null,
+        }));
+    }
+    const artistMatch = /^\/admin\/identify\/artists\/matches\/demo\/(\d+)$/.exec(path);
+    if (artistMatch && method === 'GET') {
+      const track = this.tracks.find((item) => item.id === Number(artistMatch[1]));
+      if (!track) throw this.error(404, 'Demo artist not found.');
+      return {
+        match: {
+          provider: 'demo',
+          id: String(track.id),
+          name: track.artist,
+          detail: 'Demo catalog',
+          imageUrl: null,
+        },
+        description: track.artistDescription,
+        imageUrl: null,
+        imageDataUrl: track.artistImageUrl,
+        imageProvider: 'Demo',
+      };
+    }
+    if (path === '/admin/identify/suggestions' && method === 'POST') {
+      const track = this.tracks.find((item) => body.trackIds.includes(item.id));
+      return {
+        tagArtist: track?.artist ?? null,
+        tagAlbum: track?.album ?? null,
+        tagYear: track?.year ?? null,
+        matches: track ? [this.match(track)] : [],
+      };
+    }
+    if (path === '/admin/identify/search' && method === 'POST') {
+      const seen = new Set<string>();
+      return this.tracks
+        .filter((track) => {
+          const key = `${track.artist}\0${track.album}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return (
+            (!body.artist || track.artist.toLowerCase().includes(body.artist.toLowerCase())) &&
+            (!body.album || track.album.toLowerCase().includes(body.album.toLowerCase())) &&
+            (!body.year || track.year === body.year)
+          );
+        })
+        .map((track) => this.match(track));
+    }
+    const matchPath = /^\/admin\/identify\/matches\/demo\/(\d+)$/.exec(path);
+    if (matchPath && method === 'GET') {
+      const track = this.tracks.find((item) => item.id === Number(matchPath[1]));
+      if (!track) throw this.error(404, 'Demo album not found.');
+      return {
+        match: this.match(track),
+        genre: track.genre,
+        musicBrainzReleaseGroupId: null,
+        tracks: this.tracks
+          .filter((item) => item.album === track.album && item.albumArtist === track.albumArtist)
+          .map((item) => ({
+            discNumber: item.discNumber,
+            trackNumber: item.trackNumber,
+            title: item.title,
+            artist: item.artist,
+            durationSeconds: item.durationSeconds,
+          })),
+      };
+    }
+    if (path === '/admin/identify/covers' && method === 'POST') {
+      const track = this.tracks.find((item) => body.trackIds.includes(item.id));
+      return {
+        candidates: track
+          ? [
+              {
+                id: 'demo-cover',
+                source: 'Demo',
+                label: 'Demo artwork',
+                previewUrl: track.coverUrl,
+              },
+            ]
+          : [],
+        warnings: [],
+      };
+    }
+    if (path === '/admin/identify/move/preview' && method === 'POST') {
+      return {
+        canMove: false,
+        reason: 'Moving files is unavailable in the demo.',
+        sourcePath: 'Demo Music',
+        destinationPath: 'Demo Music',
+      };
+    }
+    if (path === '/admin/identify/move' && method === 'POST') {
+      throw this.error(501, 'Moving files is unavailable in the demo.');
+    }
+    throw this.error(501, `Demo API does not implement ${method} ${path}.`);
+  }
+
+  private match(track: MusicTrack): AlbumMatch {
+    return {
+      provider: 'demo',
+      id: String(track.id),
+      artist: track.albumArtist,
+      title: track.album,
+      year: track.year,
+      trackCount: this.tracks.filter(
+        (item) => item.album === track.album && item.albumArtist === track.albumArtist,
+      ).length,
+      coverUrl: track.coverUrl,
+      detail: 'Demo catalog',
+    };
+  }
+
+  private providers() {
+    return [
+      {
+        id: 'demo',
+        name: 'Demo catalog',
+        description: 'Fictional local demo catalog.',
+        isConfigured: true,
+        credentials: [],
+      },
+    ];
+  }
+
+  private filteredTracks(url: URL): DemoTrack[] {
+    const query = (url.searchParams.get('query') ?? '').toLowerCase();
+    const rootId = url.searchParams.get('sourceRootId');
+    const folder = url.searchParams.get('folderPath');
+    return this.tracks.filter(
+      (track) =>
+        `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query) &&
+        (!rootId || track.sourceRootId === Number(rootId)) &&
+        (!folder || track.relativePath.startsWith(`${folder}/`)),
+    );
+  }
+
+  private paginate<T>(items: T[], url: URL) {
+    const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+    const pageSize = Math.max(1, Number(url.searchParams.get('pageSize')) || 20);
+    return {
+      items: items.slice((page - 1) * pageSize, page * pageSize),
+      totalCount: items.length,
+      page,
+      pageSize,
+    };
+  }
+
+  private updateTracks(
+    ids: number[],
+    update: (track: DemoTrack) => DemoTrack,
+  ): { results: { trackId: number; succeeded: boolean; message: string }[] } {
+    const results = ids.map((id) => {
+      const found = this.tracks.some((track) => track.id === id);
+      if (found)
+        this.tracks = this.tracks.map((track) => (track.id === id ? update(track) : track));
+      return {
+        trackId: id,
+        succeeded: found,
+        message: found ? 'Updated in demo.' : 'Track not found.',
+      };
+    });
+    return { results };
+  }
+
+  private imageDataUrl(image: string): string {
+    const header = atob(image.slice(0, 64));
+    const mime = header.startsWith('\x89PNG')
+      ? 'image/png'
+      : header.startsWith('\xff\xd8\xff')
+        ? 'image/jpeg'
+        : header.startsWith('GIF8')
+          ? 'image/gif'
+          : header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP'
+            ? 'image/webp'
+            : header.trimStart().startsWith('<svg') || header.trimStart().startsWith('<?xml')
+              ? 'image/svg+xml'
+              : null;
+    if (!mime) throw this.error(400, 'Unsupported demo image format.');
+    return `data:${mime};base64,${image}`;
+  }
+
+  private nextId(items: { id: number }[]): number {
+    return Math.max(0, ...items.map((item) => item.id)) + 1;
+  }
+
+  private error(status: number, message: string): HttpErrorResponse {
+    return new HttpErrorResponse({ status, error: { message }, statusText: message });
+  }
+
+  private createTracks(): DemoTrack[] {
+    const albums = [
+      {
+        artist: 'Aurora Drive',
+        title: 'First Light',
+        year: 2022,
+        genre: 'Indie electronic',
+        image: 'aurora.svg',
+        songs: ['Daybreak', 'Open Roads', 'Soft Focus', 'A Place to Begin'],
+      },
+      {
+        artist: 'Aurora Drive',
+        title: 'Golden Hour',
+        year: 2024,
+        genre: 'Indie electronic',
+        image: 'garden.svg',
+        songs: ['Sunroom', 'Golden Hour', 'Wildflower', 'The Long Way Home'],
+      },
+      {
+        artist: 'The Paper Sea',
+        title: 'Slow Tides',
+        year: 2023,
+        genre: 'Ambient',
+        image: 'tides.svg',
+        songs: ['Blue Water', 'Driftwood', 'Between Waves', 'A Quiet Shore'],
+      },
+      {
+        artist: 'Luna North',
+        title: 'Night Signals',
+        year: 2025,
+        genre: 'Downtempo',
+        image: 'night.svg',
+        songs: ['Night Signals', 'Satellite', 'After Midnight', 'Lights Below'],
+      },
+    ];
+    return albums.flatMap((album, albumIndex) =>
+      album.songs.map((title, index) => {
+        const image = new URL(`demo/${album.image}`, this.document.baseURI).href;
+        const description = `${album.artist} is a fictional artist from the Afterhours demo collection.`;
+        return {
+          id: albumIndex * 4 + index + 1,
+          sourceRootId: 1,
+          folderId: albumIndex + 1,
+          relativePath: `${album.artist}/${album.title}/${String(index + 1).padStart(2, '0')} - ${title}.wav`,
+          title,
+          artist: album.artist,
+          album: album.title,
+          albumArtist: album.artist,
+          genre: album.genre,
+          trackNumber: index + 1,
+          discNumber: 1,
+          year: album.year,
+          durationSeconds: 24,
+          streamUrl: this.audioUrl(albumIndex),
+          coverUrl: image,
+          tileCoverUrl: image,
+          albumCoverUrl: image,
+          fileExtension: '.wav',
+          albumDescription: `${album.title} is an imaginary release created for this demo.`,
+          artistDescription: description,
+          artistImageUrl: image,
+          artistImageMissing: false,
+          albumArtistDescription: description,
+          albumArtistImageUrl: image,
+          albumArtistImageMissing: false,
+        };
+      }),
+    );
+  }
+
+  private audioUrl(albumIndex: number): string {
+    const existing = this.audioUrls.get(albumIndex);
+    if (existing) return existing;
+    const rate = 16000;
+    const samples = rate * 24;
+    const buffer = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(buffer);
+    const text = (offset: number, value: string) => {
+      for (let index = 0; index < value.length; index++)
+        view.setUint8(offset + index, value.charCodeAt(index));
+    };
+    text(0, 'RIFF');
+    view.setUint32(4, 36 + samples * 2, true);
+    text(8, 'WAVE');
+    text(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true);
+    view.setUint32(28, rate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    text(36, 'data');
+    view.setUint32(40, samples * 2, true);
+    const notes = [0, 4, 7, 11, 7, 4, 2, 7, 9, 7, 4, 2, 0, 4, 7, 4];
+    for (let i = 0; i < samples; i++) {
+      const time = i / rate;
+      const noteTime = time % 0.75;
+      const note = notes[Math.floor(time / 0.75) % notes.length] + albumIndex * 2;
+      const frequency = 220 * 2 ** (note / 12);
+      const envelope =
+        Math.min(1, noteTime * 12) * Math.exp(-noteTime * 2.5) * Math.min(1, (24 - time) * 2);
+      const sound =
+        Math.sin(2 * Math.PI * frequency * time) +
+        0.25 * Math.sin(2 * Math.PI * frequency * 2 * time);
+      view.setInt16(44 + i * 2, sound * envelope * 7000, true);
+    }
+    const url = URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+    this.audioUrls.set(albumIndex, url);
+    return url;
+  }
+}
+
+export const demoInterceptor: HttpInterceptorFn = (request, next) => {
+  if (!request.url.startsWith(`${MUSIC_API_BASE}/`)) return next(request);
+  try {
+    return of(new HttpResponse({ status: 200, body: inject(DemoBackend).handle(request) }));
+  } catch (error) {
+    return throwError(() => error);
+  }
+};

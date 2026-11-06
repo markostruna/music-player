@@ -92,6 +92,31 @@ dotnet build backend/MusicPlayer.Api/MusicPlayer.Api.csproj
 
 The Angular production files are emitted to `dist/music-player/browser`.
 
+## Demo And GitHub Pages
+
+The demo runs entirely in the browser, without the API or a music library:
+
+```powershell
+npm run start:demo
+npm run build:demo
+```
+
+Open `http://localhost:4200` for the local demo. The build command produces
+`dist/music-player/browser` with the `/music-player/` base path, ready to deploy
+as a GitHub Pages artifact for this repository. In GitHub's **Settings > Pages**,
+choose **GitHub Actions**. The included deployment workflow builds the demo and
+publishes it when changes are pushed to `main`. The published URL is
+`https://markostruna.github.io/music-player/`. Demo routes use URL hashes so
+they also work when refreshed on GitHub Pages.
+
+The demo signs in automatically as a fictional administrator; after signing out,
+any email and password will sign back in. The albums and artists are fictional,
+the artwork is included locally, and each album plays a short generated audio
+sample. API responses and supported edits are simulated in memory and reset on
+reload. Scans are simulated; external metadata refresh, remote image URLs, and
+moving actual files are unavailable. No real accounts, music files, or backend
+data are modified. Normal `npm start` and `npm run build` still use the real API.
+
 ## XAMPP Hosting
 
 Build the Angular application and copy the **contents** of `dist/music-player/browser` to a directory such as `C:/xampp/htdocs/afterhours`. Configure Apache with HTTPS and enable `mod_proxy`, `mod_proxy_http`, `mod_headers`, `mod_dir`, `mod_filter`, `mod_deflate`, and `mod_ssl`. `Configure-Api.ps1` enables the proxy, header, and compression modules and restarts Apache; run it again with the same `-InstallPath` if the API was already configured before compression was added. Add the following directives to the HTTPS virtual host, adjusting the static directory to match your installation:

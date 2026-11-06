@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs><linearGradient id="a" x2="1" y2="1"><stop stop-color="#e9b579"/><stop offset="1" stop-color="#973e50"/></linearGradient></defs>
+  <rect width="600" height="600" fill="url(#a)"/><circle cx="300" cy="280" r="170" fill="#f3d9ad"/><path d="M100 500Q180 250 300 430Q410 220 520 500Z" fill="#45604f"/><path d="M180 500Q250 350 330 500Q405 310 460 500Z" fill="#7f9b70"/><g fill="#f8c3a2"><circle cx="205" cy="365" r="18"/><circle cx="395" cy="355" r="22"/><circle cx="320" cy="420" r="14"/></g>
+  <text x="40" y="65" fill="#fff" font-family="sans-serif" font-size="24" letter-spacing="6">AURORA DRIVE</text><text x="40" y="560" fill="#fff" font-family="sans-serif" font-size="30" letter-spacing="5">GOLDEN HOUR</text>
+</svg>

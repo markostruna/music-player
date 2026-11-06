@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthState } from '@shared/services/auth-state';
+import { DEMO_MODE } from '@shared/utils/api-path';
 
 @Component({
   selector: 'app-login-page',
@@ -9,6 +10,7 @@ import { AuthState } from '@shared/services/auth-state';
   templateUrl: './login-page.html',
 })
 export class LoginPage {
+  readonly demoMode = DEMO_MODE;
   private readonly auth = inject(AuthState);
   private readonly router = inject(Router);
 

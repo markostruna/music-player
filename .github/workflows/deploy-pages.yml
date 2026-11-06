@@ -31,7 +31,7 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build
+      - run: npm run build:demo
 
       # Let Angular handle direct navigation to client-side routes.
       - run: cp dist/music-player/browser/index.html dist/music-player/browser/404.html

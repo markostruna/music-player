@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs><linearGradient id="a" x2="0" y2="1"><stop stop-color="#0e313d"/><stop offset="1" stop-color="#a8d5c6"/></linearGradient></defs>
+  <rect width="600" height="600" fill="url(#a)"/><circle cx="300" cy="240" r="130" fill="#eed9a3"/><path d="M0 330Q100 260 200 330T400 330T600 330V600H0Z" fill="#326b73"/><path d="M0 385Q100 315 200 385T400 385T600 385V600H0Z" fill="#4a8f8a"/><path d="M0 455Q100 385 200 455T400 455T600 455V600H0Z" fill="#8bbcaf"/>
+  <text x="40" y="65" fill="#fff" font-family="sans-serif" font-size="24" letter-spacing="6">THE PAPER SEA</text><text x="40" y="560" fill="#fff" font-family="sans-serif" font-size="30" letter-spacing="5">SLOW TIDES</text>
+</svg>
