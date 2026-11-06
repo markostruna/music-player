@@ -38,7 +38,8 @@
       <div class="home-collection-grid">
         @for (album of albums(); track album.coverTrackId) {
           <a
-            class="collection-tile"
+            class="collection-tile album-tile"
+            [style.--tile-cover]="'url(&quot;' + album.coverUrl + '&quot;)'"
             [routerLink]="['/library/album', album.coverTrackId]"
             [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
           >
@@ -102,7 +103,9 @@
       <div class="home-collection-grid">
         @for (artist of artists(); track artist.artist) {
           <a
-            class="collection-tile"
+            class="collection-tile album-tile"
+            [class.photo-missing]="artist.artistImageMissing"
+            [style.--tile-cover]="'url(&quot;' + (artist.artistImageUrl || artist.coverUrl) + '&quot;)'"
             [routerLink]="['/library/artist', artist.artist]"
             [attr.aria-label]="'View artist ' + artist.artist"
           >
@@ -169,7 +172,12 @@
     @if (tracks().length) {
       <div class="home-track-grid">
         @for (track of tracks(); track track.id) {
-          <button class="home-track-tile" type="button" (click)="playTrack(track)">
+          <button
+            class="home-track-tile"
+            type="button"
+            [style.--tile-cover]="'url(&quot;' + track.coverUrl + '&quot;)'"
+            (click)="playTrack(track)"
+          >
             <span class="home-track-art">
               <img
                 [src]="track.coverUrl"

@@ -29,7 +29,10 @@
       </ol>
     </aside>
   }
-  <footer class="player-bar">
+  <footer
+    class="player-bar"
+    [style.--player-cover]="'url(&quot;' + track.coverUrl + '&quot;)'"
+  >
     <div class="now-playing-info">
       <a class="now-playing-art" routerLink="/now-playing" aria-label="Open Playing now"
         ><img

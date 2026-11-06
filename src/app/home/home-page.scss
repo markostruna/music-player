@@ -99,7 +99,8 @@
   gap: 8px 14px;
 }
 
-.home-skeleton-track-tile {
+.home-track-tile.home-skeleton-track-tile {
+  background: var(--surface);
   cursor: default;
 }
 
@@ -127,16 +128,37 @@
   align-items: center;
   gap: 11px;
   padding: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: #2a2e2a;
+  color: #fff;
   cursor: pointer;
   text-align: left;
 }
 
-.home-track-tile:hover {
-  background: var(--surface-hover);
+.home-track-tile:not(.home-skeleton-track-tile)::before,
+.home-track-tile:not(.home-skeleton-track-tile)::after {
+  position: absolute;
+  z-index: -1;
+  content: '';
+}
+
+.home-track-tile:not(.home-skeleton-track-tile)::before {
+  inset: -30px;
+  background: var(--tile-cover) center / cover no-repeat;
+  filter: blur(28px) saturate(1.3);
+}
+
+.home-track-tile:not(.home-skeleton-track-tile)::after {
+  inset: 0;
+  background: rgb(0 0 0 / 70%);
+}
+
+.home-track-tile:hover::after {
+  background: rgb(0 0 0 / 16%);
 }
 
 .home-track-art {
@@ -178,7 +200,7 @@
 }
 
 .home-track-copy small {
-  color: var(--muted);
+  color: rgb(255 255 255 / 75%);
   font-size: 12px;
 }
 
