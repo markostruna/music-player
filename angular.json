@@ -32,7 +32,8 @@
               },
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "public",
+                "ignore": [".htaccess"]
               }
             ],
             "styles": ["src/styles.scss"]

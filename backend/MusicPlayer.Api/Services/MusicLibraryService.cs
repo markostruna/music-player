@@ -17,6 +17,7 @@ public sealed class MusicLibraryService(
     IMusicBrainzClient musicBrainz,
     ILogger<MusicLibraryService> logger,
     MusicLibraryBrowseService browseService,
+    ImageWebpService imageWebp,
     IEnumerable<IAlbumProvider>? albumProviders = null,
     IProviderSettingsService? providerSettings = null,
     SafeImageFetcher? safeImageFetcher = null,
@@ -407,7 +408,10 @@ public sealed class MusicLibraryService(
         return new ResolvedMedia(path, GetContentType(path));
     }
 
-    public async Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken)
+    public async Task<CoverImage?> ResolveCoverAsync(
+        int trackId,
+        CancellationToken cancellationToken,
+        CoverImageVariant variant = CoverImageVariant.Track)
     {
         var track = await database.Tracks.AsNoTracking().SingleOrDefaultAsync(item => item.Id == trackId, cancellationToken);
         if (track is not null)
@@ -423,7 +427,7 @@ public sealed class MusicLibraryService(
                     : await ReadMetadataImageAsync(metadata.ImageFileName, "albums", cancellationToken);
             if (customImage is not null)
             {
-                return customImage;
+                return await imageWebp.ConvertAlbumCoverAsync(customImage.Data, variant, cancellationToken);
             }
         }
 
@@ -436,7 +440,7 @@ public sealed class MusicLibraryService(
         var folderCover = await ResolveFolderCoverAsync(Path.GetDirectoryName(media.FullPath)!, cancellationToken);
         if (folderCover is not null)
         {
-            return folderCover;
+            return await imageWebp.ConvertAlbumCoverAsync(folderCover.Data, variant, cancellationToken);
         }
 
         using var audio = TagLib.File.Create(media.FullPath);
@@ -444,17 +448,23 @@ public sealed class MusicLibraryService(
             ?? audio.Tag.Pictures.FirstOrDefault();
         return picture is null || picture.Data.Count == 0
             ? null
-            : new CoverImage(picture.Data.Data, picture.MimeType);
+            : await imageWebp.ConvertAlbumCoverAsync(picture.Data.Data, variant, cancellationToken);
     }
 
-    public async Task<CoverImage?> ResolveArtistImageAsync(string key, CancellationToken cancellationToken)
+    public async Task<CoverImage?> ResolveArtistImageAsync(
+        string key,
+        CancellationToken cancellationToken,
+        ArtistImageVariant variant = ArtistImageVariant.Page)
     {
         var metadata = await database.ArtistMetadata.AsNoTracking().SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
-        return metadata is null
+        var image = metadata is null
             ? null
             : metadata.ImageSourceRootId.HasValue
                 ? await ReadLibraryImageAsync(metadata.ImageSourceRootId, metadata.ImageRelativePath, cancellationToken)
                 : await ReadMetadataImageAsync(metadata.ImageFileName, "artists", cancellationToken);
+        return image is null
+            ? null
+            : await imageWebp.ConvertArtistImageAsync(image.Data, variant, cancellationToken);
     }
 
     public async Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(string artist, CancellationToken cancellationToken)
@@ -861,6 +871,7 @@ public sealed class MusicLibraryService(
             throw new ArgumentException("The image must be a supported PNG, JPEG, GIF, or WebP file under 10 MB.");
         }
 
+        var webp = await imageWebp.ConvertAsync(request.Image, contentType, cancellationToken);
         var key = album ? GetAlbumMetadataKey(request.Artist, request.Album) : GetArtistMetadataKey(request.Artist);
         var extension = contentType switch
         {
@@ -874,13 +885,18 @@ public sealed class MusicLibraryService(
         var directory = Path.Combine(GetMetadataDirectory(), album ? "albums" : "artists");
         Directory.CreateDirectory(directory);
         var imagePath = Path.Combine(directory, newFileName);
-        await System.IO.File.WriteAllBytesAsync(imagePath, request.Image, cancellationToken);
+        var webpPath = Path.ChangeExtension(imagePath, ".webp");
 
         string? oldFileName;
         int? oldImageRootId;
         string? oldImageRelativePath;
         try
         {
+            await System.IO.File.WriteAllBytesAsync(imagePath, request.Image, cancellationToken);
+            if (!string.Equals(imagePath, webpPath, StringComparison.OrdinalIgnoreCase))
+            {
+                await System.IO.File.WriteAllBytesAsync(webpPath, webp.Data, cancellationToken);
+            }
             if (album)
             {
                 var metadata = await database.AlbumMetadata.SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
@@ -923,6 +939,7 @@ public sealed class MusicLibraryService(
         catch
         {
             if (System.IO.File.Exists(imagePath)) System.IO.File.Delete(imagePath);
+            if (System.IO.File.Exists(webpPath)) System.IO.File.Delete(webpPath);
             throw;
         }
 
@@ -1161,6 +1178,12 @@ public sealed class MusicLibraryService(
         try
         {
             if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+            var webpPath = Path.ChangeExtension(path, ".webp");
+            if (!string.Equals(path, webpPath, StringComparison.OrdinalIgnoreCase) &&
+                System.IO.File.Exists(webpPath))
+            {
+                System.IO.File.Delete(webpPath);
+            }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -1216,11 +1239,11 @@ public sealed class MusicLibraryService(
 
     private static string? GetArtistImageUrl(MusicArtistMetadata metadata) =>
         !metadata.ImageMissing && !string.IsNullOrWhiteSpace(metadata.ImageFileName)
-            ? $"/api/library/artists/{metadata.Key}/image?v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
+            ? $"/api/library/artists/{metadata.Key}/image?format=webp&variant=page&v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
             : null;
 
     private static string GetAlbumImageUrl(int trackId, DateTimeOffset? updatedAt = null) =>
-        $"/api/library/tracks/{trackId}/cover{(updatedAt.HasValue ? $"?v={updatedAt.Value.ToUnixTimeMilliseconds()}" : "")}";
+        $"/api/library/tracks/{trackId}/cover?format=webp&variant=album{(updatedAt.HasValue ? $"&v={updatedAt.Value.ToUnixTimeMilliseconds()}" : "")}";
 
     private Task<int?> FindAlbumCoverTrackIdAsync(
         string artist,

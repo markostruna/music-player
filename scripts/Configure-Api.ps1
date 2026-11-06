@@ -133,7 +133,7 @@ Set-Content -Path $apiConf -Value $conf -Encoding ASCII
 
 Remove-ApacheBlock
 # Enable required modules if commented out; add them only if absent entirely.
-$modules = 'proxy_module', 'proxy_http_module', 'headers_module'
+$modules = 'proxy_module', 'proxy_http_module', 'headers_module', 'filter_module', 'deflate_module'
 $lines = Get-Content $httpdConf | ForEach-Object {
     if ($_ -match '^\s*#\s*(LoadModule\s+(proxy_module|proxy_http_module|headers_module)\b.*)$') { $Matches[1] } else { $_ }
 }

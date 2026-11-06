@@ -6,7 +6,8 @@
   <div class="collection-grid">
     @for (album of visibleAlbums(); track album.coverTrackId) {
       <a
-        class="collection-tile"
+        class="collection-tile album-tile"
+        [style.--tile-cover]="'url(&quot;' + album.coverUrl + '&quot;)'"
         [routerLink]="['/library/album', album.coverTrackId]"
         [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
         [title]="'View album: ' + album.album"

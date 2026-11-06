@@ -34,7 +34,7 @@
       <div class="now-playing-cover">
         <span class="now-playing-placeholder" aria-hidden="true">♫</span>
         <img
-          [src]="track.coverUrl"
+          [src]="track.albumCoverUrl"
           [alt]="track.album + ' album artwork'"
           (error)="$any($event.target).style.visibility = 'hidden'"
         />

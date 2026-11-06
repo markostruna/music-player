@@ -4,7 +4,7 @@
 
 .album-page .eyebrow {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.3px;
 }
@@ -53,7 +53,7 @@
   background: rgb(17 25 21 / 82%);
   color: white;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   opacity: 0;
   transition: opacity 140ms;
@@ -123,7 +123,7 @@
 }
 .cover-dialog > .album-play-button {
   min-height: 36px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .cover-dialog .secondary-action {
   background: var(--surface-hover);
@@ -142,7 +142,7 @@
 }
 .cover-dialog-actions .album-play-button {
   min-height: 38px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .cover-dialog-actions .album-play-button:disabled {
   cursor: not-allowed;
@@ -159,7 +159,7 @@
 
 .album-kind {
   color: var(--accent);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 1.5px;
 }
@@ -192,7 +192,7 @@
 }
 .album-metadata dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .album-metadata dd {
   margin: 0;
@@ -242,7 +242,7 @@
 
 .metadata-description .eyebrow {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.3px;
 }
@@ -324,7 +324,7 @@
 
 .metadata-controls .album-play-button {
   min-height: 36px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .metadata-controls .secondary-action {
@@ -340,7 +340,7 @@
   display: inline-block;
   margin-top: 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .album-track-heading {
   margin-bottom: 12px;
@@ -381,7 +381,7 @@
 .album-track-number,
 .album-track-duration {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .album-track-title {
   display: grid;
@@ -397,7 +397,7 @@
 .album-track-title small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -406,7 +406,7 @@
 }
 .album-track-play {
   color: var(--accent);
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
 }
 

@@ -48,10 +48,13 @@ export class MusicShell {
   readonly headerVisible = signal(true);
   readonly searchQuery = this.library.searchQuery;
   private lastScrollY = 0;
+  private static readonly compactViewportQuery =
+    '(max-width: 680px), (max-height: 500px) and (orientation: landscape)';
   private readonly headerScrollThreshold = 100;
   readonly isLibraryPage = computed(() => {
     this.navigationEnd();
-    return this.route.firstChild?.snapshot.routeConfig?.path === 'library';
+    const path = this.route.firstChild?.snapshot.routeConfig?.path;
+    return path === 'library' || (path?.startsWith('library/') ?? false);
   });
   readonly isHomePage = computed(() => {
     this.navigationEnd();
@@ -104,9 +107,19 @@ export class MusicShell {
     this.location.back();
   }
 
+  private isCompactViewport(): boolean {
+    return window.matchMedia(MusicShell.compactViewportQuery).matches;
+  }
+
   @HostListener('window:scroll')
   updateHeaderVisibility(): void {
     const currentScrollY = window.scrollY;
+
+    if (!this.isCompactViewport()) {
+      this.headerVisible.set(true);
+      this.lastScrollY = currentScrollY;
+      return;
+    }
 
     if (currentScrollY <= 10) {
       this.headerVisible.set(true);
@@ -147,24 +160,27 @@ export class MusicShell {
   constructor() {
     if (typeof window !== 'undefined') {
       this.lastScrollY = window.scrollY;
-      inject(DestroyRef).onDestroy(() => document.body.classList.remove('player-hidden'));
     }
 
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mobile = window.matchMedia('(max-width: 680px)');
+      const compact = window.matchMedia(MusicShell.compactViewportQuery);
       const landscape = window.matchMedia('(orientation: landscape)');
       const updateMenuVisibility = () => {
-        if (landscape.matches) {
-          this.menuVisible.set(false);
-        } else if (mobile.matches) {
-          this.menuVisible.set(true);
+        const tabletWidth = !mobile.matches && window.innerWidth <= 900;
+        this.menuVisible.set(!landscape.matches && !tabletWidth);
+        if (!compact.matches) {
+          this.headerVisible.set(true);
+          this.lastScrollY = window.scrollY;
         }
       };
       updateMenuVisibility();
       mobile.addEventListener('change', updateMenuVisibility);
+      compact.addEventListener('change', updateMenuVisibility);
       landscape.addEventListener('change', updateMenuVisibility);
       inject(DestroyRef).onDestroy(() => {
         mobile.removeEventListener('change', updateMenuVisibility);
+        compact.removeEventListener('change', updateMenuVisibility);
         landscape.removeEventListener('change', updateMenuVisibility);
       });
     }
@@ -175,9 +191,6 @@ export class MusicShell {
       this.headerVisible.set(true);
     });
 
-    effect(() => {
-      document.body.classList.toggle('player-hidden', !this.headerVisible());
-    });
   }
 
   setSearchQuery(query: string): void {

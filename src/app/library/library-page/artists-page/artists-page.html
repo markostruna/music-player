@@ -6,7 +6,9 @@
   <div class="collection-grid">
     @for (artist of visibleArtists(); track artist.artist) {
       <a
-        class="collection-tile"
+        class="collection-tile album-tile"
+        [class.photo-missing]="artist.artistImageMissing"
+        [style.--tile-cover]="'url(&quot;' + (artist.artistImageUrl || artist.coverUrl) + '&quot;)'"
         [routerLink]="['/library/artist', artist.artist]"
         [attr.aria-label]="'View artist ' + artist.artist"
         [title]="'View artist: ' + artist.artist"
@@ -40,9 +42,6 @@
         <span class="tile-detail">
           {{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}
         </span>
-        @if (artist.artistImageMissing) {
-          <span class="tile-meta">Photo missing</span>
-        }
       </a>
     }
   </div>

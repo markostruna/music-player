@@ -212,13 +212,26 @@ public static class LibraryEndpoints
         })
         .WithName("StreamTrack")
         .WithSummary("Streams a catalogued track with HTTP range support.");
-        library.MapGet("/tracks/{trackId:int}/cover", async Task<Results<FileContentHttpResult, NotFound>> (
+        library.MapGet("/tracks/{trackId:int}/cover", async Task<Results<FileContentHttpResult, NotFound, BadRequest<string>>> (
             int trackId,
+            string? variant,
             HttpContext context,
             IMusicLibraryService music,
             CancellationToken cancellationToken) =>
         {
-            var image = await music.ResolveCoverAsync(trackId, cancellationToken);
+            var coverVariant = variant?.Trim().ToLowerInvariant() switch
+            {
+                null or "" or "track" => CoverImageVariant.Track,
+                "tile" => CoverImageVariant.Tile,
+                "album" => CoverImageVariant.Album,
+                _ => (CoverImageVariant?)null,
+            };
+            if (!coverVariant.HasValue)
+            {
+                return TypedResults.BadRequest("Cover variant must be tile, track, or album.");
+            }
+
+            var image = await music.ResolveCoverAsync(trackId, cancellationToken, coverVariant.Value);
             if (image is null)
             {
                 return TypedResults.NotFound();
@@ -229,13 +242,25 @@ public static class LibraryEndpoints
         })
         .WithName("GetTrackCover")
         .WithSummary("Returns the embedded cover art for a track.");
-        library.MapGet("/artists/{key}/image", async Task<Results<FileContentHttpResult, NotFound>> (
+        library.MapGet("/artists/{key}/image", async Task<Results<FileContentHttpResult, NotFound, BadRequest<string>>> (
             string key,
+            string? variant,
             HttpContext context,
             IMusicLibraryService music,
             CancellationToken cancellationToken) =>
         {
-            var image = await music.ResolveArtistImageAsync(key, cancellationToken);
+            var imageVariant = variant?.Trim().ToLowerInvariant() switch
+            {
+                null or "" or "page" => ArtistImageVariant.Page,
+                "tile" => ArtistImageVariant.Tile,
+                _ => (ArtistImageVariant?)null,
+            };
+            if (!imageVariant.HasValue)
+            {
+                return TypedResults.BadRequest("Artist image variant must be tile or page.");
+            }
+
+            var image = await music.ResolveArtistImageAsync(key, cancellationToken, imageVariant.Value);
             if (image is null)
             {
                 return TypedResults.NotFound();

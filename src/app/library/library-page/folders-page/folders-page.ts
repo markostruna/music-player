@@ -115,11 +115,7 @@ export class FoldersPage {
   }
 
   playTrack(track: MusicTrack): void {
-    const queue = this.playableTracks();
-    this.player.play(
-      queue,
-      queue.findIndex((candidate) => candidate.id === track.id),
-    );
+    this.player.play([track], 0);
   }
 
   private async loadFolderContents(folder: MusicFolderBrowseEntry): Promise<void> {

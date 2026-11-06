@@ -94,7 +94,7 @@ The Angular production files are emitted to `dist/music-player/browser`.
 
 ## XAMPP Hosting
 
-Build the Angular application and copy the **contents** of `dist/music-player/browser` to a directory such as `C:/xampp/htdocs/afterhours`. Configure Apache with HTTPS and enable `mod_proxy`, `mod_proxy_http`, `mod_headers`, `mod_dir`, and `mod_ssl`. Add the following directives to the HTTPS virtual host, adjusting the static directory to match your installation:
+Build the Angular application and copy the **contents** of `dist/music-player/browser` to a directory such as `C:/xampp/htdocs/afterhours`. Configure Apache with HTTPS and enable `mod_proxy`, `mod_proxy_http`, `mod_headers`, `mod_dir`, `mod_filter`, `mod_deflate`, and `mod_ssl`. `Configure-Api.ps1` enables the proxy, header, and compression modules and restarts Apache; run it again with the same `-InstallPath` if the API was already configured before compression was added. Add the following directives to the HTTPS virtual host, adjusting the static directory to match your installation:
 
 ```apache
 DocumentRoot "C:/xampp/htdocs/afterhours"
@@ -114,9 +114,15 @@ RequestHeader set X-Forwarded-Proto "https"
 
 The Angular build includes an `.htaccess` file that gives fingerprinted JavaScript and CSS bundles a one-year immutable cache and keeps `index.html` revalidated. `AllowOverride All` lets Apache apply these per-directory rules. If your server doesn't allow `.htaccess`, put the same `FilesMatch` and `Files` header rules directly in the HTTPS virtual host instead.
 
+The `.htaccess` file also enables DEFLATE compression for HTML, CSS, JavaScript, JSON, XML, and SVG responses. If your server doesn't allow `.htaccess`, add `AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/javascript application/json application/manifest+json image/svg+xml` to the HTTPS virtual host.
+
 Use a trusted TLS certificate before exposing the site to the internet. Run the API as a Windows service or a Task Scheduler task under a dedicated, non-interactive account that can read the configured music folders and write the database directory. Keep port `5080` private; only Apache should accept public connections. In Production, authentication and CSRF cookies are always marked Secure, so sign-in requires HTTPS. Development adapts cookie security to the local request to support `http://localhost:4200`. Back up the SQLite database and music files separately.
 
 The Angular client uses the public `/music-api` prefix, which Apache and the development proxy strip before forwarding to the API's existing `/api` routes. This avoids conflicting with other applications that already use `/api`. No public API port or client-side music path is needed.
+
+The API compresses supported responses (including JSON) with Brotli or gzip when the client advertises support. Compression is enabled for HTTPS because the API is behind Apache; forwarded headers are processed before the compression middleware. Avoid combining attacker-controlled reflected content and secrets in the same compressed response.
+
+Album covers and artist images are delivered as WebP. Existing PNG, JPEG, and GIF artwork is converted when first requested and cached by source content under `%LOCALAPPDATA%\Afterhours\webp-cache`; originals in music folders are not modified. Images uploaded by an administrator keep their original under `%LOCALAPPDATA%\Afterhours\metadata` and also receive a `.webp` sibling. Deploy and restart the API for this behavior to take effect.
 
 ## Artist And Album Information
 

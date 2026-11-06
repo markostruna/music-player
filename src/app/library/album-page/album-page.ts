@@ -70,7 +70,7 @@ export class AlbumPage {
     return {
       title: selectedTrack.album,
       artist,
-      coverUrl: refreshed?.imageUrl || selectedTrack.coverUrl,
+      coverUrl: refreshed?.imageUrl || selectedTrack.albumCoverUrl,
       musicBrainzId: refreshed?.musicBrainzId ?? '',
       informationUpdatedAt: refreshed?.updatedAt ?? '',
       releaseYear: albumTracks.find((track) => track.year > 0)?.year,
@@ -120,8 +120,12 @@ export class AlbumPage {
     }
   }
 
-  playTrack(tracks: MusicTrack[], index: number): void {
-    this.player.play(tracks, index);
+  playAlbum(tracks: MusicTrack[]): void {
+    this.player.play(tracks, 0);
+  }
+
+  playTrack(track: MusicTrack): void {
+    this.player.play([track], 0);
   }
 
   refreshInformation(): void {

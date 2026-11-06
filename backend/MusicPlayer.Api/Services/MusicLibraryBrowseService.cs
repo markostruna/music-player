@@ -14,6 +14,9 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 
+    private static int SelectPage(int requestedPage, int pageCount, bool random) =>
+        random ? Random.Shared.Next(pageCount) + 1 : Math.Min(requestedPage, pageCount);
+
     public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken)
         => await GetTracksAsync(null, cancellationToken);
 
@@ -51,16 +54,14 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
 
         var totalCount = await tracksQuery.CountAsync(cancellationToken);
         var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
-        var actualPage = Math.Min(page, pageCount);
-        var orderedTracks = random
-            ? tracksQuery.OrderBy(track => EF.Functions.Random()).ThenBy(track => track.Id)
-            : tracksQuery.OrderBy(track => track.AlbumArtist)
-                .ThenBy(track => track.Album)
-                .ThenBy(track => track.DiscNumber)
-                .ThenBy(track => track.TrackNumber)
-                .ThenBy(track => track.Title)
-                .ThenBy(track => track.Id);
-        var tracks = await orderedTracks
+        var actualPage = SelectPage(page, pageCount, random);
+        var tracks = await tracksQuery
+            .OrderBy(track => track.AlbumArtist)
+            .ThenBy(track => track.Album)
+            .ThenBy(track => track.DiscNumber)
+            .ThenBy(track => track.TrackNumber)
+            .ThenBy(track => track.Title)
+            .ThenBy(track => track.Id)
             .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -100,7 +101,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             .Distinct()
             .CountAsync(cancellationToken);
         var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
-        var actualPage = Math.Min(page, pageCount);
+        var actualPage = SelectPage(page, pageCount, random);
         var albumGroups = albums
             .GroupBy(item => new { item.Album, item.Artist })
             .Select(group => new
@@ -112,12 +113,10 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 DurationSeconds = group.Sum(item => item.Track.DurationSeconds),
                 CoverTrackId = group.Min(item => item.Track.Id),
             });
-        var orderedAlbums = random
-            ? albumGroups.OrderBy(_ => EF.Functions.Random()).ThenBy(item => item.CoverTrackId)
-            : albumGroups.OrderBy(item => item.Artist)
-                .ThenBy(item => item.Album)
-                .ThenBy(item => item.CoverTrackId);
-        var albumPage = await orderedAlbums
+        var albumPage = await albumGroups
+            .OrderBy(item => item.Artist)
+            .ThenBy(item => item.Album)
+            .ThenBy(item => item.CoverTrackId)
             .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -136,7 +135,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             item.TrackCount,
             item.DurationSeconds,
             item.CoverTrackId,
-            coversByTrackId[item.CoverTrackId].CoverUrl)).ToArray();
+            $"{coversByTrackId[item.CoverTrackId].CoverUrl}&variant=tile")).ToArray();
         return new PagedResponse<AlbumSummaryResponse>(items, totalCount, actualPage, pageSize);
     }
 
@@ -227,7 +226,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
 
         var totalCount = await artists.Select(item => item.Artist).Distinct().CountAsync(cancellationToken);
         var pageCount = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
-        var actualPage = Math.Min(page, pageCount);
+        var actualPage = SelectPage(page, pageCount, random);
         var artistGroups = artists
             .GroupBy(item => item.Artist)
             .Select(group => new
@@ -236,10 +235,9 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 TrackCount = group.Count(),
                 RepresentativeTrackId = group.Min(item => item.Track.Id),
             });
-        var orderedArtists = random
-            ? artistGroups.OrderBy(_ => EF.Functions.Random()).ThenBy(item => item.RepresentativeTrackId)
-            : artistGroups.OrderBy(item => item.Artist).ThenBy(item => item.RepresentativeTrackId);
-        var artistPage = await orderedArtists
+        var artistPage = await artistGroups
+            .OrderBy(item => item.Artist)
+            .ThenBy(item => item.RepresentativeTrackId)
             .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -283,7 +281,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 item.Artist,
                 item.TrackCount,
                 albumCounts.GetValueOrDefault(item.Artist),
-                representative.CoverUrl,
+                $"{representative.CoverUrl}&variant=tile",
                 GetArtistImageUrl(metadata) ?? "",
                 IsArtistImageMissing(metadata));
         }).ToArray();
@@ -434,13 +432,13 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         track.DurationSeconds,
         $"/api/library/tracks/{track.Id}/stream",
         album?.ImageMissing == false && !string.IsNullOrWhiteSpace(album.ImageFileName)
-            ? $"/api/library/tracks/{track.Id}/cover?v={album.UpdatedAt.ToUnixTimeMilliseconds()}"
-            :                         $"/api/library/tracks/{track.Id}/cover",
+            ? $"/api/library/tracks/{track.Id}/cover?format=webp&variant=track&v={album.UpdatedAt.ToUnixTimeMilliseconds()}"
+            : $"/api/library/tracks/{track.Id}/cover?format=webp&variant=track",
             Path.GetExtension(track.RelativePath).TrimStart('.').ToLowerInvariant());
 
     private static string? GetArtistImageUrl(MusicArtistMetadata? metadata) =>
             metadata?.ImageMissing == false && !string.IsNullOrWhiteSpace(metadata.ImageFileName)
-                ? $"/api/library/artists/{metadata.Key}/image?v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
+                ? $"/api/library/artists/{metadata.Key}/image?format=webp&variant=tile&v={metadata.UpdatedAt.ToUnixTimeMilliseconds()}"
                 : null;
 
     private static bool IsArtistImageMissing(MusicArtistMetadata? metadata) =>

@@ -50,7 +50,7 @@
         <button
           class="album-play-button"
           type="button"
-          (click)="playTrack(album.tracks, 0)"
+          (click)="playAlbum(album.tracks)"
           [disabled]="!album.tracks.length"
         >
           <span aria-hidden="true">▶</span> Play album
@@ -88,7 +88,7 @@
                 class="album-track-row"
                 type="button"
                 [class.album-track-playing]="currentTrack()?.id === track.id && isPlaying()"
-                (click)="playTrack(album.tracks, index)"
+                (click)="playTrack(track)"
               >
                 <span class="album-track-number">{{ track.trackNumber || index + 1 }}</span>
                 <span class="album-track-title"

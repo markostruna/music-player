@@ -62,8 +62,14 @@ public interface IMusicLibraryService
         bool random = false);
     Task<IReadOnlyList<AlbumResponse>> GetAlbumsAsync(CancellationToken cancellationToken);
     Task<ResolvedMedia?> ResolveStreamAsync(int trackId, CancellationToken cancellationToken);
-    Task<CoverImage?> ResolveCoverAsync(int trackId, CancellationToken cancellationToken);
-    Task<CoverImage?> ResolveArtistImageAsync(string key, CancellationToken cancellationToken);
+    Task<CoverImage?> ResolveCoverAsync(
+        int trackId,
+        CancellationToken cancellationToken,
+        CoverImageVariant variant = CoverImageVariant.Track);
+    Task<CoverImage?> ResolveArtistImageAsync(
+        string key,
+        CancellationToken cancellationToken,
+        ArtistImageVariant variant = ArtistImageVariant.Page);
     Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(string artist, CancellationToken cancellationToken);
     Task<MetadataRefreshResponse> RefreshArtistMetadataAsync(
         string artist,
