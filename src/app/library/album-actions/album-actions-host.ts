@@ -12,7 +12,13 @@ import { ArtistCoverDialog } from './artist-cover-dialog';
 
 @Component({
   selector: 'app-album-actions-host',
-  imports: [MetadataRefreshDialog, AlbumCoverDialog, AlbumTagsDialog, AlbumMoveDialog, ArtistCoverDialog],
+  imports: [
+    MetadataRefreshDialog,
+    AlbumCoverDialog,
+    AlbumTagsDialog,
+    AlbumMoveDialog,
+    ArtistCoverDialog,
+  ],
   templateUrl: './album-actions-host.html',
 })
 export class AlbumActionsHost {
@@ -42,6 +48,39 @@ export class AlbumActionsHost {
       this.toast.show(`Added ${album.title} to the queue.`, 'success');
     } catch {
       this.toast.show('The album tracks could not be loaded.', 'error');
+    }
+  }
+
+  async playArtist(): Promise<void> {
+    const artist = this.actions.artistMenu()?.artist;
+    this.actions.closeMenu();
+    if (!artist) return;
+    try {
+      const tracks = await this.library.listArtistTracks(artist);
+      if (!tracks.length) {
+        this.toast.show(`No tracks were found for ${artist}.`, 'error');
+        return;
+      }
+      this.player.play(tracks, 0);
+    } catch {
+      this.toast.show('The artist tracks could not be loaded.', 'error');
+    }
+  }
+
+  async enqueueArtist(): Promise<void> {
+    const artist = this.actions.artistMenu()?.artist;
+    this.actions.closeMenu();
+    if (!artist) return;
+    try {
+      const tracks = await this.library.listArtistTracks(artist);
+      if (!tracks.length) {
+        this.toast.show(`No tracks were found for ${artist}.`, 'error');
+        return;
+      }
+      this.player.enqueue(tracks);
+      this.toast.show(`Added ${artist} to the queue.`, 'success');
+    } catch {
+      this.toast.show('The artist tracks could not be loaded.', 'error');
     }
   }
 

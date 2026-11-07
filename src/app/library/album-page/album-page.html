@@ -20,11 +20,28 @@
           <div class="album-details">
             <span class="album-kind">ALBUM</span>
             <h1>{{ album.title }}</h1>
-            <p class="album-artist">
-              <a [routerLink]="['/library/artist', album.artist]">{{ album.artist }}</a> •
+            <div class="album-artist-row">
+              <span class="album-artist-image">
+                <img
+                  [src]="artistImageUrl() || album.coverUrl"
+                  alt=""
+                  aria-hidden="true"
+                  (error)="$any($event.target).style.visibility = 'hidden'"
+                />
+              </span>
+              <a class="album-artist" [routerLink]="['/library/artist', album.artist]">{{
+                album.artist
+              }}</a>
+            </div>
+            @if (artistImageError()) {
+              <p class="album-artist-image-error" role="status">{{ artistImageError() }}</p>
+            }
+            <p class="album-facts">
               {{ album.releaseYear ?? 'Unknown' }} • {{ album.tracks.length }}
-              {{ album.tracks.length === 1 ? 'song' : 'songs' }},
-              {{ formatAlbumDuration(album.totalDurationSeconds) }}
+              {{ album.tracks.length === 1 ? 'song' : 'songs' }}
+              @if (formatAlbumDuration(album.totalDurationSeconds); as duration) {
+                , {{ duration }}
+              }
             </p>
           </div>
         </div>
@@ -125,21 +142,13 @@
           } @else {
             <div class="album-related-list">
               @for (relatedAlbum of relatedAlbums(); track relatedAlbum.key) {
-                <a
-                  class="album-related-tile"
-                  [routerLink]="['/library/album', relatedAlbum.tracks[0].id]"
-                >
-                  <span class="album-related-art">
-                    <span class="album-cover-placeholder" aria-hidden="true">♫</span>
-                    <img
-                      [src]="relatedAlbum.coverUrl"
-                      [alt]="relatedAlbum.title + ' album artwork'"
-                      (error)="$any($event.target).style.visibility = 'hidden'"
-                    />
-                  </span>
-                  <strong>{{ relatedAlbum.title }}</strong>
-                  <span>{{ relatedAlbum.year || 'Unknown year' }}</span>
-                </a>
+                <app-album-tile
+                  [title]="relatedAlbum.title"
+                  [artist]="relatedAlbum.artist"
+                  [coverUrl]="relatedAlbum.coverUrl"
+                  [trackId]="relatedAlbum.tracks[0].id"
+                  [year]="relatedAlbum.year"
+                />
               }
             </div>
           }

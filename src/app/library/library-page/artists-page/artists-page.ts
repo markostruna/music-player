@@ -1,18 +1,16 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { AuthState } from '@shared/services/auth-state';
+import { ArtistTile } from '@shared/components/artist-tile/artist-tile';
 import { LIBRARY_PAGE_SIZE, LibraryStore } from '@shared/services/library-store';
 import { AlbumActions } from '../../album-actions/album-actions';
 
 @Component({
   selector: 'app-library-artists-page',
-  imports: [RouterLink],
+  imports: [ArtistTile],
   templateUrl: './artists-page.html',
 })
 export class ArtistsPage {
   private readonly store = inject(LibraryStore);
   readonly albumActions = inject(AlbumActions);
-  readonly isAdmin = inject(AuthState).isAdmin;
 
   readonly active = input(false);
   readonly refreshTrigger = input(0);

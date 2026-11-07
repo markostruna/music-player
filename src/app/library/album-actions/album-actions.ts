@@ -12,6 +12,7 @@ export type ArtistAction = 'refresh' | 'cover';
 
 const MENU_WIDTH = 190;
 const MENU_HEIGHT = 230;
+const ARTIST_MENU_HEIGHT = 160;
 
 // Shared state for the album tile menu and its dialogs; rendered once by AlbumActionsHost.
 @Injectable({ providedIn: 'root' })
@@ -71,8 +72,8 @@ export class AlbumActions {
       artist,
       left: Math.max(8, Math.min(rect.left, window.innerWidth - MENU_WIDTH - 8)),
       top:
-        rect.bottom + 100 > window.innerHeight
-          ? Math.max(8, rect.top - 100)
+        rect.bottom + ARTIST_MENU_HEIGHT > window.innerHeight
+          ? Math.max(8, rect.top - ARTIST_MENU_HEIGHT)
           : rect.bottom + 4,
     });
   }

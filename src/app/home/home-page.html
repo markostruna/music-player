@@ -37,38 +37,13 @@
     @if (albums().length) {
       <div class="home-collection-grid">
         @for (album of albums(); track album.coverTrackId) {
-          <a
-            class="collection-tile album-tile"
-            [style.--tile-cover]="'url(&quot;' + album.coverUrl + '&quot;)'"
-            [routerLink]="['/library/album', album.coverTrackId]"
-            [attr.aria-label]="'View album ' + album.album + ' by ' + album.artist"
-          >
-            <span class="tile-art">
-              <span class="tile-placeholder" aria-hidden="true">♫</span>
-              <img
-                [src]="album.coverUrl"
-                [alt]="album.album + ' artwork'"
-                (error)="$any($event.target).style.visibility = 'hidden'"
-              />
-              <button
-                class="tile-play tile-menu-button"
-                type="button"
-                aria-haspopup="menu"
-                [attr.aria-expanded]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
-                [attr.aria-label]="'Actions for ' + album.album"
-                [class.menu-open]="albumActions.isMenuOpen({ artist: album.artist, title: album.album })"
-                (click)="albumActions.openMenu({ artist: album.artist, title: album.album }, $event)"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="5" cy="12" r="2" />
-                  <circle cx="12" cy="12" r="2" />
-                  <circle cx="19" cy="12" r="2" />
-                </svg>
-              </button>
-            </span>
-            <span class="tile-title">{{ album.album }}</span>
-            <span class="tile-detail">{{ album.artist }}</span>
-          </a>
+          <app-album-tile
+            [title]="album.album"
+            [artist]="album.artist"
+            [coverUrl]="album.coverUrl"
+            [trackId]="album.coverTrackId"
+            [year]="album.releaseYear"
+          />
         }
       </div>
     } @else if (albumsLoading()) {
@@ -102,43 +77,13 @@
     @if (artists().length) {
       <div class="home-collection-grid">
         @for (artist of artists(); track artist.artist) {
-          <a
-            class="collection-tile album-tile"
-            [class.photo-missing]="artist.artistImageMissing"
-            [style.--tile-cover]="'url(&quot;' + (artist.artistImageUrl || artist.coverUrl) + '&quot;)'"
-            [routerLink]="['/library/artist', artist.artist]"
-            [attr.aria-label]="'View artist ' + artist.artist"
-          >
-            <span class="tile-art artist-art">
-              <span class="tile-placeholder" aria-hidden="true">♫</span>
-              <img
-                [src]="artist.artistImageUrl || artist.coverUrl"
-                [alt]="artist.artist + ' photo'"
-                (error)="$any($event.target).style.visibility = 'hidden'"
-              />
-              @if (isAdmin()) {
-                <button
-                  class="tile-play tile-menu-button"
-                  type="button"
-                  aria-haspopup="menu"
-                  [attr.aria-expanded]="albumActions.isArtistMenuOpen(artist.artist)"
-                  [attr.aria-label]="'Actions for ' + artist.artist"
-                  [class.menu-open]="albumActions.isArtistMenuOpen(artist.artist)"
-                  (click)="albumActions.openArtistMenu(artist.artist, $event)"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="5" cy="12" r="2" />
-                    <circle cx="12" cy="12" r="2" />
-                    <circle cx="19" cy="12" r="2" />
-                  </svg>
-                </button>
-              }
-            </span>
-            <span class="tile-title">{{ artist.artist }}</span>
-            <span class="tile-detail">
-              {{ artist.albumCount }} {{ artist.albumCount === 1 ? 'album' : 'albums' }}
-            </span>
-          </a>
+          <app-artist-tile
+            [name]="artist.artist"
+            [imageUrl]="artist.artistImageUrl"
+            [coverUrl]="artist.coverUrl"
+            [imageMissing]="artist.artistImageMissing"
+            [albumCount]="artist.albumCount"
+          />
         }
       </div>
     } @else if (artistsLoading()) {

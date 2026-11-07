@@ -1,0 +1,36 @@
+<a
+  class="collection-tile media-tile"
+  [class.photo-missing]="imageMissing()"
+  [style.--tile-cover]="'url(&quot;' + artistImageUrl() + '&quot;)'"
+  [routerLink]="['/library/artist', name()]"
+  [attr.aria-label]="'View artist ' + name()"
+  [title]="'View artist: ' + name()"
+>
+  <span class="tile-art artist-art">
+    <span class="tile-placeholder" aria-hidden="true">♫</span>
+    <img
+      [src]="artistImageUrl()"
+      [alt]="name() + ' photo'"
+      (error)="$any($event.target).style.visibility = 'hidden'"
+    />
+    @if (isAdmin()) {
+      <button
+        class="tile-play tile-menu-button"
+        type="button"
+        aria-haspopup="menu"
+        [attr.aria-expanded]="albumActions.isArtistMenuOpen(name())"
+        [attr.aria-label]="'Actions for ' + name()"
+        [class.menu-open]="albumActions.isArtistMenuOpen(name())"
+        (click)="albumActions.openArtistMenu(name(), $event)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="19" cy="12" r="2" />
+        </svg>
+      </button>
+    }
+  </span>
+  <span class="tile-title">{{ name() }}</span>
+  <span class="tile-detail">{{ albumCount() }} {{ albumCount() === 1 ? 'album' : 'albums' }}</span>
+</a>

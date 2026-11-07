@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { AlbumTile } from '@shared/components/album-tile/album-tile';
 import { formatTime } from '@shared/utils/format-time';
 import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
@@ -9,7 +10,7 @@ import { distinctUntilChanged, map } from 'rxjs';
 
 @Component({
   selector: 'app-album-page',
-  imports: [RouterLink],
+  imports: [AlbumTile, RouterLink],
   templateUrl: './album-page.html',
 })
 export class AlbumPage {
@@ -21,6 +22,8 @@ export class AlbumPage {
   private readonly albumTracks = signal<MusicTrack[]>([]);
   private readonly relatedTracks = signal<MusicTrack[]>([]);
   private readonly loadingError = signal('');
+  readonly artistImageUrl = signal('');
+  readonly artistImageError = signal('');
   readonly relatedAlbumsError = signal('');
   private albumRequestId = 0;
 
@@ -37,7 +40,9 @@ export class AlbumPage {
   readonly formatTime = formatTime;
   formatAlbumDuration(seconds: number): string {
     const totalMinutes = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds / 60) : 0;
-    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}min`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return [hours ? `${hours}h` : '', minutes ? `${minutes}min` : ''].filter(Boolean).join(' ');
   }
   readonly album = computed(() => {
     const albumTracks = [...this.albumTracks()].sort(
@@ -65,7 +70,14 @@ export class AlbumPage {
 
     const albums = new Map<
       string,
-      { key: string; title: string; coverUrl: string; year: number; tracks: MusicTrack[] }
+      {
+        key: string;
+        title: string;
+        artist: string;
+        coverUrl: string;
+        year: number;
+        tracks: MusicTrack[];
+      }
     >();
     for (const track of this.relatedTracks()) {
       const artist = track.albumArtist.trim() || track.artist.trim();
@@ -84,6 +96,7 @@ export class AlbumPage {
         albums.set(key, {
           key,
           title: track.album,
+          artist,
           coverUrl: track.tileCoverUrl,
           year: track.year,
           tracks: [track],
@@ -121,6 +134,8 @@ export class AlbumPage {
     this.loadingError.set('');
     this.albumTracks.set([]);
     this.relatedTracks.set([]);
+    this.artistImageUrl.set('');
+    this.artistImageError.set('');
     this.relatedAlbumsError.set('');
     if (!Number.isInteger(trackId) || trackId < 1) {
       this.isLoading.set(false);
@@ -134,6 +149,14 @@ export class AlbumPage {
       const selectedTrack = tracks[0];
       if (selectedTrack) {
         const artist = selectedTrack.albumArtist.trim() || selectedTrack.artist;
+        try {
+          const metadata = await this.libraryApi.getArtistMetadata(artist);
+          if (requestId === this.albumRequestId) this.artistImageUrl.set(metadata.imageUrl ?? '');
+        } catch {
+          if (requestId === this.albumRequestId) {
+            this.artistImageError.set('Artist picture could not be loaded; showing album artwork.');
+          }
+        }
         try {
           const relatedTracks = await this.libraryApi.listArtistTracks(artist);
           if (requestId === this.albumRequestId) this.relatedTracks.set(relatedTracks);

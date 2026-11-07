@@ -1,0 +1,38 @@
+<a
+  class="collection-tile media-tile"
+  [style.--tile-cover]="'url(&quot;' + coverUrl() + '&quot;)'"
+  [routerLink]="['/library/album', trackId()]"
+  [attr.aria-label]="'View album ' + title() + ' by ' + artist()"
+  [title]="'View album: ' + title()"
+>
+  <span class="tile-art">
+    <span class="tile-placeholder" aria-hidden="true">♫</span>
+    <img
+      [src]="coverUrl()"
+      [alt]="title() + ' artwork'"
+      (error)="$any($event.target).style.visibility = 'hidden'"
+    />
+    <button
+      class="tile-play tile-menu-button"
+      type="button"
+      aria-haspopup="menu"
+      [attr.aria-expanded]="albumActions.isMenuOpen(albumRef())"
+      [attr.aria-label]="'Actions for ' + title()"
+      [class.menu-open]="albumActions.isMenuOpen(albumRef())"
+      (click)="albumActions.openMenu(albumRef(), $event)"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="5" cy="12" r="2" />
+        <circle cx="12" cy="12" r="2" />
+        <circle cx="19" cy="12" r="2" />
+      </svg>
+    </button>
+  </span>
+  <span class="tile-title">{{ title() }}</span>
+  <span class="tile-detail"
+    >{{ artist() }}
+    @if (year()) {
+      · {{ year() }}
+    }
+  </span>
+</a>

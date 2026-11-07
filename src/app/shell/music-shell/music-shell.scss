@@ -390,3 +390,47 @@ app-playlists-page {
     min-height: 0;
   }
 }
+
+@media (max-width: 680px) {
+  app-music-shell:has(app-album-page, app-artist-page) app-shell-header {
+    display: none;
+  }
+
+  app-music-shell:has(app-album-page, app-artist-page) .page-heading {
+    position: fixed;
+    z-index: 11;
+    top: 8px;
+    left: 8px;
+    min-height: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  app-music-shell:has(app-album-page, app-artist-page) .page-heading-inner {
+    min-height: 0;
+    padding: 0;
+  }
+
+  app-music-shell:has(app-album-page, app-artist-page) .breadcrumbs {
+    display: none;
+  }
+
+  app-music-shell:has(app-album-page, app-artist-page) .page-back-button {
+    width: 40px;
+    height: 40px;
+    color: #fff;
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 65%));
+    pointer-events: auto;
+  }
+
+  app-music-shell:has(app-album-page, app-artist-page) .page-back-button:hover {
+    background: rgb(0 0 0 / 24%);
+    color: #fff;
+  }
+}
+
+@media (max-width: 680px) and (orientation: portrait) {
+  app-music-shell .workspace {
+    padding-bottom: 48px;
+  }
+}

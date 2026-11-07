@@ -30,7 +30,7 @@
   </div>
 }
 
-@if (isAdmin() && actions.artistMenu(); as menu) {
+@if (actions.artistMenu(); as menu) {
   <div
     class="album-menu-backdrop"
     (click)="actions.closeMenu()"
@@ -43,16 +43,24 @@
     [style.top.px]="menu.top"
     (keydown.escape)="actions.closeMenu()"
   >
-    <button
-      type="button"
-      role="menuitem"
-      (click)="actions.openArtistDialog('refresh', menu.artist)"
-    >
-      Refresh information
-    </button>
-    <button type="button" role="menuitem" (click)="actions.openArtistDialog('cover', menu.artist)">
-      Change cover
-    </button>
+    <button type="button" role="menuitem" (click)="playArtist()">Play</button>
+    <button type="button" role="menuitem" (click)="enqueueArtist()">Enqueue</button>
+    @if (isAdmin()) {
+      <button
+        type="button"
+        role="menuitem"
+        (click)="actions.openArtistDialog('refresh', menu.artist)"
+      >
+        Refresh information
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        (click)="actions.openArtistDialog('cover', menu.artist)"
+      >
+        Change cover
+      </button>
+    }
   </div>
 }
 

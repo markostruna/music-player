@@ -1,11 +1,11 @@
 ﻿import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { AlbumTile } from '@shared/components/album-tile/album-tile';
 import { LIBRARY_PAGE_SIZE, LibraryStore } from '@shared/services/library-store';
 import { AlbumActions } from '../../album-actions/album-actions';
 
 @Component({
   selector: 'app-library-albums-page',
-  imports: [RouterLink],
+  imports: [AlbumTile],
   templateUrl: './albums-page.html',
 })
 export class AlbumsPage {

@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, signal, untracked } from '@angular
 import { Location } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { AlbumTile } from '@shared/components/album-tile/album-tile';
 import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore } from '@shared/services/library-store';
 import {
@@ -11,13 +12,13 @@ import {
 } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { ToastService } from '@shared/services/toast-service';
-import { AlbumActions, AlbumRef } from '../album-actions/album-actions';
+import { AlbumActions } from '../album-actions/album-actions';
 import { MetadataRefreshDialog } from '../metadata-refresh-dialog/metadata-refresh-dialog';
 import { distinctUntilChanged, map } from 'rxjs';
 
 @Component({
   selector: 'app-artist-page',
-  imports: [MetadataRefreshDialog, RouterLink],
+  imports: [AlbumTile, MetadataRefreshDialog, RouterLink],
   templateUrl: './artist-page.html',
 })
 export class ArtistPage {
@@ -65,12 +66,11 @@ export class ArtistPage {
   });
   readonly artist = computed(() => {
     const name = (this.params()?.get('name') ?? '').trim().toLowerCase();
-    const tracks = this.artistTracks()
-      .filter(
-        (track) =>
-          (track.albumArtist.trim() || track.artist.trim() || 'Unknown artist').toLowerCase() ===
-          name,
-      );
+    const tracks = this.artistTracks().filter(
+      (track) =>
+        (track.albumArtist.trim() || track.artist.trim() || 'Unknown artist').toLowerCase() ===
+        name,
+    );
     if (!tracks.length) return null;
 
     const groups = new Map<
@@ -98,8 +98,7 @@ export class ArtistPage {
     const displayName = first.albumArtist.trim() || first.artist.trim() || 'Unknown artist';
     const refreshed =
       this.refreshedInformation()?.artist === name ? this.refreshedInformation() : null;
-    const metadata =
-      this.artistMetadata()?.artist === name ? this.artistMetadata() : null;
+    const metadata = this.artistMetadata()?.artist === name ? this.artistMetadata() : null;
     return {
       name: displayName,
       coverUrl: refreshed?.imageUrl || metadata?.imageUrl || first.albumCoverUrl,
@@ -163,9 +162,9 @@ export class ArtistPage {
     }
   }
 
-  albumRef(album: { title: string; tracks: MusicTrack[] }): AlbumRef {
-    const track = album.tracks[0];
-    return { artist: track.albumArtist.trim() || track.artist.trim(), title: album.title };
+  playArtist(): void {
+    const tracks = this.artist()?.albums.flatMap((album) => album.tracks) ?? [];
+    this.player.play(tracks, 0);
   }
 
   descriptionValue(artist: string, description: string): string {

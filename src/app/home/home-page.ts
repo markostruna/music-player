@@ -1,7 +1,8 @@
 import { Component, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AlbumTile } from '@shared/components/album-tile/album-tile';
+import { ArtistTile } from '@shared/components/artist-tile/artist-tile';
 import { AlbumActions } from '../library/album-actions/album-actions';
-import { AuthState } from '@shared/services/auth-state';
 import { LibraryStore, LibraryView } from '@shared/services/library-store';
 import {
   AlbumSummary,
@@ -15,7 +16,7 @@ const HOME_COLLECTION_SIZE = 6;
 
 @Component({
   selector: 'app-home-page',
-  imports: [RouterLink],
+  imports: [RouterLink, AlbumTile, ArtistTile],
   templateUrl: './home-page.html',
   styleUrl: './home-page.scss',
 })
@@ -24,7 +25,6 @@ export class HomePage implements OnInit {
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
   readonly albumActions = inject(AlbumActions);
-  readonly isAdmin = inject(AuthState).isAdmin;
   private lastChangeCount = this.albumActions.changeCount();
 
   readonly albums = signal<AlbumSummary[]>([]);
