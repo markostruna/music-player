@@ -1,45 +1,30 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { AuthState } from '@shared/services/auth-state';
 import { formatTime } from '@shared/utils/format-time';
-import {
-  MetadataRefreshResult,
-  MusicLibraryApi,
-  MusicTrack,
-} from '@shared/services/music-library-api';
+import { MusicLibraryApi, MusicTrack } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
-import { ToastService } from '@shared/services/toast-service';
-import { AlbumActions } from '../album-actions/album-actions';
-import { MetadataRefreshDialog } from '../metadata-refresh-dialog/metadata-refresh-dialog';
+import { AlbumActions, AlbumRef } from '../album-actions/album-actions';
 import { distinctUntilChanged, map } from 'rxjs';
 
 @Component({
   selector: 'app-album-page',
-  imports: [MetadataRefreshDialog, RouterLink],
+  imports: [RouterLink],
   templateUrl: './album-page.html',
 })
 export class AlbumPage {
-  private readonly auth = inject(AuthState);
   readonly albumActions = inject(AlbumActions);
   private readonly libraryApi = inject(MusicLibraryApi);
   private readonly player = inject(PlayerService);
-  private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly params = toSignal(this.route.paramMap);
   private readonly albumTracks = signal<MusicTrack[]>([]);
+  private readonly relatedTracks = signal<MusicTrack[]>([]);
   private readonly loadingError = signal('');
+  readonly relatedAlbumsError = signal('');
   private albumRequestId = 0;
 
-  readonly isAdmin = this.auth.isAdmin;
-  readonly isMetadataDialogOpen = signal(false);
   private lastChangeCount = this.albumActions.changeCount();
-  private readonly refreshedInformation = signal<{
-    key: string;
-    imageUrl: string | null;
-    musicBrainzId: string;
-    updatedAt: string;
-  } | null>(null);
   readonly isLoading = signal(true);
   readonly errorMessage = computed(() => {
     if (this.loadingError()) return this.loadingError();
@@ -65,18 +50,50 @@ export class AlbumPage {
     if (!selectedTrack) return null;
 
     const artist = selectedTrack.albumArtist.trim() || selectedTrack.artist;
-    const key = `${artist.toLowerCase()}\0${selectedTrack.album.toLowerCase()}`;
-    const refreshed = this.refreshedInformation()?.key === key ? this.refreshedInformation() : null;
     return {
       title: selectedTrack.album,
       artist,
-      coverUrl: refreshed?.imageUrl || selectedTrack.albumCoverUrl,
-      musicBrainzId: refreshed?.musicBrainzId ?? '',
-      informationUpdatedAt: refreshed?.updatedAt ?? '',
+      coverUrl: selectedTrack.albumCoverUrl,
       releaseYear: albumTracks.find((track) => track.year > 0)?.year,
       tracks: albumTracks,
       totalDurationSeconds: albumTracks.reduce((total, track) => total + track.durationSeconds, 0),
     };
+  });
+  readonly relatedAlbums = computed(() => {
+    const currentAlbum = this.album();
+    if (!currentAlbum) return [];
+
+    const albums = new Map<
+      string,
+      { key: string; title: string; coverUrl: string; year: number; tracks: MusicTrack[] }
+    >();
+    for (const track of this.relatedTracks()) {
+      const artist = track.albumArtist.trim() || track.artist.trim();
+      if (
+        artist.toLowerCase() !== currentAlbum.artist.toLowerCase() ||
+        track.album.trim().toLowerCase() === currentAlbum.title.toLowerCase()
+      ) {
+        continue;
+      }
+      const key = `${artist.toLowerCase()}\0${track.album.toLowerCase()}`;
+      const existing = albums.get(key);
+      if (existing) {
+        existing.tracks.push(track);
+        existing.year ||= track.year;
+      } else {
+        albums.set(key, {
+          key,
+          title: track.album,
+          coverUrl: track.tileCoverUrl,
+          year: track.year,
+          tracks: [track],
+        });
+      }
+    }
+
+    return [...albums.values()].sort(
+      (first, second) => second.year - first.year || first.title.localeCompare(second.title),
+    );
   });
 
   constructor() {
@@ -103,6 +120,8 @@ export class AlbumPage {
     this.isLoading.set(true);
     this.loadingError.set('');
     this.albumTracks.set([]);
+    this.relatedTracks.set([]);
+    this.relatedAlbumsError.set('');
     if (!Number.isInteger(trackId) || trackId < 1) {
       this.isLoading.set(false);
       return;
@@ -110,7 +129,20 @@ export class AlbumPage {
 
     try {
       const tracks = await this.libraryApi.listAlbumTracksByTrackId(trackId);
-      if (requestId === this.albumRequestId) this.albumTracks.set(tracks);
+      if (requestId !== this.albumRequestId) return;
+      this.albumTracks.set(tracks);
+      const selectedTrack = tracks[0];
+      if (selectedTrack) {
+        const artist = selectedTrack.albumArtist.trim() || selectedTrack.artist;
+        try {
+          const relatedTracks = await this.libraryApi.listArtistTracks(artist);
+          if (requestId === this.albumRequestId) this.relatedTracks.set(relatedTracks);
+        } catch {
+          if (requestId === this.albumRequestId) {
+            this.relatedAlbumsError.set('More albums by this artist could not be loaded.');
+          }
+        }
+      }
     } catch {
       if (requestId === this.albumRequestId) {
         this.loadingError.set('The album could not be loaded. Check the music server connection.');
@@ -128,29 +160,7 @@ export class AlbumPage {
     this.player.play([track], 0);
   }
 
-  refreshInformation(): void {
-    this.isMetadataDialogOpen.set(true);
-  }
-
-  closeMetadataDialog(): void {
-    this.isMetadataDialogOpen.set(false);
-  }
-
-  saveRefreshedInformation(
-    artist: string,
-    album: string,
-    selection: { result: MetadataRefreshResult; providerId: string },
-  ): void {
-    const { result, providerId } = selection;
-    this.refreshedInformation.set({
-      key: `${artist.toLowerCase()}\0${album.toLowerCase()}`,
-      imageUrl: result.imageUrl,
-      musicBrainzId: result.musicBrainzId,
-      updatedAt: result.updatedAt,
-    });
-    this.toast.show(
-      `Album information refreshed from ${providerId} at ${new Date(result.updatedAt).toLocaleString()}.`,
-      'success',
-    );
+  albumRef(album: { artist: string; title: string }): AlbumRef {
+    return { artist: album.artist, title: album.title };
   }
 }

@@ -7,74 +7,83 @@
         {{ errorMessage() }} <a routerLink="/library">Return to your library</a>
       </p>
     } @else if (album(); as album) {
-      <section class="album-hero">
-        <div class="album-cover">
-          <span class="album-cover-placeholder" aria-hidden="true">♫</span>
-          <img
-            [src]="album.coverUrl"
-            [alt]="album.title + ' album artwork'"
-            (error)="$any($event.target).style.visibility = 'hidden'"
-          />
-          @if (isAdmin()) {
-            <button
-              class="album-cover-edit"
-              type="button"
-              (click)="albumActions.openDialog('cover', { artist: album.artist, title: album.title })"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="m14.5 6.5 3 3M4 20l4.5-.9L19 8.6a2.12 2.12 0 0 0-3-3L5.5 16.1 4 20Z"
-                  stroke="currentColor"
-                  stroke-width="1.7"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              <span>Change cover</span>
-            </button>
-          }
+      <section class="album-overview" aria-label="Album overview">
+        <div class="album-hero">
+          <div class="album-cover">
+            <span class="album-cover-placeholder" aria-hidden="true">♫</span>
+            <img
+              [src]="album.coverUrl"
+              [alt]="album.title + ' album artwork'"
+              (error)="$any($event.target).style.visibility = 'hidden'"
+            />
+          </div>
+          <div class="album-details">
+            <span class="album-kind">ALBUM</span>
+            <h1>{{ album.title }}</h1>
+            <p class="album-artist">
+              <a [routerLink]="['/library/artist', album.artist]">{{ album.artist }}</a> •
+              {{ album.releaseYear ?? 'Unknown' }} • {{ album.tracks.length }}
+              {{ album.tracks.length === 1 ? 'song' : 'songs' }},
+              {{ formatAlbumDuration(album.totalDurationSeconds) }}
+            </p>
+          </div>
         </div>
-        <div class="album-details">
-          <span class="album-kind">ALBUM</span>
-          <h1>{{ album.title }}</h1>
-          <p class="album-artist">
-            <a [routerLink]="['/library/artist', album.artist]">{{ album.artist }}</a> •
-            {{ album.releaseYear ?? 'Unknown' }} • {{ album.tracks.length }}
-            {{ album.tracks.length === 1 ? 'song' : 'songs' }},
-            {{ formatAlbumDuration(album.totalDurationSeconds) }}
-          </p>
+
+        <div class="album-toolbar" aria-label="Album actions">
+          <button
+            class="album-toolbar-play"
+            type="button"
+            aria-label="Play album"
+            [disabled]="!album.tracks.length"
+            (click)="playAlbum(album.tracks)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+          </button>
+          <button
+            class="album-toolbar-icon"
+            type="button"
+            aria-label="Download album (coming soon)"
+            title="Download album (coming soon)"
+            disabled
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            class="album-toolbar-icon album-toolbar-menu"
+            type="button"
+            aria-label="More album actions"
+            aria-haspopup="menu"
+            [attr.aria-expanded]="albumActions.isMenuOpen(albumRef(album))"
+            [class.menu-open]="albumActions.isMenuOpen(albumRef(album))"
+            (click)="albumActions.openMenu(albumRef(album), $event)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="5" cy="12" r="1.7" />
+              <circle cx="12" cy="12" r="1.7" />
+              <circle cx="19" cy="12" r="1.7" />
+            </svg>
+          </button>
+          <span class="album-view-mode" aria-label="List view">
+            List
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
         </div>
       </section>
-
-      <div class="album-actions">
-        <button
-          class="album-play-button"
-          type="button"
-          (click)="playAlbum(album.tracks)"
-          [disabled]="!album.tracks.length"
-        >
-          <span aria-hidden="true">▶</span> Play album
-        </button>
-        @if (isAdmin()) {
-          <button
-            class="album-play-button secondary-action"
-            type="button"
-            [disabled]="isMetadataDialogOpen()"
-            (click)="refreshInformation()"
-          >
-            Refresh information
-          </button>
-        }
-      </div>
-
-      @if (isMetadataDialogOpen()) {
-        <app-metadata-refresh-dialog
-          [artist]="album.artist"
-          [album]="album.title"
-          (saved)="saveRefreshedInformation(album.artist, album.title, $event)"
-          (closed)="closeMetadataDialog()"
-        />
-      }
 
       <section class="album-track-section" aria-labelledby="album-track-heading">
         <div class="album-track-heading">
@@ -104,6 +113,38 @@
           }
         </ol>
       </section>
+
+      @if (relatedAlbums().length || relatedAlbumsError()) {
+        <section class="album-related-section" aria-labelledby="album-related-heading">
+          <div class="album-related-heading">
+            <h2 id="album-related-heading">More by {{ album.artist }}</h2>
+            <a [routerLink]="['/library/artist', album.artist]">See discography</a>
+          </div>
+          @if (relatedAlbumsError()) {
+            <p class="album-related-error" role="status">{{ relatedAlbumsError() }}</p>
+          } @else {
+            <div class="album-related-list">
+              @for (relatedAlbum of relatedAlbums(); track relatedAlbum.key) {
+                <a
+                  class="album-related-tile"
+                  [routerLink]="['/library/album', relatedAlbum.tracks[0].id]"
+                >
+                  <span class="album-related-art">
+                    <span class="album-cover-placeholder" aria-hidden="true">♫</span>
+                    <img
+                      [src]="relatedAlbum.coverUrl"
+                      [alt]="relatedAlbum.title + ' album artwork'"
+                      (error)="$any($event.target).style.visibility = 'hidden'"
+                    />
+                  </span>
+                  <strong>{{ relatedAlbum.title }}</strong>
+                  <span>{{ relatedAlbum.year || 'Unknown year' }}</span>
+                </a>
+              }
+            </div>
+          }
+        </section>
+      }
     }
   </div>
 </div>

@@ -18,7 +18,7 @@
         Refresh information
       </button>
       <button type="button" role="menuitem" (click)="actions.openDialog('tags', menu.album)">
-        Edit tags
+        Edit
       </button>
       <button type="button" role="menuitem" (click)="actions.openDialog('cover', menu.album)">
         Change cover
@@ -43,7 +43,11 @@
     [style.top.px]="menu.top"
     (keydown.escape)="actions.closeMenu()"
   >
-    <button type="button" role="menuitem" (click)="actions.openArtistDialog('refresh', menu.artist)">
+    <button
+      type="button"
+      role="menuitem"
+      (click)="actions.openArtistDialog('refresh', menu.artist)"
+    >
       Refresh information
     </button>
     <button type="button" role="menuitem" (click)="actions.openArtistDialog('cover', menu.artist)">
