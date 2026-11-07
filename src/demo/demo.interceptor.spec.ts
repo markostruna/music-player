@@ -36,12 +36,35 @@ describe('demo API', () => {
   });
 
   it('serves a populated library with local artwork and generated audio', async () => {
-    const tracks = await firstValueFrom(http.get<MusicTrack[]>(`${MUSIC_API_BASE}/library/tracks`));
-    expect(tracks).toHaveLength(16);
-    expect(new Set(tracks.map((track) => track.album)).size).toBe(4);
-    expect(tracks[0].coverUrl).toContain('/demo/aurora.svg');
+    const tracks = await firstValueFrom(
+      http.get<(MusicTrack & { artistImageUrl: string })[]>(`${MUSIC_API_BASE}/library/tracks`),
+    );
+    expect(tracks).toHaveLength(240);
+    expect(new Set(tracks.map((track) => track.album)).size).toBe(30);
+    expect(new Set(tracks.map((track) => track.artist)).size).toBe(20);
+    expect(new Set(tracks.map((track) => track.albumCoverUrl)).size).toBe(30);
+    expect(new Set(tracks.map((track) => track.artistImageUrl)).size).toBe(20);
+    expect(tracks.every((track) => track.coverUrl !== track.artistImageUrl)).toBe(true);
+    for (const artist of new Set(tracks.map((track) => track.artist))) {
+      expect(
+        new Set(
+          tracks.filter((track) => track.artist === artist).map((track) => track.artistImageUrl),
+        ).size,
+      ).toBe(1);
+    }
+    expect(new Set(tracks.map((track) => track.id)).size).toBe(240);
+    expect(
+      [...new Set(tracks.map((track) => track.album))].map(
+        (album) => tracks.filter((track) => track.album === album).length,
+      ),
+    ).toEqual(Array.from({ length: 30 }, () => 8));
+    const roots = await firstValueFrom(
+      http.get<{ trackCount: number }[]>(`${MUSIC_API_BASE}/admin/roots`),
+    );
+    expect(roots[0].trackCount).toBe(240);
+    expect(tracks[0].coverUrl).toContain('/demo/first-light.png');
     expect(tracks[0].streamUrl).toBe('blob:demo-audio');
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(4);
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(30);
   });
 
   it('supports sign-out, sign-in, and theme changes without network requests', async () => {
@@ -104,11 +127,11 @@ describe('demo API', () => {
     expect(albums.totalCount).toBe(2);
     expect(albums.items).toHaveLength(1);
     const artists = await api.listArtistPage('', 1, 10);
-    expect(artists.totalCount).toBe(3);
+    expect(artists.totalCount).toBe(20);
     expect(artists.items.find((artist) => artist.artist === 'Aurora Drive')?.albumCount).toBe(2);
     const tracks = await api.listAlbumTracksByTrackId(1);
-    expect(tracks).toHaveLength(4);
-    expect(tracks[0].tileCoverUrl).toContain('aurora.svg');
+    expect(tracks).toHaveLength(8);
+    expect(tracks[0].tileCoverUrl).toContain('first-light.png');
     expect(await api.getArtistMetadata('Aurora Drive')).toMatchObject({
       imageMissing: false,
       description: expect.stringContaining('fictional'),
@@ -116,7 +139,7 @@ describe('demo API', () => {
     expect((await api.browseLibraryFolder(1, 'Aurora Drive')).folders).toHaveLength(2);
     expect(
       await api.searchTracks('', { sourceRootId: 1, path: 'Aurora Drive/First Light' }),
-    ).toHaveLength(4);
+    ).toHaveLength(8);
   });
 
   it('fails unsupported API calls instead of falling through to the network', async () => {

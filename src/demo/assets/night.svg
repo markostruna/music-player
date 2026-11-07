@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
-  <defs><linearGradient id="a" x2="1" y2="1"><stop stop-color="#170f33"/><stop offset="1" stop-color="#a54967"/></linearGradient></defs>
-  <rect width="600" height="600" fill="url(#a)"/><circle cx="390" cy="195" r="85" fill="#ffbf9b"/><path d="M0 420L110 300 180 370 280 240 410 390 480 310 600 420V600H0Z" fill="#282340"/><path d="M0 470L145 370 250 455 375 320 600 480V600H0Z" fill="#54415b"/><g fill="#fff"><circle cx="85" cy="145" r="3"/><circle cx="215" cy="90" r="2"/><circle cx="500" cy="120" r="3"/><circle cx="300" cy="165" r="2"/></g>
-  <text x="40" y="65" fill="#fff" font-family="sans-serif" font-size="24" letter-spacing="6">LUNA NORTH</text><text x="40" y="560" fill="#fff" font-family="sans-serif" font-size="30" letter-spacing="5">NIGHT SIGNALS</text>
-</svg>
