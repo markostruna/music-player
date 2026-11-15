@@ -12,6 +12,20 @@
       [alt]="title() + ' artwork'"
       (error)="$any($event.target).style.visibility = 'hidden'"
     />
+    @if (formatBadge(); as badge) {
+      <span
+        class="tile-format-badge"
+        [class.tile-format-badge--flac-single]="
+          badge.className === 'tile-format-badge--flac-single'
+        "
+        [class.tile-format-badge--flac-album]="badge.className === 'tile-format-badge--flac-album'"
+        [class.tile-format-badge--mixed]="badge.className === 'tile-format-badge--mixed'"
+        [class.tile-format-badge--other]="badge.className === 'tile-format-badge--other'"
+        [title]="badge.title"
+      >
+        {{ badge.label }}
+      </span>
+    }
     <button
       class="tile-play tile-menu-button"
       type="button"

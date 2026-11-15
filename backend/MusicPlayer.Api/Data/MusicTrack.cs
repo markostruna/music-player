@@ -35,5 +35,6 @@ public sealed class MusicTrack
     public long FileSize { get; set; }
     public DateTimeOffset LastWriteTime { get; set; }
     public DateTimeOffset ScannedAt { get; set; }
+    public long? ImportedAtUnixMilliseconds { get; set; }
     public bool IsAvailable { get; set; } = true;
 }

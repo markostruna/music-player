@@ -657,7 +657,7 @@ export class DemoBackend {
     if (path === '/library/tracks/page' && method === 'GET') {
       return this.paginate(this.filteredTracks(url), url);
     }
-    if (path === '/library/albums/page' && method === 'GET') {
+    if ((path === '/library/albums/page' || path === '/library/albums/recent') && method === 'GET') {
       const albums = new Map<string, AlbumSummary>();
       for (const track of this.tracks) {
         const key = `${track.albumArtist}\0${track.album}`;
@@ -665,6 +665,9 @@ export class DemoBackend {
         if (album) {
           album.trackCount++;
           album.durationSeconds += track.durationSeconds;
+          if (!album.fileExtensions.includes(track.fileExtension)) {
+            album.fileExtensions.push(track.fileExtension);
+          }
         } else {
           albums.set(key, {
             artist: track.albumArtist,
@@ -674,9 +677,12 @@ export class DemoBackend {
             durationSeconds: track.durationSeconds,
             coverTrackId: track.id,
             coverUrl: track.coverUrl,
+            fileExtensions: [track.fileExtension],
+            importedAt: null,
           });
         }
       }
+      if (path === '/library/albums/recent') return [...albums.values()].reverse().slice(0, 7);
       const query = (url.searchParams.get('query') ?? '').toLowerCase();
       return this.paginate(
         [...albums.values()].filter((album) =>
@@ -697,6 +703,7 @@ export class DemoBackend {
             coverUrl: track.coverUrl,
             artistImageUrl: track.artistImageUrl,
             artistImageMissing: track.artistImageMissing,
+            importedAt: null,
             albums: new Set<string>(),
           };
           artists.set(track.artist, artist);
@@ -835,12 +842,29 @@ export class DemoBackend {
         return this.operation;
       }
     }
+    if (path === '/admin/operations/clean-database' && method === 'POST') {
+      this.operation = {
+        id: 'demo-operation',
+        sourceRootId: 0,
+        rootName: 'database',
+        operationType: 'database-cleanup',
+        state: 'running',
+        message: 'Simulating database cleanup.',
+        completedUnits: 0,
+        totalUnits: 1,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+      };
+      return this.operation;
+    }
     if (path === '/admin/operations/active' && method === 'GET') return null;
     if (path === '/admin/operations/demo-operation' && method === 'GET' && this.operation) {
       this.operation = {
         ...this.operation,
         state: 'completed',
-        message: 'Demo operation complete.',
+        message: this.operation.operationType === 'database-cleanup'
+          ? 'Demo cleanup complete. No entries removed.'
+          : 'Demo operation complete.',
         completedUnits: 1,
         finishedAt: new Date().toISOString(),
       };

@@ -1,11 +1,41 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using MusicPlayer.Api.Data;
 
 namespace MusicPlayer.Api.Tests;
 
 public sealed class DatabaseMigrationTests
 {
+    [Fact]
+    public async Task ImportTimestampMigrationBackfillsPreviousScanTime()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<MusicDbContext>().UseSqlite(connection).Options;
+        await using var database = new MusicDbContext(options);
+        await database.Database.GetService<IMigrator>().MigrateAsync("20261031191400_RemoveAlbumDescription");
+        await database.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO "SourceRoots" ("Id", "Name", "Path", "IsEnabled", "AddedAt")
+            VALUES (1, 'Music', 'C:\Music', 1, '2020-01-01 00:00:00+00:00');
+            INSERT INTO "Folders" ("Id", "SourceRootId", "RelativePath", "Name")
+            VALUES (1, 1, '', 'Music');
+            INSERT INTO "Tracks" ("SourceRootId", "FolderId", "RelativePath", "Title", "Artist", "Album",
+                "AlbumArtist", "Genre", "TrackNumber", "DiscNumber", "Year", "DurationSeconds", "FileSize",
+                "LastWriteTime", "ScannedAt", "IsAvailable")
+            VALUES (1, 1, 'track.wav', 'Track', 'Artist', 'Album', '', '', 1, 1, 2020, 1, 1,
+                '2020-01-01 00:00:00+00:00', '2022-05-06 07:08:09+02:00', 1);
+            """);
+
+        await database.Database.MigrateAsync();
+
+        var track = await database.Tracks.SingleAsync();
+        Assert.Equal(new DateTimeOffset(2022, 5, 6, 5, 8, 9, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            track.ImportedAtUnixMilliseconds);
+    }
+
     [Fact]
     public async Task MigrateCreatesTheCurrentSchema()
     {
@@ -29,6 +59,9 @@ public sealed class DatabaseMigrationTests
         Assert.Contains(
             "20261031191400_RemoveAlbumDescription",
             await database.Database.GetAppliedMigrationsAsync());
+        Assert.Contains(
+            "20261115140000_AddImportTimestamp",
+            await database.Database.GetAppliedMigrationsAsync());
         await AssertAlbumDescriptionColumnsRemovedAsync(database);
     }
 
@@ -42,6 +75,8 @@ public sealed class DatabaseMigrationTests
             .Options;
         await using var database = new MusicDbContext(options);
         await database.Database.EnsureCreatedAsync();
+        await database.Database.ExecuteSqlRawAsync(
+            """ALTER TABLE "Tracks" DROP COLUMN "ImportedAtUnixMilliseconds" """);
         await database.Database.ExecuteSqlRawAsync(
             """ALTER TABLE "AlbumMetadata" ADD COLUMN "Description" TEXT NOT NULL DEFAULT ''""");
         await database.Database.ExecuteSqlRawAsync(

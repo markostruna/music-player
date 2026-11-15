@@ -21,4 +21,24 @@ public sealed class LibraryOperationManagerTests
         Assert.NotNull(manager.TryStart(1, "Music", LibraryOperationManager.ScanOperation));
         Assert.False(manager.TryBeginRootRemoval(1));
     }
+
+    [Fact]
+    public void AlbumImportReservationPreventsOverlappingOperationsAndQueuesCompositeScan()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        using var manager = new LibraryOperationManager(
+            services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<LibraryOperationManager>.Instance);
+
+        Assert.True(manager.TryBeginLibraryMutation());
+        Assert.Null(manager.TryStart(1, "Music", LibraryOperationManager.ScanOperation));
+        Assert.False(manager.TryBeginRootRemoval(1));
+
+        var operation = manager.StartReservedImportOperation(2, "Library", "Artist/Album", sourceRetained: true);
+
+        Assert.NotNull(operation);
+        Assert.Equal(LibraryOperationManager.ImportScanMetadataOperation, operation.OperationType);
+        Assert.Contains("original files remain", operation.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(manager.TryBeginLibraryMutation());
+    }
 }

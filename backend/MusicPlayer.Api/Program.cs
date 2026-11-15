@@ -29,6 +29,7 @@ builder.Services.AddDataProtection()
 builder.Services.AddScoped<IProviderSettingsService, ProviderSettingsService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<MusicLibraryBrowseService>();
+builder.Services.AddScoped<IUnscannedFolderService, UnscannedFolderService>();
 builder.Services.AddSingleton<ImageWebpService>();
 builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
 builder.Services.AddSingleton<LibraryOperationManager>();
@@ -149,6 +150,7 @@ app.MapUserEndpoints();
 app.MapProviderSettingsEndpoints();
 app.MapLibraryEndpoints();
 app.MapIdentifyEndpoints();
+app.MapUnscannedFolderEndpoints();
 
 app.Run();
 

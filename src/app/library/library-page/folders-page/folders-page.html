@@ -5,9 +5,16 @@
       <h3>{{ selectedFolder()?.name ?? 'All folders' }}</h3>
     </div>
     @if (selectedFolder()) {
-      <button class="folder-back" type="button" (click)="navigateToAllFolders()">
-        All folders
-      </button>
+      <div class="folder-heading-actions">
+        @if (isAdmin() && selectedIsUnscanned() && selectedFolder()!.relativePath) {
+          <button type="button" class="folder-back" (click)="renameFolder(selectedFolder()!)">
+            Rename folder
+          </button>
+        }
+        <button class="folder-back" type="button" (click)="navigateToAllFolders()">
+          All folders
+        </button>
+      </div>
     }
   </div>
 
@@ -50,28 +57,42 @@
             </svg>
           </span>
           <span class="folder-name">{{ folder.name }}</span>
-          <span class="folder-path">Music folder</span>
+          <span class="folder-path">
+            {{ unscannedRootIds().has(folder.sourceRootId) ? 'Unscanned inbox' : 'Music folder' }}
+          </span>
         </button>
       }
     </div>
   } @else if (contents()) {
     <div class="folder-grid">
       @for (folder of contents()!.folders; track folder.sourceRootId + ':' + folder.relativePath) {
-        <button class="folder-tile" type="button" (click)="navigateTo(folder)">
-          <span class="folder-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path
-                d="M3.5 6.5h6l2 2h9v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-11Z"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linejoin="round"
-              />
-              <path d="M3.5 9h17" stroke="currentColor" stroke-width="1.7" />
-            </svg>
-          </span>
-          <span class="folder-name">{{ folder.name }}</span>
-          <span class="folder-path">{{ folder.relativePath }}</span>
-        </button>
+        <div class="folder-entry">
+          <button class="folder-tile" type="button" (click)="navigateTo(folder)">
+            <span class="folder-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M3.5 6.5h6l2 2h9v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-11Z"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linejoin="round"
+                />
+                <path d="M3.5 9h17" stroke="currentColor" stroke-width="1.7" />
+              </svg>
+            </span>
+            <span class="folder-name">{{ folder.name }}</span>
+            <span class="folder-path">{{ folder.relativePath }}</span>
+          </button>
+          @if (
+            isAdmin()
+            && selectedIsUnscanned()
+            && selectedFolder()?.relativePath
+            && files().some(file => file.type === 'music')
+          ) {
+            <button class="folder-back" type="button" (click)="renameFolder(folder)">
+              Rename
+            </button>
+          }
+        </div>
       } @empty {
         <p class="empty-state">No subfolders in this folder.</p>
       }
@@ -147,10 +168,147 @@
               </svg>
             </button>
           }
+          @if (isAdmin() && selectedIsUnscanned() && file.type === 'music') {
+            <button
+              class="folder-back folder-file-rename"
+              type="button"
+              (click)="renameTrack(file)"
+            >
+              Rename
+            </button>
+          }
         </div>
       } @empty {
         <p class="empty-state">No files in this folder.</p>
       }
     </section>
+
+    @if (isAdmin() && selectedIsUnscanned()) {
+      <section class="album-import" aria-label="Import album into library">
+        <div>
+          <span class="eyebrow">ALBUM INBOX</span>
+          <h4>Prepare this folder for the library</h4>
+        </div>
+        <div class="album-import-fields">
+          <label>
+            Artist
+            <input
+              name="importArtist"
+              [ngModel]="importArtist()"
+              (ngModelChange)="importArtist.set($event); albumCheck.set(null)"
+              maxlength="1024"
+              required
+            />
+          </label>
+          <label>
+            Album
+            <input
+              name="importAlbum"
+              [ngModel]="albumTitle()"
+              (ngModelChange)="albumTitle.set($event); albumCheck.set(null)"
+              maxlength="1024"
+              required
+            />
+          </label>
+          <label>
+            Scanned destination
+            <select
+              name="destinationRoot"
+              [ngModel]="destinationRootId()"
+              (ngModelChange)="destinationRootId.set(+$event); albumCheck.set(null)"
+              required
+            >
+              @for (root of scannedRoots(); track root.id) {
+                <option [ngValue]="root.id">{{ root.name }} — {{ root.path }}</option>
+              }
+            </select>
+          </label>
+          <button type="button" (click)="checkAlbum()">Check for existing album</button>
+        </div>
+
+        @if (albumCheck(); as check) {
+          @if (check.existingAlbums.length > 0) {
+            <div class="album-match-list">
+              <strong>Matching album records found:</strong>
+              @for (album of check.existingAlbums; track album.sourceRootId + ':' + album.relativePath) {
+                <span>{{ album.artist }} — {{ album.album }} · {{ album.relativePath }}</span>
+              }
+            </div>
+          } @else if (!check.destinationFolderExists) {
+            <p class="album-check-clear">No matching album is in the database or destination folder.</p>
+          }
+
+          @if (check.existingAlbums.length > 0 || check.destinationFolderExists) {
+            <div class="album-import-fields">
+              <label>
+                Existing album action
+                <select
+                  name="conflictAction"
+                  [ngModel]="conflictAction()"
+                  (ngModelChange)="conflictAction.set($event)"
+                >
+                  <option value="">Choose an action</option>
+                  <option value="rename">Rename existing album</option>
+                  <option value="delete">Delete existing album from disk and library</option>
+                </select>
+              </label>
+              @if (conflictAction() === 'rename') {
+                <label>
+                  New name for existing album
+                  <input
+                    name="existingAlbumNewName"
+                    [ngModel]="existingAlbumNewName()"
+                    (ngModelChange)="existingAlbumNewName.set($event)"
+                    maxlength="255"
+                    required
+                  />
+                </label>
+              }
+            </div>
+          }
+
+          @if (check.hasCueFile) {
+            <div class="cue-options">
+              <p>This folder contains a CUE file for a single-file album.</p>
+              <label>
+                CUE handling
+                <select
+                  name="cueProcessing"
+                  [ngModel]="cueProcessingChoice()"
+                  (ngModelChange)="cueProcessingChoice.set($event)"
+                >
+                  <option value="">Choose an action</option>
+                  <option value="keep-as-is">Import the original files without splitting</option>
+                  <option value="split">Split into separate FLAC tracks using FFmpeg</option>
+                </select>
+              </label>
+              @if (cueProcessingChoice() === 'split') {
+                <label>
+                  Original CUE and FLAC
+                  <select
+                    name="cueSourceChoice"
+                    [ngModel]="cueSourceChoice()"
+                    (ngModelChange)="cueSourceChoice.set($event)"
+                  >
+                    <option value="">Choose what to do with the originals</option>
+                    <option value="keep">Keep originals in the unscanned folder</option>
+                    <option value="delete">Delete originals after successful import</option>
+                  </select>
+                </label>
+              }
+            </div>
+          }
+          <button class="album-import-button" type="button" (click)="importAlbum()">
+            Move album, scan, and refresh metadata
+          </button>
+        }
+        @if (albumErrorMessage()) {
+          <p class="empty-state" role="alert">{{ albumErrorMessage() }}</p>
+        }
+        @if (albumStatusMessage()) {
+          <p class="album-check-clear" role="status">{{ albumStatusMessage() }}</p>
+        }
+      </section>
+    }
   }
 </section>

@@ -15,8 +15,17 @@ public interface IMusicLibraryService
         string? relativePath,
         CancellationToken cancellationToken);
     Task<ScanResponse> ScanAsync(int rootId, CancellationToken cancellationToken);
+    Task<ScanResponse> ScanFolderAsync(int rootId, string relativePath, CancellationToken cancellationToken);
+    Task<DatabaseCleanupResponse> CleanDatabaseAsync(
+        Action<int, int, string> reportProgress,
+        CancellationToken cancellationToken);
     Task<RootMetadataRefreshResponse> RefreshRootMetadataAsync(
         int rootId,
+        Action<int, int, string> reportProgress,
+        CancellationToken cancellationToken);
+    Task<RootMetadataRefreshResponse> RefreshFolderMetadataAsync(
+        int rootId,
+        string relativePath,
         Action<int, int, string> reportProgress,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken);
@@ -41,6 +50,7 @@ public interface IMusicLibraryService
         int pageSize,
         CancellationToken cancellationToken,
         bool random = false);
+    Task<IReadOnlyList<AlbumSummaryResponse>> GetRecentAlbumsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<TrackResponse>> GetArtistTracksAsync(
         string artist,
         CancellationToken cancellationToken);

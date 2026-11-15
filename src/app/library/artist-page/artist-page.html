@@ -139,6 +139,8 @@
               [coverUrl]="album.coverUrl"
               [trackId]="album.tracks[0].id"
               [year]="album.year || null"
+              [fileExtensions]="album.tracks.map((track) => track.fileExtension)"
+              [trackCount]="album.tracks.length"
             />
           }
         </div>

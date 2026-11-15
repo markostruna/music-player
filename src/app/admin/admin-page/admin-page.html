@@ -23,6 +23,9 @@
       </div>
       <span>{{ roots().length }} configured</span>
     </div>
+    <button type="button" [disabled]="operations.isRunning()" (click)="cleanDatabase()">
+      Clean database
+    </button>
     <form class="admin-form root-form" (ngSubmit)="addRoot()">
       <label
         >Display name<input
@@ -72,6 +75,60 @@
       } @empty {
         @if (!isLoading()) {
           <p class="admin-empty">No music folders configured.</p>
+        }
+      }
+    </div>
+  </section>
+
+  <section class="admin-section">
+    <div class="admin-section-heading">
+      <div>
+        <span class="eyebrow">ALBUM INBOX</span>
+        <h2>Unscanned folders</h2>
+      </div>
+      <span>{{ unscannedFolders().length }} configured</span>
+    </div>
+    <p class="admin-help">
+      These server folders are excluded from scans. Open the Folders page to review, rename, and
+      import albums.
+    </p>
+    <form class="admin-form root-form" (ngSubmit)="addUnscannedFolder()">
+      <label
+        >Display name<input
+          name="unscannedFolderName"
+          [(ngModel)]="unscannedFolderName"
+          required
+          maxlength="120"
+          placeholder="Album inbox"
+      /></label>
+      <label
+        >Folder path<input
+          name="unscannedFolderPath"
+          [(ngModel)]="unscannedFolderPath"
+          required
+          maxlength="2048"
+          placeholder="Server folder location"
+      /></label>
+      <button type="submit">Add unscanned folder</button>
+    </form>
+    <div class="admin-list">
+      @for (folder of unscannedFolders(); track folder.id) {
+        <div class="admin-list-row">
+          <div class="admin-row-main">
+            <strong>{{ folder.name }}</strong>
+            <small>{{ folder.path }}</small>
+          </div>
+          <button
+            type="button"
+            class="danger-action"
+            (click)="removeUnscannedFolder(folder)"
+          >
+            Remove
+          </button>
+        </div>
+      } @empty {
+        @if (!isLoading()) {
+          <p class="admin-empty">No unscanned folders configured.</p>
         }
       }
     </div>

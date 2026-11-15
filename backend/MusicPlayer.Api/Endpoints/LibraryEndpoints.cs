@@ -92,6 +92,10 @@ public static class LibraryEndpoints
         })
         .WithName("ListAlbumPage")
         .WithSummary("Searches and returns one page of album summaries.");
+        library.MapGet("/albums/recent", async (IMusicLibraryService music, CancellationToken cancellationToken) =>
+                TypedResults.Ok(await music.GetRecentAlbumsAsync(cancellationToken)))
+            .WithName("ListRecentlyAddedAlbums")
+            .WithSummary("Returns up to seven albums ordered by their first catalogued import time.");
         library.MapGet("/albums/tracks", async Task<Results<Ok<IReadOnlyList<TrackResponse>>, BadRequest<string>>> (
             string artist,
             string album,
@@ -392,6 +396,17 @@ public static class LibraryEndpoints
         var adminOperations = app.MapGroup("/api/admin/operations")
             .WithTags("Library operations")
             .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
+        adminOperations.MapPost("/clean-database", Results<Accepted<LibraryOperationStatus>, Conflict<string>> (
+            LibraryOperationManager operations) =>
+        {
+            var operation = operations.TryStart(0, "database", LibraryOperationManager.DatabaseCleanupOperation);
+            return operation is null
+                ? TypedResults.Conflict("Another library operation is already running.")
+                : TypedResults.Accepted($"/api/admin/operations/{operation.Id}", operation);
+        })
+        .AddEndpointFilter<CsrfEndpointFilter>()
+        .WithName("CleanLibraryDatabase")
+        .WithSummary("Starts removing missing track and folder entries without deleting files.");
         adminOperations.MapGet("/active", Results<Ok<LibraryOperationStatus>, NoContent> (
             LibraryOperationManager operations) =>
         {

@@ -52,6 +52,8 @@ export interface AlbumSummary {
   durationSeconds: number;
   coverTrackId: number;
   coverUrl: string;
+  fileExtensions: string[];
+  importedAt: string | null;
 }
 
 export interface ArtistSummary {
@@ -61,6 +63,7 @@ export interface ArtistSummary {
   coverUrl: string;
   artistImageUrl: string;
   artistImageMissing: boolean;
+  importedAt: string | null;
 }
 
 export interface PagedResult<T> {
@@ -109,7 +112,37 @@ export interface SourceRoot {
   isEnabled: boolean;
 }
 
-export type LibraryOperationType = 'scan' | 'metadata-refresh';
+export interface UnscannedFolder {
+  id: number;
+  name: string;
+  path: string;
+}
+
+export interface ExistingAlbum {
+  sourceRootId: number;
+  artist: string;
+  album: string;
+  relativePath: string;
+}
+
+export interface UnscannedAlbumCheck {
+  hasCueFile: boolean;
+  destinationFolderExists: boolean;
+  existingAlbums: ExistingAlbum[];
+}
+
+export interface ImportUnscannedAlbum {
+  relativePath: string;
+  destinationRootId: number;
+  artist: string;
+  album: string;
+  conflictAction: '' | 'rename' | 'delete';
+  existingAlbumNewName: string;
+  splitCue: boolean;
+  keepCueSources: boolean;
+}
+
+export type LibraryOperationType = 'scan' | 'metadata-refresh' | 'import-scan-metadata' | 'database-cleanup';
 export type LibraryOperationState = 'queued' | 'running' | 'completed' | 'failed';
 
 export interface LibraryOperationStatus {
@@ -247,6 +280,17 @@ export class MusicLibraryApi {
     }));
   }
 
+  listRecentAlbums(): Promise<AlbumSummary[]> {
+    return firstValueFrom(
+      this.http.get<AlbumSummary[]>(`${MUSIC_API_BASE}/library/albums/recent`, {
+        withCredentials: true,
+      }),
+    ).then((albums) => albums.map((album) => ({
+      ...album,
+      coverUrl: coverImageUrl(album.coverUrl, 'tile'),
+    })));
+  }
+
   listAlbumTracks(artist: string, album: string): Promise<MusicTrack[]> {
     const params = new URLSearchParams({ artist, album });
     return firstValueFrom(
@@ -346,6 +390,94 @@ export class MusicLibraryApi {
     );
   }
 
+  listUnscannedFolders(): Promise<UnscannedFolder[]> {
+    return firstValueFrom(
+      this.http.get<UnscannedFolder[]>(`${MUSIC_API_BASE}/admin/unscanned-folders`, {
+        withCredentials: true,
+      }),
+    );
+  }
+
+  async addUnscannedFolder(name: string, path: string): Promise<UnscannedFolder> {
+    return firstValueFrom(
+      this.http.post<UnscannedFolder>(
+        `${MUSIC_API_BASE}/admin/unscanned-folders`,
+        { name, path },
+        await this.writeOptions(),
+      ),
+    );
+  }
+
+  async removeUnscannedFolder(id: number): Promise<void> {
+    await firstValueFrom(
+      this.http.delete<void>(
+        `${MUSIC_API_BASE}/admin/unscanned-folders/${id}`,
+        await this.writeOptions(),
+      ),
+    );
+  }
+
+  browseUnscannedFolder(rootId: number, path: string): Promise<MusicFolderContents> {
+    const params = new URLSearchParams({ path });
+    return firstValueFrom(
+      this.http.get<MusicFolderContents>(
+        `${MUSIC_API_BASE}/admin/unscanned-folders/${rootId}?${params}`,
+        { withCredentials: true },
+      ),
+    );
+  }
+
+  async renameUnscannedFolder(rootId: number, path: string, name: string): Promise<void> {
+    const params = new URLSearchParams({ path });
+    await firstValueFrom(
+      this.http.put<void>(
+        `${MUSIC_API_BASE}/admin/unscanned-folders/${rootId}/folders?${params}`,
+        { name },
+        await this.writeOptions(),
+      ),
+    );
+  }
+
+  async renameUnscannedTrack(rootId: number, path: string, name: string): Promise<void> {
+    const params = new URLSearchParams({ path });
+    await firstValueFrom(
+      this.http.put<void>(
+        `${MUSIC_API_BASE}/admin/unscanned-folders/${rootId}/tracks?${params}`,
+        { name },
+        await this.writeOptions(),
+      ),
+    );
+  }
+
+  checkUnscannedAlbum(
+    rootId: number,
+    relativePath: string,
+    artist: string,
+    album: string,
+    destinationRootId: number,
+  ): Promise<UnscannedAlbumCheck> {
+    return firstValueFrom(
+      this.http.post<UnscannedAlbumCheck>(
+        `${MUSIC_API_BASE}/admin/unscanned-folders/${rootId}/check-album`,
+        { relativePath, artist, album, destinationRootId },
+        { withCredentials: true },
+      ),
+    );
+  }
+
+  async importUnscannedAlbum(
+    rootId: number,
+    request: ImportUnscannedAlbum,
+  ): Promise<LibraryOperationStatus> {
+    return firstValueFrom(
+      this.http.post<LibraryOperationStatus>(
+        `${MUSIC_API_BASE}/admin/unscanned-folders/${rootId}/import`,
+        request,
+        await this.writeOptions(),
+      ),
+    );
+  }
+
   async addRoot(name: string, path: string): Promise<SourceRoot> {
     return firstValueFrom(
       this.http.post<SourceRoot>(
@@ -360,6 +492,16 @@ export class MusicLibraryApi {
     return firstValueFrom(
       this.http.post<LibraryOperationStatus>(
         `${MUSIC_API_BASE}/admin/roots/${id}/scan`,
+        {},
+        await this.writeOptions(),
+      ),
+    );
+  }
+
+  async cleanDatabase(): Promise<LibraryOperationStatus> {
+    return firstValueFrom(
+      this.http.post<LibraryOperationStatus>(
+        `${MUSIC_API_BASE}/admin/operations/clean-database`,
         {},
         await this.writeOptions(),
       ),

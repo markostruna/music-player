@@ -11,6 +11,7 @@ import {
   MusicTrack,
 } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
+import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 
 const HOME_COLLECTION_SIZE = 6;
 
@@ -24,17 +25,21 @@ export class HomePage implements OnInit {
   private readonly library = inject(MusicLibraryApi);
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
+  private readonly operations = inject(LibraryOperationTracker);
   readonly albumActions = inject(AlbumActions);
   private lastChangeCount = this.albumActions.changeCount();
 
   readonly albums = signal<AlbumSummary[]>([]);
+  readonly recentAlbums = signal<AlbumSummary[]>([]);
   readonly artists = signal<ArtistSummary[]>([]);
   readonly tracks = signal<MusicTrack[]>([]);
   readonly skeletonItems = Array.from({ length: HOME_COLLECTION_SIZE });
   readonly albumsLoading = signal(true);
+  readonly recentAlbumsLoading = signal(true);
   readonly artistsLoading = signal(true);
   readonly tracksLoading = signal(true);
   readonly albumsError = signal('');
+  readonly recentAlbumsError = signal('');
   readonly artistsError = signal('');
   readonly tracksError = signal('');
 
@@ -45,6 +50,12 @@ export class HomePage implements OnInit {
       this.lastChangeCount = changeCount;
       untracked(() => void this.loadHomeCollections());
     });
+    effect(() => {
+      const operation = this.operations.operation();
+      if (operation?.state === 'completed') {
+        untracked(() => void this.loadRecentAlbums());
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -52,8 +63,20 @@ export class HomePage implements OnInit {
   }
 
   async loadHomeCollections(): Promise<void> {
-    await this.loadAlbums();
+    await Promise.all([this.loadAlbums(), this.loadRecentAlbums()]);
     await Promise.all([this.loadArtists(), this.loadTracks()]);
+  }
+
+  private async loadRecentAlbums(): Promise<void> {
+    this.recentAlbumsLoading.set(true);
+    this.recentAlbumsError.set('');
+    try {
+      this.recentAlbums.set(await this.library.listRecentAlbums());
+    } catch {
+      this.recentAlbumsError.set('Recently added albums could not be loaded. Check the music server connection.');
+    } finally {
+      this.recentAlbumsLoading.set(false);
+    }
   }
 
   private async loadAlbums(): Promise<void> {

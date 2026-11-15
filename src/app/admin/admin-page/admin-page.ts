@@ -1,6 +1,12 @@
 import { Component, effect, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { LibraryStore, ManagedUser, MusicLibraryApi, SourceRoot } from '@shared/services';
+import {
+  LibraryStore,
+  ManagedUser,
+  MusicLibraryApi,
+  SourceRoot,
+  UnscannedFolder,
+} from '@shared/services';
 import { UserRole } from '@shared/services/auth-state';
 import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 
@@ -16,6 +22,7 @@ export class AdminPage implements OnInit {
   private readonly handledOperations = new Set<string>();
 
   readonly roots = signal<SourceRoot[]>([]);
+  readonly unscannedFolders = signal<UnscannedFolder[]>([]);
   readonly users = signal<ManagedUser[]>([]);
   readonly isLoading = signal(true);
   readonly errorMessage = signal('');
@@ -24,6 +31,8 @@ export class AdminPage implements OnInit {
 
   rootName = '';
   rootPath = '';
+  unscannedFolderName = '';
+  unscannedFolderPath = '';
   newEmail = '';
   temporaryPassword = '';
   newRole: UserRole = 'Guest';
@@ -32,6 +41,16 @@ export class AdminPage implements OnInit {
   constructor() {
     effect(() => {
       const operation = this.operations.operation();
+      if (operation?.operationType === 'database-cleanup' &&
+          (operation.state === 'completed' || operation.state === 'failed') &&
+          !this.handledOperations.has(operation.id)) {
+        if (operation.state === 'completed') {
+          this.statusMessage.set(operation.message);
+        } else {
+          this.errorMessage.set(operation.message);
+          this.handledOperations.add(operation.id);
+        }
+      }
       if (operation?.state === 'completed' && !this.handledOperations.has(operation.id)) {
         this.handledOperations.add(operation.id);
         void this.reload();
@@ -47,13 +66,47 @@ export class AdminPage implements OnInit {
     this.isLoading.set(true);
     this.errorMessage.set('');
     try {
-      const [roots, users] = await Promise.all([this.api.listRoots(), this.api.listUsers()]);
-      this.roots.set(roots);
+      const [roots, unscannedFolders, users] = await Promise.all([
+        this.api.listRoots(),
+        this.api.listUnscannedFolders(),
+        this.api.listUsers(),
+      ]);
+      this.roots.set(roots.filter((root) => root.isEnabled));
+      this.unscannedFolders.set(unscannedFolders);
       this.users.set(users);
     } catch {
       this.errorMessage.set('Administrator data could not be loaded.');
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  async addUnscannedFolder(): Promise<void> {
+    try {
+      await this.api.addUnscannedFolder(this.unscannedFolderName, this.unscannedFolderPath);
+      this.unscannedFolderName = '';
+      this.unscannedFolderPath = '';
+      this.statusMessage.set('Unscanned folder added. It will not be included in library scans.');
+      await this.reload();
+    } catch {
+      this.errorMessage.set(
+        'The unscanned folder could not be added. Check that the server path exists and does not overlap a configured music folder.',
+      );
+    }
+  }
+
+  async removeUnscannedFolder(folder: UnscannedFolder): Promise<void> {
+    const confirmed = globalThis.confirm(
+      `Remove ${folder.name} from the unscanned-folder list? Its files will remain untouched.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await this.api.removeUnscannedFolder(folder.id);
+      this.statusMessage.set(`${folder.name} was removed from the list. Its files were left untouched.`);
+      await this.reload();
+    } catch {
+      this.errorMessage.set('The unscanned folder could not be removed.');
     }
   }
 
@@ -85,6 +138,20 @@ export class AdminPage implements OnInit {
       await this.operations.startScan(root.id);
     } catch {
       this.errorMessage.set(`The scan of ${root.name} could not be completed.`);
+    }
+  }
+
+  async cleanDatabase(): Promise<void> {
+    if (!globalThis.confirm(
+      'Remove missing tracks and folders from the database? Music files will not be deleted. Unavailable sources will be skipped.',
+    )) return;
+
+    this.errorMessage.set('');
+    this.statusMessage.set('');
+    try {
+      await this.operations.startDatabaseCleanup();
+    } catch {
+      this.errorMessage.set('Database cleanup could not start. Check whether another library operation is running.');
     }
   }
 

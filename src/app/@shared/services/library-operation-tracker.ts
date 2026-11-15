@@ -1,6 +1,10 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { LibraryStore } from './library-store';
-import { LibraryOperationStatus, MusicLibraryApi } from './music-library-api';
+import {
+  ImportUnscannedAlbum,
+  LibraryOperationStatus,
+  MusicLibraryApi,
+} from './music-library-api';
 
 @Injectable({ providedIn: 'root' })
 export class LibraryOperationTracker {
@@ -27,6 +31,32 @@ export class LibraryOperationTracker {
 
   async startMetadataRefresh(rootId: number): Promise<void> {
     await this.start(rootId, 'metadata-refresh');
+  }
+
+  async startDatabaseCleanup(): Promise<void> {
+    await this.initialRestore;
+    if (this.isRunning()) {
+      throw new Error('Another library operation is already running.');
+    }
+
+    this.clearTimers();
+    this.operation.set(null);
+    this.pollingError.set(false);
+    this.operation.set(await this.api.cleanDatabase());
+    this.schedulePoll(700);
+  }
+
+  async startAlbumImport(rootId: number, request: ImportUnscannedAlbum): Promise<void> {
+    await this.initialRestore;
+    if (this.isRunning()) {
+      throw new Error('Another library operation is already running.');
+    }
+
+    this.clearTimers();
+    this.operation.set(null);
+    this.pollingError.set(false);
+    this.operation.set(await this.api.importUnscannedAlbum(rootId, request));
+    this.schedulePoll(700);
   }
 
   private async start(rootId: number, type: 'scan' | 'metadata-refresh'): Promise<void> {
@@ -68,12 +98,17 @@ export class LibraryOperationTracker {
       const updated = await this.api.getLibraryOperation(current.id);
       this.operation.set(updated);
       this.pollingError.set(false);
+      if (updated.operationType === 'database-cleanup' &&
+          (updated.state === 'completed' || updated.state === 'failed')) {
+        this.store.invalidate();
+      }
       if (updated.state === 'completed') {
         void this.store.refresh();
         this.scheduleHide(updated.id, 8000);
         return;
       }
       if (updated.state === 'failed') {
+        if (updated.operationType === 'database-cleanup') void this.store.refresh();
         this.scheduleHide(updated.id, 15000);
         return;
       }

@@ -10,6 +10,8 @@ public sealed class LibraryOperationManager(
 {
     public const string ScanOperation = "scan";
     public const string MetadataRefreshOperation = "metadata-refresh";
+    public const string ImportScanMetadataOperation = "import-scan-metadata";
+    public const string DatabaseCleanupOperation = "database-cleanup";
 
     private readonly Channel<LibraryOperationJob> queue = Channel.CreateUnbounded<LibraryOperationJob>();
     private readonly object sync = new();
@@ -17,6 +19,7 @@ public sealed class LibraryOperationManager(
     private readonly Queue<Guid> historyOrder = new();
     private readonly HashSet<int> rootsBeingRemoved = [];
     private LibraryOperationStatus? current;
+    private bool importInProgress;
 
     public LibraryOperationStatus? TryStart(
         int rootId,
@@ -25,43 +28,54 @@ public sealed class LibraryOperationManager(
     {
         lock (sync)
         {
-            if (current is { State: "queued" or "running" } || rootsBeingRemoved.Count > 0)
+            if (current is { State: "queued" or "running" } || rootsBeingRemoved.Count > 0 || importInProgress)
             {
                 return null;
             }
 
-            var status = new LibraryOperationStatus(
-                Guid.NewGuid(),
-                rootId,
-                rootName,
-                operationType,
-                "queued",
-                operationType == ScanOperation ? "Scan queued." : "Metadata refresh queued.",
-                0,
-                0,
-                DateTimeOffset.UtcNow,
-                null);
-            current = status;
-            history[status.Id] = status;
-            historyOrder.Enqueue(status.Id);
-            if (!queue.Writer.TryWrite(new LibraryOperationJob(status.Id, rootId, operationType)))
+            return StartOperation(rootId, rootName, operationType, sourceRetained: false, relativePath: null);
+        }
+    }
+
+    public bool TryBeginLibraryMutation()
+    {
+        lock (sync)
+        {
+            if (current is { State: "queued" or "running" }
+                || rootsBeingRemoved.Count > 0
+                || importInProgress)
             {
-                current = null;
-                history.Remove(status.Id);
-                historyOrder.Dequeue();
-                throw new InvalidOperationException("The library operation queue is unavailable.");
+                return false;
             }
 
-            while (historyOrder.Count > 50)
+            importInProgress = true;
+            return true;
+        }
+    }
+
+    public LibraryOperationStatus? StartReservedImportOperation(
+        int rootId,
+        string rootName,
+        string relativePath,
+        bool sourceRetained)
+    {
+        lock (sync)
+        {
+            if (!importInProgress || current is { State: "queued" or "running" })
             {
-                var oldestId = historyOrder.Dequeue();
-                if (oldestId != current.Id)
-                {
-                    history.Remove(oldestId);
-                }
+                return null;
             }
 
-            return status;
+            importInProgress = false;
+            return StartOperation(rootId, rootName, ImportScanMetadataOperation, sourceRetained, relativePath);
+        }
+    }
+
+    public void EndLibraryMutationReservation()
+    {
+        lock (sync)
+        {
+            importInProgress = false;
         }
     }
 
@@ -69,7 +83,9 @@ public sealed class LibraryOperationManager(
     {
         lock (sync)
         {
-            if (current is { State: "queued" or "running" } || !rootsBeingRemoved.Add(rootId))
+            if (current is { State: "queued" or "running" }
+                || importInProgress
+                || !rootsBeingRemoved.Add(rootId))
             {
                 return false;
             }
@@ -121,13 +137,37 @@ public sealed class LibraryOperationManager(
         Update(job.Id, status => status with
         {
             State = "running",
-            Message = job.OperationType == ScanOperation ? "Scanning folder…" : "Preparing metadata refresh…",
+            Message = job.OperationType == DatabaseCleanupOperation
+                ? "Checking library entries…"
+                : job.OperationType == ScanOperation
+                ? "Scanning folder…"
+                : job.OperationType == ImportScanMetadataOperation
+                    ? "Scanning imported album…"
+                    : "Preparing metadata refresh…",
         });
 
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var library = scope.ServiceProvider.GetRequiredService<IMusicLibraryService>();
+            if (job.OperationType == DatabaseCleanupOperation)
+            {
+                var result = await library.CleanDatabaseAsync(
+                    (completed, total, message) => Update(job.Id, status => status with
+                    {
+                        CompletedUnits = completed,
+                        TotalUnits = total,
+                        Message = message,
+                    }),
+                    cancellationToken);
+                var skipped = result.SkippedRoots.Count == 0
+                    ? " No sources skipped."
+                    : $" Skipped {result.SkippedRoots.Count} unavailable or unsafe sources: {string.Join(", ", result.SkippedRoots)}.";
+                Complete(job.Id, "completed",
+                    $"Removed {result.RemovedTracks} tracks and {result.RemovedFolders} folders from the database.{skipped}");
+                return;
+            }
+
             if (job.OperationType == ScanOperation)
             {
                 var result = await library.ScanAsync(job.RootId, cancellationToken);
@@ -135,6 +175,37 @@ public sealed class LibraryOperationManager(
                     job.Id,
                     "completed",
                     $"Scanned {result.DiscoveredTracks} tracks; {result.UnreadableTracks} files could not be read.");
+                return;
+            }
+
+            if (job.OperationType == ImportScanMetadataOperation)
+            {
+                var albumPath = job.RelativePath
+                    ?? throw new InvalidOperationException("The imported album folder is missing from the operation.");
+                var scanResult = await library.ScanFolderAsync(job.RootId, albumPath, cancellationToken);
+                Update(job.Id, status => status with
+                {
+                    Message = $"Scanned {scanResult.DiscoveredTracks} tracks. Refreshing metadata…",
+                    CompletedUnits = 1,
+                    TotalUnits = 2,
+                });
+                var refreshResult = await library.RefreshFolderMetadataAsync(
+                    job.RootId,
+                    albumPath,
+                    (completed, total, message) => Update(job.Id, status => status with
+                    {
+                        CompletedUnits = completed + 1,
+                        TotalUnits = total + 1,
+                        Message = message,
+                    }),
+                    cancellationToken);
+                Complete(
+                    job.Id,
+                    "completed",
+                    $"Imported album scan completed with {scanResult.DiscoveredTracks} tracks; "
+                        + $"{scanResult.UnreadableTracks} files could not be read; refreshed "
+                        + $"{refreshResult.ArtistsProcessed} artists and {refreshResult.AlbumsProcessed} albums."
+                        + (job.SourceRetained ? " Original files were retained in the unscanned folder." : ""));
                 return;
             }
 
@@ -166,7 +237,9 @@ public sealed class LibraryOperationManager(
                 job.Id,
                 job.OperationType,
                 job.RootId);
-            Complete(job.Id, "failed", "The operation failed. Check that the folder is accessible and review the API logs.");
+            Complete(job.Id, "failed", job.OperationType == DatabaseCleanupOperation
+                ? "Database cleanup failed; some sources may already have been cleaned. Review the API logs."
+                : "The operation failed. Check that the folder is accessible and review the API logs.");
         }
     }
 
@@ -190,5 +263,55 @@ public sealed class LibraryOperationManager(
         }
     }
 
-    private sealed record LibraryOperationJob(Guid Id, int RootId, string OperationType);
+    private LibraryOperationStatus StartOperation(
+        int rootId,
+        string rootName,
+        string operationType,
+        bool sourceRetained,
+        string? relativePath)
+    {
+        var status = new LibraryOperationStatus(
+            Guid.NewGuid(),
+            rootId,
+            rootName,
+            operationType,
+            "queued",
+            operationType switch
+            {
+                ScanOperation => "Scan queued.",
+                DatabaseCleanupOperation => "Database cleanup queued.",
+                ImportScanMetadataOperation => sourceRetained
+                    ? "Album imported; original files remain in the unscanned folder. Scan and metadata refresh queued."
+                    : "Album import queued for scanning and metadata refresh.",
+                _ => "Metadata refresh queued.",
+            },
+            0,
+            0,
+            DateTimeOffset.UtcNow,
+            null);
+        current = status;
+        history[status.Id] = status;
+        historyOrder.Enqueue(status.Id);
+        if (!queue.Writer.TryWrite(new LibraryOperationJob(status.Id, rootId, operationType, sourceRetained, relativePath)))
+        {
+            current = null;
+            history.Remove(status.Id);
+            historyOrder.Dequeue();
+            throw new InvalidOperationException("The library operation queue is unavailable.");
+        }
+
+        while (historyOrder.Count > 50)
+        {
+            var oldestId = historyOrder.Dequeue();
+            if (oldestId != current.Id)
+            {
+                history.Remove(oldestId);
+            }
+        }
+
+        return status;
+    }
+
+    private sealed record LibraryOperationJob(
+        Guid Id, int RootId, string OperationType, bool SourceRetained, string? RelativePath);
 }

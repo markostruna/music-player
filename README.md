@@ -57,6 +57,7 @@ Afterhours is a self-hosted music library. The Angular client plays audio from a
 - Windows with .NET 10 SDK and Node.js/npm
 - XAMPP/Apache for public HTTPS hosting
 - Music folders readable by the Windows account running the API
+- FFmpeg on the API server's `PATH` when splitting single-FLAC CUE albums
 
 ## First Run
 
@@ -77,7 +78,15 @@ npm install
 npm start
 ```
 
-Open `http://localhost:4200`. Sign in with the bootstrap administrator, then open **Admin** to add a music folder; its initial scan starts automatically. Scans read existing audio tags and use a `Folder.jpg` or another recognized image in an album folder for artwork, without calling metadata providers. The folder path is a path on the server, not on the listening device. Use the Admin page to create Guest accounts. Guests can play music and choose their own theme; only administrators can change the library or accounts.
+Open `http://localhost:4200`. Sign in with the bootstrap administrator, then open **Admin** to add a music folder; its initial scan starts automatically. Scans read existing audio tags and use a `Folder.jpg` or another recognized image in an album folder for artwork, without calling metadata providers. The folder path is a path on the server, not on the listening device.
+
+Administrators can also register **Unscanned folders** as album inboxes. These folders must not overlap a configured music source. Open **Folders** to browse the inbox, rename directories or audio filenames, check artist/album names against the catalog, and move an album into a scanned source. Imports scan only the imported album folder and then refresh metadata for its artists and albums automatically. When a matching album exists, choose to rename or delete it before importing. If an album has a single FLAC and a CUE file, choose whether to split it into track FLACs; splitting requires FFmpeg on the API server's `PATH`, and you can keep the original FLAC/CUE in the inbox or delete them after a successful import. Unscanned inboxes are visible to administrators only.
+
+Use **Clean database** on the Admin page to remove catalog entries for missing tracks and folders in scanned sources. It never deletes files, configured sources, or metadata. Unavailable or unsafe sources are skipped and reported in the operation result.
+
+The home page shows up to seven **Added recently** albums. Album and artist import times are derived from the earliest catalogued track and do not change on rescans. For entries already in the database when this feature is installed, the previous scan time is used as an approximation because their original import time was not recorded.
+
+Use the Admin page to create Guest accounts. Guests can play music and choose their own theme; only administrators can change the library or accounts.
 
 The development proxy sends `/music-api` requests to the local API at `http://127.0.0.1:5080` and removes the prefix. Do not put a public server address or credentials in the checked-in proxy configuration.
 

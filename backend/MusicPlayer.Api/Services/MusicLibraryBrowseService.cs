@@ -78,7 +78,8 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         int page,
         int pageSize,
         CancellationToken cancellationToken,
-        bool random = false)
+        bool random = false,
+        bool recent = false)
     {
         var albums = AvailableTracks().Select(track => new
         {
@@ -113,10 +114,42 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 DurationSeconds = group.Sum(item => item.Track.DurationSeconds),
                 CoverTrackId = group.Min(item => item.Track.Id),
             });
-        var albumPage = await albumGroups
-            .OrderBy(item => item.Artist)
-            .ThenBy(item => item.Album)
-            .ThenBy(item => item.CoverTrackId)
+        var albumImportTimes = database.Tracks
+            .Where(track => track.SourceRoot != null && track.SourceRoot.IsEnabled)
+            .GroupBy(track => new
+            {
+                Album = EF.Functions.Collate(track.Album.Trim(), "NOCASE"),
+                Artist = EF.Functions.Collate(
+                    (track.AlbumArtist.Trim() == "" ? track.Artist : track.AlbumArtist).Trim(),
+                    "NOCASE"),
+            })
+            .Select(group => new
+            {
+                group.Key.Album,
+                group.Key.Artist,
+                ImportedAt = group.Min(track => track.ImportedAtUnixMilliseconds),
+            });
+        var albumsWithImportTimes =
+            from album in albumGroups
+            join time in albumImportTimes
+                on new { album.Album, album.Artist } equals new { time.Album, time.Artist }
+            select new
+            {
+                album.Album,
+                album.Artist,
+                album.ReleaseYear,
+                album.TrackCount,
+                album.DurationSeconds,
+                album.CoverTrackId,
+                time.ImportedAt,
+            };
+        var orderedAlbums = recent
+            ? albumsWithImportTimes.OrderByDescending(item => item.ImportedAt)
+                .ThenByDescending(item => item.CoverTrackId)
+            : albumsWithImportTimes.OrderBy(item => item.Artist)
+                .ThenBy(item => item.Album)
+                .ThenBy(item => item.CoverTrackId);
+        var albumPage = await orderedAlbums
             .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -128,6 +161,27 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 await AvailableTracks().Where(track => coverTrackIds.Contains(track.Id)).ToListAsync(cancellationToken),
                 cancellationToken);
         var coversByTrackId = coverTracks.ToDictionary(track => track.Id);
+        var albumNames = albumPage.Select(item => item.Album).Distinct().ToArray();
+        var albumTrackFiles = await AvailableTracks()
+            .Where(track => albumNames.Contains(EF.Functions.Collate(track.Album.Trim(), "NOCASE")))
+            .Select(track => new
+            {
+                Album = EF.Functions.Collate(track.Album.Trim(), "NOCASE"),
+                Artist = EF.Functions.Collate(
+                    (track.AlbumArtist.Trim() == "" ? track.Artist : track.AlbumArtist).Trim(),
+                    "NOCASE"),
+                track.RelativePath,
+            })
+            .ToListAsync(cancellationToken);
+        var formatsByAlbum = albumTrackFiles
+            .GroupBy(item => $"{item.Artist.ToUpperInvariant()}\0{item.Album.ToUpperInvariant()}")
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(item => Path.GetExtension(item.RelativePath).TrimStart('.').ToLowerInvariant())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(extension => extension, StringComparer.OrdinalIgnoreCase)
+                    .ToArray());
         var items = albumPage.Select(item => new AlbumSummaryResponse(
             item.Album,
             item.Artist,
@@ -135,7 +189,11 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
             item.TrackCount,
             item.DurationSeconds,
             item.CoverTrackId,
-            $"{coversByTrackId[item.CoverTrackId].CoverUrl}&variant=tile")).ToArray();
+            $"{coversByTrackId[item.CoverTrackId].CoverUrl}&variant=tile",
+            formatsByAlbum.GetValueOrDefault(
+                $"{item.Artist.ToUpperInvariant()}\0{item.Album.ToUpperInvariant()}",
+                Array.Empty<string>()),
+            item.ImportedAt.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(item.ImportedAt.Value) : null)).ToArray();
         return new PagedResponse<AlbumSummaryResponse>(items, totalCount, actualPage, pageSize);
     }
 
@@ -235,7 +293,22 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 TrackCount = group.Count(),
                 RepresentativeTrackId = group.Min(item => item.Track.Id),
             });
-        var artistPage = await artistGroups
+        var artistImportTimes = database.Tracks
+            .Where(track => track.SourceRoot != null && track.SourceRoot.IsEnabled)
+            .GroupBy(track => EF.Functions.Collate(
+                track.AlbumArtist.Trim() == ""
+                    ? (track.Artist.Trim() == "" ? "Unknown artist" : track.Artist.Trim())
+                    : track.AlbumArtist.Trim(), "NOCASE"))
+            .Select(group => new
+            {
+                Artist = group.Key,
+                ImportedAt = group.Min(track => track.ImportedAtUnixMilliseconds),
+            });
+        var artistsWithImportTimes =
+            from artist in artistGroups
+            join time in artistImportTimes on artist.Artist equals time.Artist
+            select new { artist.Artist, artist.TrackCount, artist.RepresentativeTrackId, time.ImportedAt };
+        var artistPage = await artistsWithImportTimes
             .OrderBy(item => item.Artist)
             .ThenBy(item => item.RepresentativeTrackId)
             .Skip((actualPage - 1) * pageSize)
@@ -283,7 +356,8 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
                 albumCounts.GetValueOrDefault(item.Artist),
                 $"{representative.CoverUrl}&variant=tile",
                 GetArtistImageUrl(metadata) ?? "",
-                IsArtistImageMissing(metadata));
+                IsArtistImageMissing(metadata),
+                item.ImportedAt.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(item.ImportedAt.Value) : null);
         }).ToArray();
         return new PagedResponse<ArtistSummaryResponse>(items, totalCount, actualPage, pageSize);
     }

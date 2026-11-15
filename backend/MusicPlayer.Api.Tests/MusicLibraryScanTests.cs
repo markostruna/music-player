@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using MusicPlayer.Api.Contracts;
@@ -64,6 +65,202 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         if (Directory.Exists(testDirectory))
         {
             Directory.Delete(testDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RecentAlbumsUseFirstImportTimeAndReturnOnlySevenNewest()
+    {
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        Assert.Empty(await library.GetRecentAlbumsAsync(CancellationToken.None));
+
+        for (var index = 0; index < 9; index++)
+        {
+            var albumDirectory = Path.Combine(sourceDirectory, $"Album {index}");
+            Directory.CreateDirectory(albumDirectory);
+            var path = Path.Combine(albumDirectory, "track.wav");
+            await CreateWaveFileAsync(path);
+            using var audio = TagLib.File.Create(path);
+            audio.Tag.Performers = ["Shared Artist"];
+            audio.Tag.Album = $"Album {index}";
+            audio.Save();
+        }
+
+        var beforeScan = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        var tracks = await database.Tracks.ToListAsync();
+        Assert.All(tracks, track => Assert.True(track.ImportedAtUnixMilliseconds >= beforeScan));
+        var firstImport = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        foreach (var track in tracks)
+        {
+            var index = int.Parse(track.Album["Album ".Length..]);
+            track.ImportedAtUnixMilliseconds = firstImport.AddDays(index).ToUnixTimeMilliseconds();
+        }
+        await database.SaveChangesAsync();
+
+        var extraPath = Path.Combine(sourceDirectory, "Album 0", "extra.wav");
+        await CreateWaveFileAsync(extraPath);
+        using (var audio = TagLib.File.Create(extraPath))
+        {
+            audio.Tag.Performers = ["Shared Artist"];
+            audio.Tag.Album = "Album 0";
+            audio.Save();
+        }
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        database.ChangeTracker.Clear();
+        var oldTrack = await database.Tracks.SingleAsync(track => track.RelativePath == "Album 0/track.wav");
+        oldTrack.IsAvailable = false;
+        await database.SaveChangesAsync();
+
+        var recent = await library.GetRecentAlbumsAsync(CancellationToken.None);
+        Assert.Equal(7, recent.Count);
+        Assert.Equal(Enumerable.Range(2, 7).Reverse().Select(index => $"Album {index}"),
+            recent.Select(album => album.Album));
+        Assert.Equal(firstImport.AddDays(8), recent[0].ImportedAt);
+        var albumPage = await library.GetAlbumsPageAsync("Album 0", 1, 10, CancellationToken.None);
+        Assert.Equal(firstImport, Assert.Single(albumPage.Items).ImportedAt);
+        var artists = await library.GetArtistsPageAsync("Shared Artist", 1, 10, CancellationToken.None);
+        Assert.Equal(firstImport, Assert.Single(artists.Items).ImportedAt);
+    }
+
+    [Fact]
+    public async Task DatabaseCleanupRemovesMissingEntriesButKeepsExistingUnavailableTracks()
+    {
+        var existingDirectory = Path.Combine(sourceDirectory, "Existing");
+        var missingDirectory = Path.Combine(sourceDirectory, "Missing");
+        Directory.CreateDirectory(existingDirectory);
+        Directory.CreateDirectory(missingDirectory);
+        var existing = Path.Combine(existingDirectory, "existing.wav");
+        var missingFile = Path.Combine(existingDirectory, "missing.wav");
+        var missingAlbumFile = Path.Combine(missingDirectory, "album.wav");
+        await CreateWaveFileAsync(existing);
+        await CreateWaveFileAsync(missingFile);
+        await CreateWaveFileAsync(missingAlbumFile);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        var existingTrack = await database.Tracks.SingleAsync(track => track.RelativePath == "Existing/existing.wav");
+        existingTrack.IsAvailable = false;
+        await database.SaveChangesAsync();
+        System.IO.File.Delete(missingFile);
+        System.IO.File.Delete(missingAlbumFile);
+        Directory.Delete(missingDirectory);
+
+        var result = await library.CleanDatabaseAsync((_, _, _) => { }, CancellationToken.None);
+
+        Assert.Equal(2, result.RemovedTracks);
+        Assert.Equal(1, result.RemovedFolders);
+        Assert.Empty(result.SkippedRoots);
+        Assert.Equal(existingTrack.Id, (await database.Tracks.SingleAsync()).Id);
+        Assert.True(System.IO.File.Exists(existing));
+        Assert.True(await database.Folders.AnyAsync(folder => folder.RelativePath == "Existing"));
+        Assert.True(await database.SourceRoots.AnyAsync(item => item.Id == root.Id));
+    }
+
+    [Fact]
+    public async Task DatabaseCleanupSkipsOfflineRootWithoutRemovingEntries()
+    {
+        var audioPath = Path.Combine(sourceDirectory, "track.wav");
+        await CreateWaveFileAsync(audioPath);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Offline",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        Directory.Move(sourceDirectory, Path.Combine(testDirectory, "offline"));
+
+        var result = await library.CleanDatabaseAsync((_, _, _) => { }, CancellationToken.None);
+
+        Assert.Equal(0, result.RemovedTracks);
+        Assert.Equal(0, result.RemovedFolders);
+        Assert.Equal(["Offline"], result.SkippedRoots);
+        Assert.Single(await database.Tracks.ToListAsync());
+        Assert.Single(await database.Folders.ToListAsync());
+    }
+
+    [Fact]
+    public async Task DatabaseCleanupSkipsEntireRootWhenCatalogPathIsUnsafe()
+    {
+        var firstPath = Path.Combine(sourceDirectory, "first.wav");
+        var secondPath = Path.Combine(sourceDirectory, "second.wav");
+        await CreateWaveFileAsync(firstPath);
+        await CreateWaveFileAsync(secondPath);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Unsafe",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        var unsafeTrack = await database.Tracks.SingleAsync(track => track.RelativePath == "second.wav");
+        unsafeTrack.RelativePath = "../outside.wav";
+        await database.SaveChangesAsync();
+        System.IO.File.Delete(firstPath);
+
+        var result = await library.CleanDatabaseAsync((_, _, _) => { }, CancellationToken.None);
+
+        Assert.Equal(0, result.RemovedTracks);
+        Assert.Equal(["Unsafe"], result.SkippedRoots);
+        Assert.Equal(2, await database.Tracks.CountAsync());
+        Assert.True(System.IO.File.Exists(secondPath));
+    }
+
+    [Fact]
+    public async Task DatabaseCleanupOperationReportsRemovedAndSkippedEntries()
+    {
+        var audioPath = Path.Combine(sourceDirectory, "track.wav");
+        await CreateWaveFileAsync(audioPath);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        System.IO.File.Delete(audioPath);
+        database.SourceRoots.Add(new MusicSourceRoot
+        {
+            Name = "Offline",
+            Path = Path.Combine(testDirectory, "offline"),
+        });
+        await database.SaveChangesAsync();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IMusicLibraryService>(library)
+            .BuildServiceProvider();
+        using var manager = new LibraryOperationManager(
+            services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<LibraryOperationManager>.Instance);
+        try
+        {
+            var operation = manager.TryStart(0, "database", LibraryOperationManager.DatabaseCleanupOperation);
+            Assert.NotNull(operation);
+            Assert.Null(manager.TryStart(root.Id, root.Name, LibraryOperationManager.ScanOperation));
+            await manager.StartAsync(CancellationToken.None);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            LibraryOperationStatus? status;
+            do
+            {
+                await Task.Delay(20, timeout.Token);
+                status = manager.Get(operation.Id);
+            }
+            while (status?.State is "queued" or "running");
+
+            Assert.NotNull(status);
+            Assert.Equal("completed", status.State);
+            Assert.Contains("Removed 1 tracks", status.Message);
+            Assert.Contains("Skipped 1", status.Message);
+            Assert.Contains("Offline", status.Message);
+        }
+        finally
+        {
+            await manager.StopAsync(CancellationToken.None);
         }
     }
 
@@ -497,6 +694,136 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
         Assert.Equal("album-mbid", album.MusicBrainzId);
         Assert.Equal(1, musicBrainz.ArtistLookups);
         Assert.Equal(1, musicBrainz.AlbumLookups);
+    }
+
+    [Fact]
+    public async Task ImportOperationScansAndRefreshesOnlyImportedAlbum()
+    {
+        var oldAlbum = Path.Combine(sourceDirectory, "Artist", "Album Extended");
+        var newAlbum = Path.Combine(sourceDirectory, "Artist", "Album");
+        Directory.CreateDirectory(oldAlbum);
+        var oldTrackPath = Path.Combine(oldAlbum, "old.wav");
+        await CreateWaveFileAsync(oldTrackPath);
+        using (var audio = TagLib.File.Create(oldTrackPath))
+        {
+            audio.Tag.Performers = ["Old Artist"];
+            audio.Tag.Album = "Old Album";
+            audio.Save();
+        }
+
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        var oldTrack = await database.Tracks.SingleAsync();
+        var oldScannedAt = oldTrack.ScannedAt;
+        System.IO.File.Delete(oldTrackPath);
+
+        Directory.CreateDirectory(Path.Combine(newAlbum, "Disc 1"));
+        var newTrackPath = Path.Combine(newAlbum, "Disc 1", "new.wav");
+        await CreateWaveFileAsync(newTrackPath);
+        using (var audio = TagLib.File.Create(newTrackPath))
+        {
+            audio.Tag.Performers = ["New Artist"];
+            audio.Tag.AlbumArtists = ["New Artist"];
+            audio.Tag.Album = "New Album";
+            audio.Save();
+        }
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IMusicLibraryService>(library)
+            .BuildServiceProvider();
+        using var manager = new LibraryOperationManager(
+            services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<LibraryOperationManager>.Instance);
+        await manager.StartAsync(CancellationToken.None);
+        try
+        {
+            Assert.True(manager.TryBeginLibraryMutation());
+            var operation = manager.StartReservedImportOperation(
+                root.Id, root.Name, "Artist/Album", sourceRetained: false);
+            Assert.NotNull(operation);
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            LibraryOperationStatus? status;
+            do
+            {
+                await Task.Delay(20, timeout.Token);
+                status = manager.Get(operation.Id);
+            }
+            while (status?.State is "queued" or "running");
+
+            Assert.NotNull(status);
+            Assert.Equal("completed", status.State);
+            Assert.Contains("1 tracks", status.Message);
+        }
+        finally
+        {
+            await manager.StopAsync(CancellationToken.None);
+        }
+
+        database.ChangeTracker.Clear();
+        var tracks = await database.Tracks.OrderBy(track => track.RelativePath).ToListAsync();
+        Assert.Equal(2, tracks.Count);
+        Assert.Contains(tracks, track => track.RelativePath == "Artist/Album/Disc 1/new.wav" && track.IsAvailable);
+        var unchanged = Assert.Single(tracks, track => track.Id == oldTrack.Id);
+        Assert.True(unchanged.IsAvailable);
+        Assert.Equal(oldScannedAt, unchanged.ScannedAt);
+        Assert.Equal(1, musicBrainz.ArtistLookups);
+        Assert.Equal(1, musicBrainz.AlbumLookups);
+        Assert.Equal("New Artist", musicBrainz.LastAlbumArtist);
+        Assert.Equal("New Album", musicBrainz.LastAlbumTitle);
+    }
+
+    [Fact]
+    public async Task FolderScanRejectsMissingOrRootPathsWithoutChangingExistingTracks()
+    {
+        var audioPath = Path.Combine(sourceDirectory, "track.wav");
+        await CreateWaveFileAsync(audioPath);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => library.ScanFolderAsync(root.Id, "", CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => library.ScanFolderAsync(root.Id, "../outside", CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => library.ScanFolderAsync(root.Id, "missing", CancellationToken.None));
+
+        Assert.True((await database.Tracks.SingleAsync()).IsAvailable);
+    }
+
+    [Fact]
+    public async Task FolderRescanMarksOnlyMissingTracksInsideThatFolderUnavailable()
+    {
+        var album = Path.Combine(sourceDirectory, "Artist", "Album");
+        var sibling = Path.Combine(sourceDirectory, "Artist", "Album Extra");
+        Directory.CreateDirectory(album);
+        Directory.CreateDirectory(sibling);
+        var removedTrack = Path.Combine(album, "removed.wav");
+        var siblingTrack = Path.Combine(sibling, "sibling.wav");
+        await CreateWaveFileAsync(removedTrack);
+        await CreateWaveFileAsync(siblingTrack);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest
+        {
+            Name = "Music",
+            Path = sourceDirectory,
+        }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        System.IO.File.Delete(removedTrack);
+        System.IO.File.Delete(siblingTrack);
+
+        var result = await library.ScanFolderAsync(root.Id, "Artist/Album", CancellationToken.None);
+
+        Assert.Equal(0, result.DiscoveredTracks);
+        Assert.False((await database.Tracks.SingleAsync(track => track.RelativePath == "Artist/Album/removed.wav")).IsAvailable);
+        Assert.True((await database.Tracks.SingleAsync(track => track.RelativePath == "Artist/Album Extra/sibling.wav")).IsAvailable);
     }
 
     [Fact]

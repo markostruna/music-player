@@ -10,6 +10,18 @@
   gap: 16px;
 }
 
+.folder-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.folder-entry {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
 .folder-heading h3 {
   margin: 6px 0 0;
   color: var(--ink);
@@ -54,6 +66,68 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 10px;
+}
+
+.album-import {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.album-import-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.album-import-fields label,
+.cue-options label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.album-import-fields input,
+.album-import-fields select,
+.cue-options select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.album-import-fields button,
+.album-import-button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--forest);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.album-match-list,
+.cue-options {
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 12px;
 }
 
 .folder-files {

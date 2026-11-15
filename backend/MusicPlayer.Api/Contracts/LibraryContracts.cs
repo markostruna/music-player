@@ -73,6 +73,7 @@ public sealed record PagedResponse<T>(
     int Page,
     int PageSize);
 
+/// <summary>An album and its earliest catalogued import time, if known.</summary>
 public sealed record AlbumSummaryResponse(
     string Album,
     string Artist,
@@ -80,15 +81,19 @@ public sealed record AlbumSummaryResponse(
     int TrackCount,
     double DurationSeconds,
     int CoverTrackId,
-    string CoverUrl);
+    string CoverUrl,
+    IReadOnlyList<string> FileExtensions,
+    DateTimeOffset? ImportedAt);
 
+/// <summary>An artist and their earliest catalogued import time, if known.</summary>
 public sealed record ArtistSummaryResponse(
     string Artist,
     int TrackCount,
     int AlbumCount,
     string CoverUrl,
     string ArtistImageUrl,
-    bool ArtistImageMissing);
+    bool ArtistImageMissing,
+    DateTimeOffset? ImportedAt);
 
 public sealed record MetadataDescriptionRequest
 {
@@ -154,6 +159,9 @@ public sealed record AlbumResponse(
 
 /// <summary>Summary of a completed source scan.</summary>
 public sealed record ScanResponse(int SourceRootId, int DiscoveredTracks, int UnreadableTracks);
+
+/// <summary>Results of removing missing filesystem entries from the library catalog.</summary>
+public sealed record DatabaseCleanupResponse(int RemovedTracks, int RemovedFolders, IReadOnlyList<string> SkippedRoots);
 
 /// <summary>Summary of metadata refreshed for one configured source root.</summary>
 public sealed record RootMetadataRefreshResponse(

@@ -35,6 +35,12 @@
   color: var(--muted);
   font-size: 12px;
 }
+.admin-help {
+  margin: -5px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .admin-form {
   display: grid;
   gap: 10px;

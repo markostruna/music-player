@@ -27,7 +27,9 @@
     }
     <div class="library-operation-copy">
       <strong>
-        {{ operation.operationType === 'scan' ? 'Scanning' : 'Refreshing metadata' }}
+        {{ operation.operationType === 'scan' ? 'Scanning' :
+          operation.operationType === 'database-cleanup' ? 'Cleaning' :
+          operation.operationType === 'import-scan-metadata' ? 'Importing' : 'Refreshing metadata for' }}
         {{ operation.rootName }}
       </strong>
       <span>{{
@@ -39,7 +41,7 @@
         <progress
           [max]="operation.totalUnits"
           [value]="operation.completedUnits"
-          aria-label="Metadata refresh progress"
+          aria-label="Library operation progress"
         ></progress>
       }
     </div>

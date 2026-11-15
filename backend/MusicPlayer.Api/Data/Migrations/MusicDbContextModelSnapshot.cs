@@ -201,6 +201,9 @@ namespace MusicPlayer.Api.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ImportedAtUnixMilliseconds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsAvailable")
                         .HasColumnType("INTEGER");
 

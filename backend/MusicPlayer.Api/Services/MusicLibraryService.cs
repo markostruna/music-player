@@ -86,6 +86,159 @@ public sealed class MusicLibraryService(
         return removedRoots > 0;
     }
 
+    public async Task<DatabaseCleanupResponse> CleanDatabaseAsync(
+        Action<int, int, string> reportProgress,
+        CancellationToken cancellationToken)
+    {
+        var roots = await database.SourceRoots.AsNoTracking()
+            .Where(root => root.IsEnabled)
+            .OrderBy(root => root.Name)
+            .ToListAsync(cancellationToken);
+        var skippedRoots = new List<string>();
+        var removedTracks = 0;
+        var removedFolders = 0;
+
+        for (var index = 0; index < roots.Count; index++)
+        {
+            var root = roots[index];
+            cancellationToken.ThrowIfCancellationRequested();
+            var tracks = await database.Tracks
+                .Where(track => track.SourceRootId == root.Id)
+                .ToListAsync(cancellationToken);
+            var folders = await database.Folders
+                .Where(folder => folder.SourceRootId == root.Id)
+                .ToListAsync(cancellationToken);
+            var missingTracks = new List<MusicTrack>();
+            var missingFolders = new List<MusicFolder>();
+            try
+            {
+                var rootPath = Path.GetFullPath(root.Path);
+                VerifyCleanupRoot(rootPath);
+                var checkedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var track in tracks)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (IsMissingCatalogPath(rootPath, track.RelativePath, expectDirectory: false, checkedDirectories))
+                    {
+                        missingTracks.Add(track);
+                    }
+                }
+
+                var retainedFolderIds = tracks.Except(missingTracks).Select(track => track.FolderId).ToHashSet();
+                foreach (var folder in folders)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (folder.RelativePath.Length != 0
+                        && !retainedFolderIds.Contains(folder.Id)
+                        && IsMissingCatalogPath(rootPath, folder.RelativePath, expectDirectory: true, checkedDirectories))
+                    {
+                        missingFolders.Add(folder);
+                    }
+                }
+
+                VerifyCleanupRoot(rootPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                                               or InvalidOperationException or ArgumentException)
+            {
+                logger.LogWarning(exception, "Database cleanup skipped source root {SourceRootId} ({RootName}).", root.Id, root.Name);
+                skippedRoots.Add(root.Name);
+                database.ChangeTracker.Clear();
+                reportProgress(index + 1, roots.Count, $"Skipped {root.Name} (unavailable or unsafe)");
+                continue;
+            }
+
+            await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+            database.Tracks.RemoveRange(missingTracks);
+            database.Folders.RemoveRange(missingFolders);
+            await database.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            removedTracks += missingTracks.Count;
+            removedFolders += missingFolders.Count;
+            database.ChangeTracker.Clear();
+            reportProgress(index + 1, roots.Count, $"Checked {root.Name}");
+        }
+
+        return new DatabaseCleanupResponse(removedTracks, removedFolders, skippedRoots);
+    }
+
+    private static void VerifyCleanupRoot(string rootPath)
+    {
+        for (var directory = new DirectoryInfo(rootPath); directory is not null; directory = directory.Parent)
+        {
+            var attributes = System.IO.File.GetAttributes(directory.FullName);
+            if ((attributes & FileAttributes.Directory) == 0 || (attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException("The configured source folder is unavailable or unsafe.");
+            }
+        }
+
+        using var entries = Directory.EnumerateFileSystemEntries(rootPath).GetEnumerator();
+        _ = entries.MoveNext();
+    }
+
+    private static bool IsMissingCatalogPath(
+        string rootPath, string relativePath, bool expectDirectory, HashSet<string> checkedDirectories)
+    {
+        var normalized = NormalizeBrowsePath(relativePath);
+        if (normalized.Length == 0)
+        {
+            throw new InvalidOperationException("A catalog entry has an empty path.");
+        }
+
+        var fullPath = ResolvePath(rootPath, normalized);
+        var current = rootPath;
+        var segments = Path.GetRelativePath(rootPath, fullPath).Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        for (var index = 0; index < segments.Length; index++)
+        {
+            if (checkedDirectories.Add(current))
+            {
+                using var entries = Directory.EnumerateFileSystemEntries(current).GetEnumerator();
+                _ = entries.MoveNext();
+            }
+
+            current = Path.Combine(current, segments[index]);
+            FileAttributes attributes;
+            try
+            {
+                attributes = System.IO.File.GetAttributes(current);
+            }
+            catch (FileNotFoundException)
+            {
+                return true;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return true;
+            }
+
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException("A catalog path contains a symbolic link or junction.");
+            }
+
+            var isDirectory = (attributes & FileAttributes.Directory) != 0;
+            if (index < segments.Length - 1 && !isDirectory)
+            {
+                throw new InvalidOperationException("A catalog directory is no longer a directory.");
+            }
+
+            if (index == segments.Length - 1)
+            {
+                if (isDirectory != expectDirectory)
+                {
+                    throw new InvalidOperationException("A catalog path has an unexpected filesystem type.");
+                }
+
+                return false;
+            }
+        }
+
+        throw new InvalidOperationException("A catalog path could not be checked.");
+    }
+
     public async Task<IReadOnlyList<MusicFolderResponse>> GetFoldersAsync(CancellationToken cancellationToken) =>
         await database.Folders.AsNoTracking()
             .OrderBy(folder => folder.SourceRootId)
@@ -151,7 +304,13 @@ public sealed class MusicLibraryService(
         }
     }
 
-    public async Task<ScanResponse> ScanAsync(int rootId, CancellationToken cancellationToken)
+    public Task<ScanResponse> ScanAsync(int rootId, CancellationToken cancellationToken) =>
+        ScanScopeAsync(rootId, null, cancellationToken);
+
+    public Task<ScanResponse> ScanFolderAsync(int rootId, string relativePath, CancellationToken cancellationToken) =>
+        ScanScopeAsync(rootId, RequireFolderPath(relativePath), cancellationToken);
+
+    private async Task<ScanResponse> ScanScopeAsync(int rootId, string? folderRelativePath, CancellationToken cancellationToken)
     {
         var root = await database.SourceRoots.SingleOrDefaultAsync(item => item.Id == rootId && item.IsEnabled, cancellationToken)
             ?? throw new KeyNotFoundException("The source root was not found.");
@@ -161,7 +320,21 @@ public sealed class MusicLibraryService(
             throw new InvalidOperationException("The configured source folder is unavailable or unsafe.");
         }
 
-        var folders = await database.Folders.Where(folder => folder.SourceRootId == rootId).ToListAsync(cancellationToken);
+        var scanPath = folderRelativePath is null ? rootPath : ResolvePath(rootPath, folderRelativePath);
+        if (!Directory.Exists(scanPath) || !IsSafePathWithoutLinks(rootPath, scanPath))
+        {
+            throw new InvalidOperationException("The selected scan folder is unavailable or unsafe.");
+        }
+
+        var foldersQuery = database.Folders.Where(folder => folder.SourceRootId == rootId);
+        if (folderRelativePath is not null)
+        {
+            var prefix = folderRelativePath + "/";
+            foldersQuery = foldersQuery.Where(folder => folder.RelativePath == ""
+                || folder.RelativePath == folderRelativePath
+                || folder.RelativePath.StartsWith(prefix));
+        }
+        var folders = await foldersQuery.ToListAsync(cancellationToken);
         var foldersByPath = folders.ToDictionary(folder => folder.RelativePath, StringComparer.OrdinalIgnoreCase);
         if (!foldersByPath.ContainsKey(string.Empty))
         {
@@ -171,7 +344,13 @@ public sealed class MusicLibraryService(
             foldersByPath.Add(string.Empty, rootFolder);
         }
 
-        var tracks = await database.Tracks.Where(track => track.SourceRootId == rootId).ToListAsync(cancellationToken);
+        var tracksQuery = database.Tracks.Where(track => track.SourceRootId == rootId);
+        if (folderRelativePath is not null)
+        {
+            var prefix = folderRelativePath + "/";
+            tracksQuery = tracksQuery.Where(track => track.RelativePath.StartsWith(prefix));
+        }
+        var tracks = await tracksQuery.ToListAsync(cancellationToken);
         var tracksByPath = tracks.ToDictionary(track => track.RelativePath, StringComparer.OrdinalIgnoreCase);
         foreach (var track in tracks)
         {
@@ -180,7 +359,8 @@ public sealed class MusicLibraryService(
 
         var discovered = 0;
         var unreadable = 0;
-        foreach (var filePath in EnumerateFiles(rootPath, cancellationToken))
+        var importedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        foreach (var filePath in EnumerateFiles(scanPath, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var relativePath = NormalizeRelativePath(Path.GetRelativePath(rootPath, filePath));
@@ -206,7 +386,13 @@ public sealed class MusicLibraryService(
                 var tag = audio.Tag;
                 track = tracksByPath.TryGetValue(relativePath, out var existing)
                     ? existing
-                    : new MusicTrack { SourceRootId = rootId, RelativePath = relativePath, Title = string.Empty };
+                    : new MusicTrack
+                    {
+                        SourceRootId = rootId,
+                        RelativePath = relativePath,
+                        Title = string.Empty,
+                        ImportedAtUnixMilliseconds = importedAt,
+                    };
                 track.FolderId = folder.Id;
                 track.Title = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(filePath) : tag.Title.Trim();
                 track.Artist = JoinArtistTags(tag.Performers, "Unknown artist");
@@ -239,8 +425,22 @@ public sealed class MusicLibraryService(
         return new ScanResponse(rootId, discovered, unreadable);
     }
 
-    public async Task<RootMetadataRefreshResponse> RefreshRootMetadataAsync(
+    public Task<RootMetadataRefreshResponse> RefreshRootMetadataAsync(
         int rootId,
+        Action<int, int, string> reportProgress,
+        CancellationToken cancellationToken) =>
+        RefreshMetadataScopeAsync(rootId, null, reportProgress, cancellationToken);
+
+    public Task<RootMetadataRefreshResponse> RefreshFolderMetadataAsync(
+        int rootId,
+        string relativePath,
+        Action<int, int, string> reportProgress,
+        CancellationToken cancellationToken) =>
+        RefreshMetadataScopeAsync(rootId, RequireFolderPath(relativePath), reportProgress, cancellationToken);
+
+    private async Task<RootMetadataRefreshResponse> RefreshMetadataScopeAsync(
+        int rootId,
+        string? relativePath,
         Action<int, int, string> reportProgress,
         CancellationToken cancellationToken)
     {
@@ -252,8 +452,14 @@ public sealed class MusicLibraryService(
             throw new KeyNotFoundException("The source root was not found.");
         }
 
-        var tracks = await database.Tracks.AsNoTracking()
-            .Where(track => track.SourceRootId == rootId && track.IsAvailable)
+        var tracksQuery = database.Tracks.AsNoTracking()
+            .Where(track => track.SourceRootId == rootId && track.IsAvailable);
+        if (relativePath is not null)
+        {
+            var prefix = relativePath + "/";
+            tracksQuery = tracksQuery.Where(track => track.RelativePath.StartsWith(prefix));
+        }
+        var tracks = await tracksQuery
             .Select(track => new { track.Artist, track.AlbumArtist, track.Album })
             .ToListAsync(cancellationToken);
 
@@ -356,6 +562,9 @@ public sealed class MusicLibraryService(
         CancellationToken cancellationToken,
         bool random = false) =>
         browseService.GetAlbumsPageAsync(query, page, pageSize, cancellationToken, random);
+
+    public async Task<IReadOnlyList<AlbumSummaryResponse>> GetRecentAlbumsAsync(CancellationToken cancellationToken) =>
+        (await browseService.GetAlbumsPageAsync(null, 1, 7, cancellationToken, recent: true)).Items;
 
     public Task<IReadOnlyList<TrackResponse>> GetArtistTracksAsync(
         string artist,
@@ -1752,6 +1961,17 @@ public sealed class MusicLibraryService(
         }
 
         return normalizedPath;
+    }
+
+    private static string RequireFolderPath(string relativePath)
+    {
+        var normalized = NormalizeBrowsePath(relativePath);
+        if (string.IsNullOrEmpty(normalized))
+        {
+            throw new ArgumentException("A non-empty folder path is required.");
+        }
+
+        return normalized;
     }
 
     private static string FirstTag(string[]? tags, string fallback) =>

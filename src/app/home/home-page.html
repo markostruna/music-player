@@ -21,6 +21,48 @@
     </div>
   </section>
 
+  <section class="home-category" aria-labelledby="home-recent-heading">
+    <div class="home-category-heading">
+      <div>
+        <span class="eyebrow">YOUR LATEST MUSIC</span>
+        <h2 id="home-recent-heading">Added recently</h2>
+      </div>
+      <a class="see-all" routerLink="/library" (click)="selectLibraryTab('albums')">
+        See all
+      </a>
+    </div>
+    @if (recentAlbumsError()) {
+      <p class="empty-state" role="alert">{{ recentAlbumsError() }}</p>
+    }
+    @if (recentAlbums().length) {
+      <div class="home-collection-grid">
+        @for (album of recentAlbums(); track album.coverTrackId) {
+          <app-album-tile
+            [title]="album.album"
+            [artist]="album.artist"
+            [coverUrl]="album.coverUrl"
+            [trackId]="album.coverTrackId"
+            [year]="album.releaseYear"
+            [fileExtensions]="album.fileExtensions"
+            [trackCount]="album.trackCount"
+          />
+        }
+      </div>
+    } @else if (recentAlbumsLoading()) {
+      <div class="home-collection-grid" role="status" aria-label="Loading recently added albums">
+        @for (placeholder of skeletonItems; track $index) {
+          <div class="collection-tile home-skeleton-tile" aria-hidden="true">
+            <span class="tile-art"></span>
+            <span class="tile-title home-skeleton-line home-skeleton-title"></span>
+            <span class="tile-detail home-skeleton-line home-skeleton-detail"></span>
+          </div>
+        }
+      </div>
+    } @else if (!recentAlbumsError()) {
+      <p class="empty-state">No albums in your library yet.</p>
+    }
+  </section>
+
   <section class="home-category" aria-labelledby="home-albums-heading">
     <div class="home-category-heading">
       <div>
@@ -43,6 +85,8 @@
             [coverUrl]="album.coverUrl"
             [trackId]="album.coverTrackId"
             [year]="album.releaseYear"
+            [fileExtensions]="album.fileExtensions"
+            [trackCount]="album.trackCount"
           />
         }
       </div>

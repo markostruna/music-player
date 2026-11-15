@@ -1,0 +1,88 @@
+@baseUrl = http://127.0.0.1:5080
+@csrfToken = replace-with-value-from-auth-csrf
+@unscannedRootId = 1
+@destinationRootId = 2
+@folderPath = Artist/Album
+@authCookie = replace-with-auth-cookie
+
+### Show the seven most recently added albums
+GET {{baseUrl}}/api/library/albums/recent
+Cookie: {{authCookie}}
+
+### Remove missing catalog entries without deleting files
+POST {{baseUrl}}/api/admin/operations/clean-database
+Cookie: {{authCookie}}
+X-CSRF-TOKEN: {{csrfToken}}
+
+### List unscanned folders
+GET {{baseUrl}}/api/admin/unscanned-folders
+Cookie: {{authCookie}}
+
+### Register a folder without scanning it
+POST {{baseUrl}}/api/admin/unscanned-folders
+Cookie: {{authCookie}}
+X-CSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+
+{
+  "name": "Album inbox",
+  "path": "D:\\Music\\Incoming"
+}
+
+### Browse an unscanned folder
+GET {{baseUrl}}/api/admin/unscanned-folders/{{unscannedRootId}}?path={{folderPath}}
+Cookie: {{authCookie}}
+
+### Rename a subfolder
+PUT {{baseUrl}}/api/admin/unscanned-folders/{{unscannedRootId}}/folders?path={{folderPath}}
+Cookie: {{authCookie}}
+X-CSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+
+{
+  "name": "Renamed album"
+}
+
+### Rename an audio filename
+PUT {{baseUrl}}/api/admin/unscanned-folders/{{unscannedRootId}}/tracks?path={{folderPath}}%2F01%20-%20Track.flac
+Cookie: {{authCookie}}
+X-CSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+
+{
+  "name": "01 - New title"
+}
+
+### Check for a duplicate and CUE file
+POST {{baseUrl}}/api/admin/unscanned-folders/{{unscannedRootId}}/check-album
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "relativePath": "{{folderPath}}",
+  "artist": "Artist",
+  "album": "Album",
+  "destinationRootId": {{destinationRootId}}
+}
+
+### Import, then scan and refresh metadata
+POST {{baseUrl}}/api/admin/unscanned-folders/{{unscannedRootId}}/import
+Cookie: {{authCookie}}
+X-CSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+
+{
+  "relativePath": "{{folderPath}}",
+  "destinationRootId": {{destinationRootId}},
+  "artist": "Artist",
+  "album": "Album",
+  "conflictAction": "",
+  "existingAlbumNewName": "",
+  "splitCue": false,
+  "keepCueSources": false
+}
+
+### Remove a folder registration without deleting its files
+DELETE {{baseUrl}}/api/admin/unscanned-folders/{{unscannedRootId}}
+Cookie: {{authCookie}}
+X-CSRF-TOKEN: {{csrfToken}}
