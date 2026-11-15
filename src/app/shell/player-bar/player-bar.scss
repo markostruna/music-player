@@ -187,12 +187,6 @@
     justify-content: flex-end;
     gap: 14px;
   }
-  .player-extra button {
-    font-size: 15px;
-  }
-  .player-extra button.active {
-    color: var(--accent);
-  }
   .player-extra .volume-label {
     display: flex;
     align-items: center;
@@ -204,97 +198,6 @@
   .player-extra input {
     width: clamp(58px, 7vw, 90px);
   }
-  .player-extra .queue-toggle {
-    font-size: 15px;
-  }
-}
-
-.queue-panel {
-  position: fixed;
-  z-index: 5;
-  right: 20px;
-  bottom: 90px;
-  display: flex;
-  width: min(360px, calc(100vw - 24px));
-  max-height: min(60vh, 460px);
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 12px 36px rgb(25 34 30 / 20%);
-  color: var(--ink);
-}
-
-.queue-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-}
-.queue-heading button {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-}
-.queue-panel ol {
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.queue-panel li button {
-  display: grid;
-  width: 100%;
-  min-height: 48px;
-  grid-template-columns: 26px minmax(0, 1fr) 40px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.queue-panel li button:hover,
-.queue-panel li button.queue-current {
-  background: var(--surface-hover);
-}
-.queue-index,
-.queue-duration {
-  color: var(--muted);
-  font-size: 12px;
-}
-.queue-duration {
-  text-align: right;
-}
-.queue-title {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-.queue-title strong,
-.queue-title small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.queue-title strong {
-  font-size: 12px;
-}
-.queue-title small {
-  color: var(--muted);
-  font-size: 12px;
-}
-.queue-current .queue-title strong {
-  color: var(--accent);
 }
 
 /* Reserve room for the fixed player bar only while something is playing. */
@@ -344,15 +247,6 @@ body.has-player {
   .player-bar .transport {
     gap: 8px;
   }
-  .player-bar .player-extra {
-    position: absolute;
-    top: -34px;
-    right: 12px;
-  }
-  .queue-panel {
-    right: 12px;
-    bottom: 82px;
-  }
   body.has-player {
     app-music-shell .workspace {
       padding-bottom: 116px;
@@ -395,9 +289,6 @@ body.has-player {
       grid-row: 1;
       justify-self: end;
     }
-    .queue-panel {
-      bottom: 124px;
-    }
     body.has-player {
       app-music-shell .workspace {
         padding-bottom: 116px;
@@ -414,9 +305,6 @@ body.has-player {
     .player-bar {
       bottom: 48px;
     }
-    .queue-panel {
-      bottom: 124px;
-    }
   }
 
 }
@@ -431,9 +319,6 @@ body.has-player {
   app-music-shell ~ app-player-bar {
     .player-bar {
       bottom: 0;
-    }
-    .queue-panel {
-      bottom: 82px;
     }
   }
   .player-bar {
@@ -466,8 +351,5 @@ body.has-player {
   }
   app-music-shell:has(app-now-playing-page) ~ app-player-bar .player-bar {
     bottom: 48px;
-  }
-  app-music-shell:has(app-now-playing-page) ~ app-player-bar .queue-panel {
-    bottom: 124px;
   }
 }

@@ -1,34 +1,4 @@
 @if (player.currentTrack(); as track) {
-  @if (showQueue()) {
-    <aside class="queue-panel" aria-label="Play queue">
-      <div class="queue-heading">
-        <strong>Play queue</strong
-        ><button type="button" aria-label="Close play queue" (click)="showQueue.set(false)">
-          ✕
-        </button>
-      </div>
-      <ol>
-        @for (queued of player.queue(); track $index; let index = $index) {
-          <li>
-            <button
-              type="button"
-              [class.queue-current]="index === player.currentIndex()"
-              (click)="player.playFromQueue(index)"
-            >
-              <span class="queue-index">{{
-                index === player.currentIndex() && player.isPlaying() ? '♫' : index + 1
-              }}</span>
-              <span class="queue-title"
-                ><strong>{{ queued.title }}</strong
-                ><small>{{ queued.artist }}</small></span
-              >
-              <span class="queue-duration">{{ formatTime(queued.durationSeconds) }}</span>
-            </button>
-          </li>
-        }
-      </ol>
-    </aside>
-  }
   <footer
     class="player-bar"
     [style.--player-cover]="'url(&quot;' + track.coverUrl + '&quot;)'"
@@ -139,17 +109,6 @@
           aria-label="Volume"
         /><span aria-hidden="true">◖))</span
       ></label>
-      <button
-        type="button"
-        class="queue-toggle"
-        [class.active]="showQueue()"
-        [attr.aria-pressed]="showQueue()"
-        aria-label="Play queue"
-        title="Play queue"
-        (click)="showQueue.set(!showQueue())"
-      >
-        ☰
-      </button>
     </div>
   </footer>
 }

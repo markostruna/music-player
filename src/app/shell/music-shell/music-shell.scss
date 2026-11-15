@@ -367,8 +367,7 @@ app-playlists-page {
 
 @media (max-width: 680px) and (max-height: 500px) and (orientation: landscape) {
   app-music-shell:has(app-now-playing-page) app-shell-header,
-  app-music-shell:has(app-now-playing-page) app-side-menu,
-  app-music-shell:has(app-now-playing-page) .page-heading {
+  app-music-shell:has(app-now-playing-page) app-side-menu {
     display: none;
   }
 
@@ -392,11 +391,12 @@ app-playlists-page {
 }
 
 @media (max-width: 680px) {
-  app-music-shell:has(app-album-page, app-artist-page) app-shell-header {
+  app-music-shell:has(app-album-page, app-artist-page, app-now-playing-page) app-shell-header {
     display: none;
   }
 
-  app-music-shell:has(app-album-page, app-artist-page) .page-heading {
+  app-music-shell:has(app-album-page, app-artist-page, app-now-playing-page) .page-heading {
+    display: block;
     position: fixed;
     z-index: 11;
     top: 8px;
@@ -406,16 +406,16 @@ app-playlists-page {
     pointer-events: none;
   }
 
-  app-music-shell:has(app-album-page, app-artist-page) .page-heading-inner {
+  app-music-shell:has(app-album-page, app-artist-page, app-now-playing-page) .page-heading-inner {
     min-height: 0;
     padding: 0;
   }
 
-  app-music-shell:has(app-album-page, app-artist-page) .breadcrumbs {
+  app-music-shell:has(app-album-page, app-artist-page, app-now-playing-page) .breadcrumbs {
     display: none;
   }
 
-  app-music-shell:has(app-album-page, app-artist-page) .page-back-button {
+  app-music-shell:has(app-album-page, app-artist-page, app-now-playing-page) .page-back-button {
     width: 40px;
     height: 40px;
     color: #fff;
@@ -423,7 +423,7 @@ app-playlists-page {
     pointer-events: auto;
   }
 
-  app-music-shell:has(app-album-page, app-artist-page) .page-back-button:hover {
+  app-music-shell:has(app-album-page, app-artist-page, app-now-playing-page) .page-back-button:hover {
     background: rgb(0 0 0 / 24%);
     color: #fff;
   }

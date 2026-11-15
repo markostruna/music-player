@@ -7,7 +7,11 @@
         {{ errorMessage() }} <a routerLink="/library">Return to your library</a>
       </p>
     } @else if (album(); as album) {
-      <section class="album-overview" aria-label="Album overview">
+      <section
+        class="album-overview"
+        [style.--album-cover]="'url(&quot;' + album.coverUrl + '&quot;)'"
+        aria-label="Album overview"
+      >
         <div class="album-hero">
           <div class="album-cover">
             <span class="album-cover-placeholder" aria-hidden="true">♫</span>
