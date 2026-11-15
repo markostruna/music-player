@@ -52,9 +52,16 @@
   font-size: 26px;
 }
 
+.metadata-search-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
 .metadata-provider-picker {
   display: grid;
   max-width: 260px;
+  flex: 1;
   gap: 6px;
   color: var(--muted);
   font-size: 12px;
@@ -68,6 +75,163 @@
   border-radius: 5px;
   background: var(--surface);
   color: var(--ink);
+}
+
+.metadata-custom-search,
+.metadata-custom-search-actions button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--surface-hover);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metadata-custom-search:disabled,
+.metadata-custom-search-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.metadata-custom-search-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.metadata-custom-search-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metadata-custom-search-form input {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.metadata-custom-search-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.metadata-custom-search-actions .metadata-dialog-save {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.metadata-album-results {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.metadata-album-results h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.metadata-album-result {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.metadata-result-choice {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 9px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.metadata-result-choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.metadata-result-choice.metadata-candidate-selected {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent);
+}
+
+.metadata-result-choice img,
+.metadata-result-no-image {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  background: var(--surface-hover);
+  object-fit: cover;
+}
+
+.metadata-result-title {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+
+.metadata-result-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metadata-result-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metadata-result-score {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metadata-result-preview {
+  padding: 0 12px 12px 77px;
+  border-top: 1px solid var(--line);
+}
+
+.metadata-result-preview > :first-child {
+  margin-top: 12px;
 }
 
 .metadata-dialog-content {
@@ -162,10 +326,24 @@
 }
 
 .metadata-preview-tracks {
-  max-height: 190px;
-  overflow: auto;
+  min-width: 0;
+  margin: 12px 0;
   padding-left: 24px;
   font-size: 12px;
+}
+
+.metadata-track-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px);
+  align-items: start;
+  gap: 18px;
+}
+
+.metadata-track-cover {
+  width: 100%;
+  border-radius: 5px;
+  background: var(--surface-hover);
+  object-fit: cover;
 }
 
 .metadata-preview-tracks li {
@@ -220,5 +398,29 @@
 
   .metadata-dialog-content {
     grid-template-columns: 1fr;
+  }
+
+  .metadata-custom-search-form {
+    grid-template-columns: 1fr;
+  }
+
+  .metadata-result-preview {
+    padding-left: 12px;
+  }
+
+  .metadata-track-layout {
+    grid-template-columns: minmax(0, 1fr) 120px;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .metadata-search-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .metadata-provider-picker {
+    max-width: none;
   }
 }

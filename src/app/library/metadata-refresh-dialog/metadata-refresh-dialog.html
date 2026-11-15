@@ -23,44 +23,151 @@
       </button>
     </header>
 
-    <label class="metadata-provider-picker">
-      <span>Provider</span>
-      <select
-        [disabled]="isSearching() || isSaving()"
-        (change)="changeProvider($any($event.target).value)"
-      >
-        @for (provider of providers(); track provider.id) {
-          <option [value]="provider.id" [selected]="provider.id === providerId()">
-            {{ provider.name }}
-          </option>
-        }
-      </select>
-    </label>
+    <div class="metadata-search-toolbar">
+      <label class="metadata-provider-picker">
+        <span>Provider</span>
+        <select
+          [disabled]="isSearching() || isSaving()"
+          (change)="changeProvider($any($event.target).value)"
+        >
+          @for (provider of providers(); track provider.id) {
+            <option [value]="provider.id" [selected]="provider.id === providerId()">
+              {{ provider.name }}
+            </option>
+          }
+        </select>
+      </label>
+      @if (isAlbum() && !isCustomSearch()) {
+        <button
+          type="button"
+          class="metadata-custom-search"
+          [disabled]="isSearching() || isSaving()"
+          (click)="openCustomSearch()"
+        >
+          Custom search
+        </button>
+      }
+    </div>
 
     @if (errorMessage()) {
       <p class="metadata-dialog-error" role="alert">{{ errorMessage() }}</p>
     }
 
-    <div class="metadata-dialog-content">
-      <section class="metadata-candidate-list" aria-label="Potential matches">
-        <h3>Potential matches</h3>
-        @if (isSearching()) {
-          <p class="metadata-dialog-muted">Searching…</p>
-        } @else if (isAlbum()) {
-          @for (candidate of albumCandidates(); track candidate.id) {
-            <button
-              type="button"
-              class="metadata-candidate"
-              [class.metadata-candidate-selected]="selectedAlbumCandidate()?.id === candidate.id"
-              (click)="selectAlbumCandidate(candidate)"
-            >
-              <span>{{ candidate.title }}</span>
-              <small>{{ candidate.artist }}{{ candidate.year ? ' · ' + candidate.year : '' }}</small>
+    @if (isAlbum()) {
+      @if (isCustomSearch()) {
+        <form class="metadata-custom-search-form" (ngSubmit)="searchCustom()">
+          <label>
+            <span>Artist</span>
+            <input name="customArtist" [(ngModel)]="customArtist" maxlength="512" />
+          </label>
+          <label>
+            <span>Album title</span>
+            <input name="customAlbum" [(ngModel)]="customAlbum" maxlength="512" />
+          </label>
+          <label>
+            <span>Release year</span>
+            <input
+              name="customYear"
+              type="number"
+              min="1000"
+              max="3000"
+              [(ngModel)]="customYear"
+            />
+          </label>
+          <div class="metadata-custom-search-actions">
+            <button type="button" class="metadata-dialog-cancel" (click)="isCustomSearch.set(false)">
+              Cancel
             </button>
-          } @empty {
-            <p class="metadata-dialog-muted">No album candidates were found.</p>
+            <button type="submit" class="metadata-dialog-save" [disabled]="isSearching() || isSaving()">
+              {{ isSearching() ? 'Searching…' : 'Search' }}
+            </button>
+          </div>
+        </form>
+      } @else {
+        <section class="metadata-album-results" aria-label="Album matches">
+          <h3>Matching results</h3>
+          @if (isSearching()) {
+            <p class="metadata-dialog-muted">Searching…</p>
+          } @else {
+            @for (candidate of rankedAlbumCandidates(); track candidate.provider + candidate.id) {
+              <article class="metadata-album-result">
+                <button
+                  type="button"
+                  class="metadata-result-choice"
+                  [class.metadata-candidate-selected]="selectedAlbumCandidate()?.id === candidate.id"
+                  [disabled]="isSaving()"
+                  (click)="selectAlbumCandidate(candidate)"
+                >
+                  @if (candidateImageUrl(candidate); as imageUrl) {
+                    <img [src]="imageUrl" alt="" />
+                  } @else {
+                    <span class="metadata-result-no-image"></span>
+                  }
+                  <span class="metadata-result-title">
+                    <strong>{{ candidate.artist }} — {{ candidate.title }}</strong>
+                    <small>
+                      {{ candidate.year ?? 'Year unknown' }}
+                      @if (candidate.trackCount) {
+                        · {{ candidate.trackCount }} tracks
+                      }
+                    </small>
+                  </span>
+                  <span class="metadata-result-score" [attr.aria-label]="'Match score ' + matchScore(candidate)">
+                    {{ matchScore(candidate) }}
+                  </span>
+                </button>
+                @if (selectedAlbumCandidate()?.id === candidate.id) {
+                  <div class="metadata-result-preview">
+                    @if (isLoadingPreview()) {
+                      <p class="metadata-dialog-muted">Loading preview…</p>
+                    } @else if (albumPreview(); as preview) {
+                      @if (preview.genre) {
+                        <p><strong>Genre:</strong> {{ preview.genre }}</p>
+                      }
+                      @if (preview.match.detail) {
+                        <p class="metadata-dialog-muted">{{ preview.match.detail }}</p>
+                      }
+                      @if (albumMetadataPreview()?.description) {
+                        <p class="metadata-preview-description">{{ albumMetadataPreview()?.description }}</p>
+                      }
+                      @if (albumMetadataPreview()?.imageProvider) {
+                        <p class="metadata-dialog-muted">
+                          Artwork source: {{ albumMetadataPreview()?.imageProvider }}
+                        </p>
+                      }
+                      <div class="metadata-track-layout">
+                        @if (preview.tracks.length) {
+                          <ol class="metadata-preview-tracks">
+                            @for (track of preview.tracks; track track.discNumber + '-' + track.trackNumber) {
+                              <li>{{ track.title }} <small>{{ track.artist }}</small></li>
+                            }
+                          </ol>
+                        }
+                        @if (previewImageUrl(); as coverUrl) {
+                          <img
+                            class="metadata-track-cover"
+                            [src]="coverUrl"
+                            [alt]="preview.match.title + ' album cover'"
+                          />
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </article>
+            } @empty {
+              <p class="metadata-dialog-muted">No album candidates were found.</p>
+            }
           }
-        } @else {
+        </section>
+      }
+    } @else {
+      <div class="metadata-dialog-content">
+        <section class="metadata-candidate-list" aria-label="Potential matches">
+          <h3>Potential matches</h3>
+          @if (isSearching()) {
+            <p class="metadata-dialog-muted">Searching…</p>
+          } @else {
           @for (candidate of artistCandidates(); track candidate.id) {
             <button
               type="button"
@@ -76,71 +183,35 @@
           } @empty {
             <p class="metadata-dialog-muted">No artist candidates were found.</p>
           }
-        }
-      </section>
+          }
+        </section>
 
-      <section class="metadata-candidate-preview" aria-label="Candidate preview">
-        <h3>Preview</h3>
-        @if (isLoadingPreview()) {
-          <p class="metadata-dialog-muted">Loading preview…</p>
-        } @else if (isAlbum() && albumPreview(); as preview) {
-          <div class="metadata-preview-heading">
-            @if (previewImageUrl()) {
-              <img [src]="previewImageUrl()" alt="Candidate album artwork" />
-            }
-            <div>
-              <strong>{{ preview.match.title }}</strong>
-              <span>{{ preview.match.artist }}</span>
-              <small>
-                {{ preview.match.year ?? 'Year unknown' }}
-                @if (preview.match.trackCount) {
-                  · {{ preview.match.trackCount }} tracks
+        <section class="metadata-candidate-preview" aria-label="Candidate preview">
+          <h3>Preview</h3>
+          @if (isLoadingPreview()) {
+            <p class="metadata-dialog-muted">Loading preview…</p>
+          } @else if (artistPreview(); as preview) {
+            <div class="metadata-preview-heading">
+              @if (previewImageUrl()) {
+                <img [src]="previewImageUrl()" [alt]="preview.match.name + ' candidate image'" />
+              }
+              <div>
+                <strong>{{ preview.match.name }}</strong>
+                <span>{{ preview.match.detail || preview.imageProvider || 'Artist match' }}</span>
+                @if (preview.imageProvider) {
+                  <small>Image: {{ preview.imageProvider }}</small>
                 }
-              </small>
+              </div>
             </div>
-          </div>
-          @if (preview.genre) {
-            <p><strong>Genre:</strong> {{ preview.genre }}</p>
-          }
-          @if (preview.match.detail) {
-            <p class="metadata-dialog-muted">{{ preview.match.detail }}</p>
-          }
-          @if (albumMetadataPreview()?.description) {
-            <p class="metadata-preview-description">{{ albumMetadataPreview()?.description }}</p>
-          }
-          @if (albumMetadataPreview()?.imageProvider) {
-            <p class="metadata-dialog-muted">
-              Artwork source: {{ albumMetadataPreview()?.imageProvider }}
+            <p class="metadata-preview-description">
+              {{ preview.description || 'This provider did not return an artist description.' }}
             </p>
+          } @else {
+            <p class="metadata-dialog-muted">Select a candidate to preview the information before saving.</p>
           }
-          @if (preview.tracks.length) {
-            <ol class="metadata-preview-tracks">
-              @for (track of preview.tracks; track track.discNumber + '-' + track.trackNumber) {
-                <li>{{ track.title }} <small>{{ track.artist }}</small></li>
-              }
-            </ol>
-          }
-        } @else if (artistPreview(); as preview) {
-          <div class="metadata-preview-heading">
-            @if (previewImageUrl()) {
-              <img [src]="previewImageUrl()" [alt]="preview.match.name + ' candidate image'" />
-            }
-            <div>
-              <strong>{{ preview.match.name }}</strong>
-              <span>{{ preview.match.detail || preview.imageProvider || 'Artist match' }}</span>
-              @if (preview.imageProvider) {
-                <small>Image: {{ preview.imageProvider }}</small>
-              }
-            </div>
-          </div>
-          <p class="metadata-preview-description">
-            {{ preview.description || 'This provider did not return an artist description.' }}
-          </p>
-        } @else {
-          <p class="metadata-dialog-muted">Select a candidate to preview the information before saving.</p>
-        }
-      </section>
-    </div>
+        </section>
+      </div>
+    }
 
     <footer class="metadata-dialog-actions">
       <button

@@ -35,6 +35,12 @@ export class MetadataRefreshDialog implements OnInit {
   readonly providerId = signal('');
   readonly artistCandidates = signal<ArtistMatch[]>([]);
   readonly albumCandidates = signal<AlbumMatch[]>([]);
+  readonly searchQuery = signal<{ artist: string; album: string; year: number | null }>({
+    artist: '',
+    album: '',
+    year: null,
+  });
+  readonly isCustomSearch = signal(false);
   readonly selectedArtistCandidate = signal<ArtistMatch | null>(null);
   readonly selectedAlbumCandidate = signal<AlbumMatch | null>(null);
   readonly artistPreview = signal<ArtistMatchDetail | null>(null);
@@ -44,6 +50,14 @@ export class MetadataRefreshDialog implements OnInit {
   readonly isLoadingPreview = signal(false);
   readonly isSaving = signal(false);
   readonly errorMessage = signal('');
+  customArtist = '';
+  customAlbum = '';
+  customYear: number | null = null;
+  readonly rankedAlbumCandidates = computed(() =>
+    [...this.albumCandidates()].sort(
+      (left, right) => this.matchScore(right) - this.matchScore(left),
+    ),
+  );
   readonly isAlbum = computed(() => this.album() !== null);
   readonly canSave = computed(() =>
     this.isAlbum()
@@ -73,7 +87,55 @@ export class MetadataRefreshDialog implements OnInit {
 
   async changeProvider(providerId: string): Promise<void> {
     this.providerId.set(providerId);
-    await this.search();
+    if (!this.isCustomSearch()) await this.searchMatches();
+  }
+
+  openCustomSearch(): void {
+    const query = this.searchQuery();
+    this.customArtist = query.artist;
+    this.customAlbum = query.album;
+    this.customYear = query.year;
+    this.errorMessage.set('');
+    this.isCustomSearch.set(true);
+  }
+
+  async searchCustom(): Promise<void> {
+    const query = {
+      artist: this.customArtist.trim(),
+      album: this.customAlbum.trim(),
+      year: this.customYear,
+    };
+    if (!query.artist && !query.album && !query.year) {
+      this.errorMessage.set('Enter an artist, album title or release year.');
+      return;
+    }
+
+    this.searchQuery.set(query);
+    this.isCustomSearch.set(false);
+    await this.searchMatches();
+  }
+
+  candidateImageUrl(candidate: AlbumMatch): string | null {
+    return candidate.coverUrl ? this.identifyApi.remoteImageUrl(candidate.coverUrl) : null;
+  }
+
+  matchScore(candidate: AlbumMatch): number {
+    const query = this.searchQuery();
+    let weightedScore = 0;
+    let totalWeight = 0;
+    if (query.album) {
+      weightedScore += this.textSimilarity(candidate.title, query.album) * 60;
+      totalWeight += 60;
+    }
+    if (query.artist) {
+      weightedScore += this.textSimilarity(candidate.artist, query.artist) * 30;
+      totalWeight += 30;
+    }
+    if (query.year && candidate.year) {
+      weightedScore += (candidate.year === query.year ? 1 : 0) * 10;
+      totalWeight += 10;
+    }
+    return totalWeight ? Math.round((weightedScore / totalWeight) * 100) : 0;
   }
 
   async selectArtistCandidate(candidate: ArtistMatch): Promise<void> {
@@ -170,7 +232,14 @@ export class MetadataRefreshDialog implements OnInit {
         return;
       }
 
-      await this.search();
+      this.searchQuery.set({
+        artist: this.artist(),
+        album: this.album() ?? '',
+        year: null,
+      });
+      this.customArtist = this.artist();
+      this.customAlbum = this.album() ?? '';
+      await this.searchMatches();
     } catch {
       this.errorMessage.set('Metadata providers could not be loaded.');
     } finally {
@@ -178,7 +247,7 @@ export class MetadataRefreshDialog implements OnInit {
     }
   }
 
-  private async search(): Promise<void> {
+  private async searchMatches(): Promise<void> {
     if (!this.providerId()) return;
     this.isSearching.set(true);
     this.errorMessage.set('');
@@ -192,10 +261,7 @@ export class MetadataRefreshDialog implements OnInit {
     try {
       if (this.isAlbum()) {
         this.albumCandidates.set(
-          await this.identifyApi.search(this.providerId(), {
-            artist: this.artist(),
-            album: this.album()!,
-          }),
+          await this.identifyApi.search(this.providerId(), this.searchQuery()),
         );
       } else {
         this.artistCandidates.set(
@@ -207,5 +273,23 @@ export class MetadataRefreshDialog implements OnInit {
     } finally {
       this.isSearching.set(false);
     }
+  }
+
+  private textSimilarity(left: string, right: string): number {
+    const tokens = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    const leftTokens = tokens(left);
+    const rightTokens = tokens(right);
+    if (!leftTokens.length || !rightTokens.length) return 0;
+    const rightSet = new Set(rightTokens);
+    const shared = leftTokens.filter((token) => rightSet.has(token)).length;
+    return (2 * shared) / (leftTokens.length + rightTokens.length);
   }
 }
