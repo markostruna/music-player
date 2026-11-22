@@ -13,11 +13,20 @@ public sealed class MusicDbContext(DbContextOptions<MusicDbContext> options) : D
     public DbSet<ProviderCredential> ProviderCredentials => Set<ProviderCredential>();
     public DbSet<PlaybackState> PlaybackStates => Set<PlaybackState>();
     public DbSet<PlaybackHistory> PlaybackHistory => Set<PlaybackHistory>();
+    public DbSet<MusicPlaylist> Playlists => Set<MusicPlaylist>();
+    public DbSet<MusicPlaylistTrack> PlaylistTracks => Set<MusicPlaylistTrack>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<MusicUser>().HasIndex(user => user.NormalizedEmail).IsUnique();
         modelBuilder.Entity<PlaybackState>().HasKey(state => state.UserId);
+        modelBuilder.Entity<MusicPlaylist>().HasOne(playlist => playlist.User).WithMany()
+            .HasForeignKey(playlist => playlist.UserId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<MusicPlaylistTrack>().HasOne(item => item.Playlist).WithMany(playlist => playlist.Tracks)
+            .HasForeignKey(item => item.PlaylistId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<MusicPlaylistTrack>().HasOne(item => item.Track).WithMany()
+            .HasForeignKey(item => item.TrackId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<MusicPlaylistTrack>().HasIndex(item => new { item.PlaylistId, item.Position });
         modelBuilder.Entity<PlaybackState>().HasOne(state => state.User).WithOne()
             .HasForeignKey<PlaybackState>(state => state.UserId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<PlaybackHistory>().HasIndex(history => new { history.UserId, history.PlayId }).IsUnique();

@@ -22,6 +22,7 @@ export interface PlaybackSnapshot {
   ownerSessionId: string | null;
   transferTargetSessionId: string | null;
   devices: PlaybackDevice[];
+  radioMode?: 'radio-album' | 'radio-track' | null;
 }
 
 export interface PlaybackCommand {

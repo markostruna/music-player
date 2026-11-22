@@ -48,4 +48,5 @@ public sealed record PlaybackResponse(
     bool Repeat,
     string? OwnerSessionId,
     string? TransferTargetSessionId,
-    IReadOnlyList<PlaybackDeviceResponse> Devices);
+    IReadOnlyList<PlaybackDeviceResponse> Devices,
+    string? RadioMode = null);

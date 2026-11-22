@@ -35,6 +35,23 @@ describe('demo API', () => {
     vi.unstubAllGlobals();
   });
 
+  it('supports personal playlists and bounded random selections in memory', async () => {
+    const playlist = await firstValueFrom(http.post<{ id: number; tracks: MusicTrack[] }>(
+      `${MUSIC_API_BASE}/playlists`, { name: 'Mix', trackIds: [] },
+    ));
+    const updated = await firstValueFrom(http.put<{ tracks: MusicTrack[] }>(
+      `${MUSIC_API_BASE}/playlists/${playlist.id}`, { name: 'Mix', trackIds: [2, 1] },
+    ));
+    expect(updated.tracks.map((track) => track.id)).toEqual([2, 1]);
+    const tracks = await firstValueFrom(http.get<MusicTrack[]>(`${MUSIC_API_BASE}/playlists/random/random-tracks`));
+    const albums = await firstValueFrom(http.get<MusicTrack[]>(`${MUSIC_API_BASE}/playlists/random/random-albums`));
+    expect(tracks).toHaveLength(100);
+    expect(new Set(tracks.map((track) => track.id)).size).toBe(100);
+    expect(new Set(albums.map((track) => track.album)).size).toBe(10);
+    await firstValueFrom(http.delete(`${MUSIC_API_BASE}/playlists/${playlist.id}`));
+    expect(await firstValueFrom(http.get<unknown[]>(`${MUSIC_API_BASE}/playlists`))).toHaveLength(0);
+  });
+
   it('serves a populated library with local artwork and generated audio', async () => {
     const tracks = await firstValueFrom(
       http.get<(MusicTrack & { artistImageUrl: string })[]>(`${MUSIC_API_BASE}/library/tracks`),

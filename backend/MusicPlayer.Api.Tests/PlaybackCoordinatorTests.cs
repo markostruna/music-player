@@ -8,6 +8,30 @@ namespace MusicPlayer.Api.Tests;
 
 public sealed class PlaybackCoordinatorTests
 {
+    [Theory]
+    [InlineData("radio-track", 1)]
+    [InlineData("radio-album", 2)]
+    public async Task RadioReplacesQueueAtTheEndAndSurvivesCoordinatorRestart(string mode, int queueSize)
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var session = Guid.NewGuid().ToString();
+        var initial = await fixture.Poll(session, -1);
+        var playing = await fixture.Command(session, initial.Revision, mode);
+        Assert.Equal(queueSize, playing.Queue!.Count);
+        fixture.Coordinator = new PlaybackCoordinator(fixture.Clock);
+        var restored = await fixture.Poll(session, -1);
+        for (var i = 0; i < queueSize; i++)
+            restored = await fixture.Command(session, restored.Revision, "ended", playId: restored.PlayId);
+        Assert.True(restored.IsPlaying);
+        Assert.Equal(0, restored.CurrentIndex);
+        Assert.Equal(queueSize, restored.Queue!.Count);
+        Assert.NotEqual(playing.PlayId, restored.PlayId);
+
+        var regular = await fixture.Command(session, restored.Revision, "play", [1], 0);
+        var ended = await fixture.Command(session, regular.Revision, "ended", playId: regular.PlayId);
+        Assert.False(ended.IsPlaying);
+    }
+
     [Fact]
     public async Task StartingAtSavedPositionPreservesPreviousTrackHistory()
     {

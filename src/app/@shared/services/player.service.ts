@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { DEMO_MODE } from '../utils/api-path';
 import { AuthState } from './auth-state';
 import { MusicLibraryApi, MusicTrack } from './music-library-api';
+import type { BuiltInPlaylistId } from './playlist.service';
 import {
   PlaybackCommand,
   PlaybackDevice,
@@ -34,18 +35,21 @@ export class PlayerService {
   private pollAgain = false;
   private operations: Promise<void> = Promise.resolve();
   private audioGeneration = 0;
+  private localRadio: 'album-radio' | 'track-radio' | null = null;
+  private radioGeneration = 0;
 
   readonly queue = signal<MusicTrack[]>([]);
   readonly currentIndex = signal(-1);
   readonly shuffle = signal(false);
   readonly repeat = signal(false);
+  readonly radioMode = signal<'album-radio' | 'track-radio' | null>(null);
   readonly currentTrack = computed(
     (): MusicTrack | null => this.queue()[this.currentIndex()] ?? null,
   );
   readonly hasPrevious = computed(() => this.currentIndex() > 0);
   readonly hasNext = computed(
     () =>
-      this.currentIndex() >= 0 && (this.shuffle() || this.currentIndex() < this.queue().length - 1),
+      this.currentIndex() >= 0 && (this.shuffle() || this.radioMode() !== null || this.currentIndex() < this.queue().length - 1),
   );
   readonly isPlaying = signal(false);
   readonly currentTime = signal(0);
@@ -100,6 +104,7 @@ export class PlayerService {
       else if (this.repeat()) this.startIndex(this.currentIndex());
       else if (this.shuffle()) this.startRandomTrack();
       else if (this.hasNext()) this.next();
+      else if (this.localRadio) void this.advanceLocalRadio();
       else this.isPlaying.set(false);
     });
     const pageHide = (event: PageTransitionEvent) => {
@@ -159,6 +164,7 @@ export class PlayerService {
       } finally {
         this.endSynchronization();
         this.syncEnabled.set(false);
+        this.localRadio = this.radioMode();
         const track = this.currentTrack();
         if (!wasOwner && track) {
           this.audio.pause();
@@ -170,6 +176,8 @@ export class PlayerService {
         this.isPlaying.set(!this.audio.paused);
       }
     } else {
+      this.localRadio = null;
+      this.radioGeneration++;
       this.audio.pause();
       this.syncEnabled.set(true);
       this.beginSynchronization();
@@ -178,6 +186,9 @@ export class PlayerService {
 
   play(queue: MusicTrack[], index: number, startPositionSeconds = 0): void {
     if (index < 0 || index >= queue.length) return;
+    this.localRadio = null;
+    this.radioMode.set(null);
+    this.radioGeneration++;
     if (this.isSynchronized()) {
       const positionSeconds = this.safeAudioTime();
       const wasPlaying = !this.audio.paused;
@@ -197,6 +208,9 @@ export class PlayerService {
 
   enqueue(tracks: MusicTrack[]): void {
     if (!tracks.length) return;
+    this.localRadio = null;
+    this.radioMode.set(null);
+    this.radioGeneration++;
     if (this.isSynchronized()) {
       const positionSeconds = this.safeAudioTime();
       const wasPlaying = !this.audio.paused;
@@ -229,7 +243,46 @@ export class PlayerService {
   next(): void {
     if (this.isSynchronized()) this.sendCommand('next');
     else if (this.shuffle()) this.startRandomTrack();
-    else if (this.hasNext()) this.startIndex(this.currentIndex() + 1);
+    else if (this.currentIndex() < this.queue().length - 1) this.startIndex(this.currentIndex() + 1);
+    else if (this.localRadio) void this.advanceLocalRadio();
+  }
+
+  async playBuiltIn(kind: BuiltInPlaylistId): Promise<void> {
+    this.localRadio = null;
+    const generation = ++this.radioGeneration;
+    if (this.isSynchronized()) {
+      this.sendCommand(kind === 'album-radio' ? 'radio-album' : kind === 'track-radio' ? 'radio-track' : kind);
+      return;
+    }
+    const tracks = await this.library.randomPlaylist(kind);
+    if (generation !== this.radioGeneration) return;
+    if (!tracks.length) throw new Error('No playable tracks in the library.');
+    this.shuffle.set(false);
+    this.repeat.set(false);
+    this.play(tracks, 0);
+    if (!this.isSynchronized() && (kind === 'album-radio' || kind === 'track-radio')) {
+      this.localRadio = kind;
+      this.radioMode.set(kind);
+    }
+  }
+
+  private async advanceLocalRadio(): Promise<void> {
+    const mode = this.localRadio;
+    if (!mode) return;
+    const generation = ++this.radioGeneration;
+    try {
+      const tracks = await this.library.randomPlaylist(mode);
+      if (generation !== this.radioGeneration || this.localRadio !== mode) return;
+      if (!tracks.length) throw new Error('No playable tracks in the library.');
+      this.queue.set(tracks);
+      this.startIndex(0);
+    } catch {
+      if (generation !== this.radioGeneration) return;
+      this.localRadio = null;
+      this.radioMode.set(null);
+      this.isPlaying.set(false);
+      this.errorMessage.set('Radio could not select another track. Check the music server connection.');
+    }
   }
 
   previous(): void {
@@ -305,6 +358,9 @@ export class PlayerService {
   }
 
   stop(): void {
+    this.localRadio = null;
+    this.radioMode.set(null);
+    this.radioGeneration++;
     this.audioGeneration++;
     this.audio.pause();
     this.audio.removeAttribute('src');
@@ -495,6 +551,8 @@ export class PlayerService {
       this.currentIndex.set(snapshot.currentIndex);
       this.shuffle.set(snapshot.shuffle);
       this.repeat.set(snapshot.repeat);
+      this.radioMode.set(snapshot.radioMode === 'radio-album' ? 'album-radio'
+        : snapshot.radioMode === 'radio-track' ? 'track-radio' : null);
     }
     this.isPlaying.set(snapshot.isPlaying);
     this.currentTime.set(snapshot.positionSeconds);

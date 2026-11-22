@@ -9,6 +9,25 @@ namespace MusicPlayer.Api.Tests;
 public sealed class DatabaseMigrationTests
 {
     [Fact]
+    public async Task PlaylistMigrationsApplyWhenLaterHistoryMigrationWasAlreadyApplied()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var database = new MusicDbContext(new DbContextOptionsBuilder<MusicDbContext>().UseSqlite(connection).Options);
+        await database.Database.MigrateAsync();
+        await database.Database.ExecuteSqlRawAsync("""
+            DROP TABLE "PlaylistTracks";
+            DROP TABLE "Playlists";
+            ALTER TABLE "PlaybackStates" DROP COLUMN "RadioMode";
+            DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" IN
+              ('20261122142127_AddPlaylists', '20261122142204_AddRadioMode');
+            """);
+        await database.Database.MigrateAsync();
+        Assert.Empty(await database.Playlists.ToListAsync());
+        Assert.Empty(await database.PlaybackStates.ToListAsync());
+    }
+
+    [Fact]
     public async Task CompletionMigrationBackfillsOnlyPositionsAtTheKnownEnd()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -130,7 +149,7 @@ public sealed class DatabaseMigrationTests
             .Options;
         await using var database = new MusicDbContext(options);
         await database.Database.EnsureCreatedAsync();
-        await database.Database.ExecuteSqlRawAsync("DROP TABLE PlaybackHistory; DROP TABLE PlaybackStates;");
+        await database.Database.ExecuteSqlRawAsync("DROP TABLE PlaylistTracks; DROP TABLE Playlists; DROP TABLE PlaybackHistory; DROP TABLE PlaybackStates;");
         await database.Database.ExecuteSqlRawAsync(
             """ALTER TABLE "Tracks" DROP COLUMN "ImportedAtUnixMilliseconds" """);
         await database.Database.ExecuteSqlRawAsync(

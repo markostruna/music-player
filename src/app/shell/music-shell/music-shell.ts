@@ -71,6 +71,7 @@ export class MusicShell {
       case 'admin':
         return 'Manage library';
       case 'playlists':
+      case 'playlists/:id':
         return 'Playlists';
       case 'settings':
         return 'Settings';

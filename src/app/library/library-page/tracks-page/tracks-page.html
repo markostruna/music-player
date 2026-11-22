@@ -1,3 +1,4 @@
+@if (playlistError()) { <p class="empty-state" role="alert">{{ playlistError() }}</p> }
 @if (isLoading() && !visibleTracks().length) {
   <p class="empty-state">Loading your music…</p>
 } @else if (errorMessage() && !visibleTracks().length) {
@@ -26,6 +27,14 @@
             <path d="m8 5 12 7-12 7V5Z" />
           </svg>
         </button>
+        @if (playlistItems().length) {
+          <select [attr.aria-label]="'Add ' + track.title + ' to playlist'" [disabled]="addingTrack()" (change)="addToPlaylist(track, $event)">
+            <option value="">Add to playlist</option>
+            @for (playlist of playlistItems(); track playlist.id) {
+              <option [value]="playlist.id">{{ playlist.name }}</option>
+            }
+          </select>
+        }
       </article>
     } @empty {
       <p class="empty-state">

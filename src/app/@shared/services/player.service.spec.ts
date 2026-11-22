@@ -123,6 +123,9 @@ describe('PlayerService synchronization', () => {
                 tileCoverUrl: item.coverUrl,
                 albumCoverUrl: item.coverUrl,
               })),
+            randomPlaylist: vi.fn(async () => [{
+              ...track, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl,
+            }]),
           },
         },
       ],
@@ -180,6 +183,20 @@ describe('PlayerService synchronization', () => {
     player.toggle();
     expect(audio.play).toHaveBeenCalled();
     expect(api.command.mock.calls.length).toBe(calls);
+  });
+
+  it('replaces the local radio queue after each track and stops radio when another queue is played', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    await player.playBuiltIn('track-radio');
+    const library = TestBed.inject(MusicLibraryApi);
+    expect(player.hasNext()).toBe(true);
+    FakeAudio.instances[0].emit('ended');
+    await vi.waitFor(() => expect(library.randomPlaylist).toHaveBeenCalledTimes(2));
+    expect(player.queue()).toHaveLength(1);
+    player.play([player.currentTrack()!], 0);
+    FakeAudio.instances[0].emit('ended');
+    expect(library.randomPlaylist).toHaveBeenCalledTimes(2);
   });
 
   it('resumes independent playback once metadata is loaded', async () => {

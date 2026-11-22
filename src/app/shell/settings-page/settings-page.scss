@@ -103,10 +103,29 @@
 }
 
 .playlist-card {
+  color: inherit;
+  text-decoration: none;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.playlist-create {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.playlist-create input {
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
 }
 
 .playlist-art {

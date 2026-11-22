@@ -77,6 +77,9 @@
           }
         </section>
       }
+      @if (player.radioMode() === 'track-radio') {
+        <p class="now-playing-message">Track radio selects the next track as you listen.</p>
+      } @else {
       <section class="album-track-section now-playing-queue" aria-labelledby="queue-heading">
         <div
           #queueHeading
@@ -110,6 +113,7 @@
           }
         </ol>
       </section>
+      }
     } @else {
       <p class="now-playing-message">
         Nothing is playing. <a routerLink="/library">Choose something from your library</a>

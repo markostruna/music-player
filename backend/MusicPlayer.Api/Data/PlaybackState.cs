@@ -12,4 +12,5 @@ public sealed class PlaybackState
     public bool Repeat { get; set; }
     public long Revision { get; set; }
     public string PlayId { get; set; } = "";
+    public string? RadioMode { get; set; }
 }

@@ -30,6 +30,7 @@ builder.Services.AddScoped<IProviderSettingsService, ProviderSettingsService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<MusicLibraryBrowseService>();
 builder.Services.AddScoped<IPlaybackStatisticsService, PlaybackStatisticsService>();
+builder.Services.AddScoped<IPlaylistService, PlaylistService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PlaybackCoordinator>();
 builder.Services.AddScoped<IUnscannedFolderService, UnscannedFolderService>();
@@ -151,6 +152,7 @@ app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" }))
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapPlaybackEndpoints();
+app.MapPlaylistEndpoints();
 app.MapProviderSettingsEndpoints();
 app.MapLibraryEndpoints();
 app.MapIdentifyEndpoints();

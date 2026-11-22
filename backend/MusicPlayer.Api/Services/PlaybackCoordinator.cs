@@ -124,6 +124,23 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
             var startTrack = false;
             switch (request.Action)
             {
+                case "radio-album":
+                case "radio-track":
+                case "random-albums":
+                case "random-tracks":
+                    var randomTracks = await library.GetRandomTracksAsync(
+                        request.Action is "radio-album" or "random-albums",
+                        request.Action switch { "random-albums" => 10, "random-tracks" => 100, _ => 1 },
+                        cancellationToken);
+                    if (randomTracks.Count == 0) throw new ArgumentException("There are no playable tracks in the library.");
+                    queue = randomTracks.Select(track => track.Id).ToArray();
+                    state.QueueJson = JsonSerializer.Serialize(queue);
+                    state.CurrentIndex = 0;
+                    state.RadioMode = request.Action is "radio-album" or "radio-track" ? request.Action : null;
+                    state.Shuffle = false;
+                    state.Repeat = false;
+                    startTrack = true;
+                    break;
                 case "play":
                 case "enqueue":
                     if (request.TrackIds is null || request.TrackIds.Length == 0
@@ -149,6 +166,7 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                         queue = queue.Concat(request.TrackIds).ToArray();
                     }
                     state.QueueJson = JsonSerializer.Serialize(queue);
+                    state.RadioMode = null;
                     break;
                 case "index":
                     if (request.Index is null || request.Index < 0 || request.Index >= queue.Length)
@@ -175,6 +193,22 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                     {
                         state.CurrentIndex++;
                         startTrack = true;
+                    }
+                    else if (state.RadioMode is "radio-album" or "radio-track")
+                    {
+                        var nextTracks = await library.GetRandomTracksAsync(state.RadioMode == "radio-album", 1, cancellationToken);
+                        if (nextTracks.Count == 0)
+                        {
+                            state.IsPlaying = false;
+                            state.RadioMode = null;
+                        }
+                        else
+                        {
+                            queue = nextTracks.Select(track => track.Id).ToArray();
+                            state.QueueJson = JsonSerializer.Serialize(queue);
+                            state.CurrentIndex = 0;
+                            startTrack = true;
+                        }
                     }
                     else if (request.Action == "ended")
                     {
@@ -371,7 +405,8 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
         return new PlaybackResponse(state.Revision, devices.PositionRevision, state.PlayId,
             queue, state.CurrentIndex, state.PositionSeconds,
             state.IsPlaying, state.Shuffle, state.Repeat, devices.Owner, devices.Target,
-            devices.Devices.Select(item => new PlaybackDeviceResponse(item.Key, item.Value.Name)).ToArray());
+            devices.Devices.Select(item => new PlaybackDeviceResponse(item.Key, item.Value.Name)).ToArray(),
+            state.RadioMode);
     }
 
     private static bool ValidSession(string? value) => Guid.TryParse(value, out _);

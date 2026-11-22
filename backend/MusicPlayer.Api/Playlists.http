@@ -1,0 +1,33 @@
+@baseUrl = http://localhost:5080
+@csrf = replace-with-csrf-token
+@id = 1
+
+### List personal playlists (requires a signed-in session)
+GET {{baseUrl}}/api/playlists
+
+### Get a playlist
+GET {{baseUrl}}/api/playlists/{{id}}
+
+### Select 100 random tracks
+GET {{baseUrl}}/api/playlists/random/random-tracks
+
+### Create a playlist
+POST {{baseUrl}}/api/playlists
+Content-Type: application/json
+X-CSRF-TOKEN: {{csrf}}
+
+{ "name": "Favourites", "trackIds": [] }
+
+### Rename or replace the ordered tracks
+PUT {{baseUrl}}/api/playlists/{{id}}
+Content-Type: application/json
+X-CSRF-TOKEN: {{csrf}}
+
+{ "name": "Favourites", "trackIds": [1, 2] }
+
+### Delete a playlist
+DELETE {{baseUrl}}/api/playlists/{{id}}
+X-CSRF-TOKEN: {{csrf}}
+
+### Missing playlist
+GET {{baseUrl}}/api/playlists/999999

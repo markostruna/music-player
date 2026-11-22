@@ -4,20 +4,24 @@
     <h1>Playlists</h1>
     <p>Your playlists, all in one place.</p>
   </header>
-
+  @if (error()) { <p class="settings-error" role="alert">{{ error() }}</p> }
+  <form (ngSubmit)="create()" class="playlist-create">
+    <label for="playlist-name">New playlist</label>
+    <input id="playlist-name" name="name" [(ngModel)]="name" maxlength="200" required />
+    <button class="settings-action" type="submit" [disabled]="busy() || !name.trim()">Create</button>
+  </form>
   <div class="playlist-cards">
-    @for (playlist of playlists; track playlist.name) {
-      <article class="playlist-card">
-        <div class="playlist-art" [class]="playlist.swatch" aria-hidden="true">
-          <span>{{ playlist.name.slice(0, 1) }}</span>
-        </div>
-        <div class="playlist-card-copy">
-          <h2>{{ playlist.name }}</h2>
-          <p>{{ playlist.description }}</p>
-        </div>
-      </article>
-    } @empty {
-      <p class="empty-state">No playlists yet.</p>
+    @for (playlist of builtIns; track playlist.id) {
+      <a class="playlist-card" [routerLink]="['/playlists', playlist.id]">
+        <div class="playlist-art playlist-swatch-lime" aria-hidden="true"><span>♫</span></div>
+        <div class="playlist-card-copy"><h2>{{ playlist.name }}</h2><p>{{ playlist.description }}</p></div>
+      </a>
+    }
+    @for (playlist of playlists(); track playlist.id) {
+      <a class="playlist-card" [routerLink]="['/playlists', playlist.id]">
+        <div class="playlist-art playlist-swatch-blue" aria-hidden="true"><span>{{ playlist.name.slice(0, 1) }}</span></div>
+        <div class="playlist-card-copy"><h2>{{ playlist.name }}</h2><p>{{ playlist.tracks.length }} {{ playlist.tracks.length === 1 ? 'track' : 'tracks' }}</p></div>
+      </a>
     }
   </div>
 </section>

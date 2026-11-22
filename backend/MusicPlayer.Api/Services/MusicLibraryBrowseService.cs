@@ -34,6 +34,29 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         (await AvailableTracks().Where(track => ids.Contains(track.Id))
             .Select(track => track.Id).ToArrayAsync(cancellationToken)).ToHashSet();
 
+    public async Task<IReadOnlyList<TrackResponse>> GetRandomTracksAsync(
+        bool albums, int count, CancellationToken cancellationToken)
+    {
+        if (!albums)
+        {
+            var tracks = await AvailableTracks().OrderBy(_ => EF.Functions.Random())
+                .Take(count).ToListAsync(cancellationToken);
+            return await ToTrackResponsesAsync(tracks, cancellationToken);
+        }
+
+        var albumsToPlay = await AvailableTracks()
+            .Select(track => new
+            {
+                Artist = EF.Functions.Collate((track.AlbumArtist.Trim() == "" ? track.Artist : track.AlbumArtist).Trim(), "NOCASE"),
+                Album = EF.Functions.Collate(track.Album.Trim(), "NOCASE"),
+            })
+            .Distinct().OrderBy(_ => EF.Functions.Random()).Take(count).ToListAsync(cancellationToken);
+        var result = new List<TrackResponse>();
+        foreach (var album in albumsToPlay)
+            result.AddRange(await GetAlbumTracksAsync(album.Artist, album.Album, cancellationToken));
+        return result;
+    }
+
     public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(
         string? query,
         CancellationToken cancellationToken,

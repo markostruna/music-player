@@ -626,6 +626,8 @@ export class DemoBackend {
   private tracks = this.createTracks();
   private operation: LibraryOperationStatus | null = null;
   private defaultProvider = 'demo';
+  private playlists: { id: number; name: string; trackIds: number[] }[] = [];
+  private nextPlaylistId = 1;
 
   handle(request: HttpRequest<unknown>): unknown {
     const url = new URL(request.urlWithParams, this.document.baseURI);
@@ -651,6 +653,51 @@ export class DemoBackend {
     if (path === '/auth/theme' && method === 'PUT') {
       this.user = { ...this.user, theme: body.theme };
       return this.user;
+    }
+    if (path.startsWith('/playlists/random/') && method === 'GET') {
+      const kind = path.slice('/playlists/random/'.length);
+      const shuffled = <T>(items: T[]): T[] => {
+        const result = [...items];
+        for (let i = result.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [result[i], result[j]] = [result[j], result[i]];
+        }
+        return result;
+      };
+      if (kind === 'random-tracks' || kind === 'track-radio')
+        return shuffled(this.tracks).slice(0, kind === 'random-tracks' ? 100 : 1);
+      if (kind === 'random-albums' || kind === 'album-radio') {
+        const keys = [...new Set(this.tracks.map((track) => `${track.albumArtist}\0${track.album}`))];
+        return shuffled(keys).slice(0, kind === 'random-albums' ? 10 : 1)
+          .flatMap((key) => this.tracks.filter((track) => `${track.albumArtist}\0${track.album}` === key));
+      }
+      throw this.error(404, 'Playlist not found.');
+    }
+    const playlistResponse = (item: { id: number; name: string; trackIds: number[] }) => ({
+      id: item.id, name: item.name,
+      tracks: item.trackIds.flatMap((id) => this.tracks.filter((track) => track.id === id)),
+      unavailableTrackCount: 0,
+    });
+    if (path === '/playlists' && method === 'GET') return this.playlists.map(playlistResponse);
+    if (path === '/playlists' && method === 'POST') {
+      const playlist = { id: this.nextPlaylistId++, name: body.name, trackIds: [...body.trackIds] };
+      this.playlists.push(playlist);
+      return playlistResponse(playlist);
+    }
+    const playlistMatch = /^\/playlists\/(\d+)$/.exec(path);
+    if (playlistMatch) {
+      const playlist = this.playlists.find((item) => item.id === Number(playlistMatch[1]));
+      if (!playlist) throw this.error(404, 'Playlist not found.');
+      if (method === 'GET') return playlistResponse(playlist);
+      if (method === 'PUT') {
+        playlist.name = body.name;
+        playlist.trackIds = [...body.trackIds];
+        return playlistResponse(playlist);
+      }
+      if (method === 'DELETE') {
+        this.playlists = this.playlists.filter((item) => item.id !== playlist.id);
+        return null;
+      }
     }
     if (path === '/library/tracks' && method === 'GET') return this.tracks;
     if (path === '/library/tracks/search' && method === 'GET') return this.filteredTracks(url);

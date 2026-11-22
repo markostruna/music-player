@@ -215,6 +215,12 @@ export class MusicLibraryApi {
     ).then((tracks) => this.mapTracks(tracks));
   }
 
+  randomPlaylist(kind: 'random-albums' | 'album-radio' | 'random-tracks' | 'track-radio'): Promise<MusicTrack[]> {
+    return firstValueFrom(
+      this.http.get<MusicTrackResponse[]>(`${MUSIC_API_BASE}/playlists/random/${kind}`, { withCredentials: true }),
+    ).then((tracks) => this.mapTracks(tracks));
+  }
+
   searchTracks(query: string, folderScope?: TrackFolderScope | null): Promise<MusicTrack[]> {
     const params = new URLSearchParams({ query });
     if (folderScope) {

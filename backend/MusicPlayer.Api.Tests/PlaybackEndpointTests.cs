@@ -37,6 +37,7 @@ public sealed class PlaybackEndpointTests
         builder.Services.AddScoped<CsrfEndpointFilter>();
         builder.Services.AddScoped<MusicLibraryBrowseService>();
         builder.Services.AddScoped<IPlaybackStatisticsService, PlaybackStatisticsService>();
+        builder.Services.AddScoped<IPlaylistService, PlaylistService>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<PlaybackCoordinator>();
         await using var app = builder.Build();
@@ -45,6 +46,7 @@ public sealed class PlaybackEndpointTests
         app.MapGet("/test/csrf", (HttpContext context, IAntiforgery antiforgery) =>
             Results.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken }));
         app.MapPlaybackEndpoints();
+        app.MapPlaylistEndpoints();
         await using (var scope = app.Services.CreateAsyncScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<MusicDbContext>();
@@ -65,12 +67,20 @@ public sealed class PlaybackEndpointTests
         using var anonymous = CreateClient(address);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playback/history")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playback/statistics")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playlists")).StatusCode);
 
         using var first = CreateClient(address, "1");
         var session = Guid.NewGuid().ToString();
         var poll = new PlaybackPollRequest(session, "Browser", -1, 0, false, false);
         Assert.Equal(HttpStatusCode.BadRequest, (await first.PostAsJsonAsync("/api/playback/poll", poll)).StatusCode);
+        var playlistRequest = new UpdatePlaylistRequest { Name = "Mix", TrackIds = [1] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await first.PostAsJsonAsync("/api/playlists", playlistRequest)).StatusCode);
         await AddCsrfAsync(first);
+        var created = await first.PostAsJsonAsync("/api/playlists", playlistRequest);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var playlist = await created.Content.ReadFromJsonAsync<PlaylistResponse>();
+        Assert.NotNull(created.Headers.Location);
+        Assert.Equal(1, Assert.Single(playlist!.Tracks).Id);
         var initial = await ReadAsync(await first.PostAsJsonAsync("/api/playback/poll", poll));
         var command = new PlaybackCommandRequest(session, initial.Revision, "play", [1], 0, null, null);
         var playing = await ReadAsync(await first.PostAsJsonAsync("/api/playback/command", command));
@@ -80,6 +90,10 @@ public sealed class PlaybackEndpointTests
 
         using var second = CreateClient(address, "2");
         await AddCsrfAsync(second);
+        Assert.Equal(HttpStatusCode.NotFound, (await second.GetAsync($"/api/playlists/{playlist.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await second.DeleteAsync($"/api/playlists/{playlist.Id}")).StatusCode);
+        var random = await first.GetFromJsonAsync<TrackResponse[]>("/api/playlists/random/random-tracks");
+        Assert.Single(random!);
         var other = await ReadAsync(await second.PostAsJsonAsync("/api/playback/poll",
             new PlaybackPollRequest(Guid.NewGuid().ToString(), "Other", -1, 0, false, false)));
         Assert.Empty(other.Queue!);

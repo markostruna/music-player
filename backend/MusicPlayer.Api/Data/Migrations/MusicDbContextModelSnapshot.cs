@@ -133,6 +133,51 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.ToTable("Folders");
                 });
 
+            modelBuilder.Entity("MusicPlayer.Api.Data.MusicPlaylist", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Playlists");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.MusicPlaylistTrack", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PlaylistId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrackId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrackId");
+
+                    b.HasIndex("PlaylistId", "Position");
+
+                    b.ToTable("PlaylistTracks");
+                });
+
             modelBuilder.Entity("MusicPlayer.Api.Data.MusicSourceRoot", b =>
                 {
                     b.Property<int>("Id")
@@ -349,6 +394,9 @@ namespace MusicPlayer.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RadioMode")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Repeat")
                         .HasColumnType("INTEGER");
 
@@ -390,6 +438,36 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.Navigation("SourceRoot");
                 });
 
+            modelBuilder.Entity("MusicPlayer.Api.Data.MusicPlaylist", b =>
+                {
+                    b.HasOne("MusicPlayer.Api.Data.MusicUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.MusicPlaylistTrack", b =>
+                {
+                    b.HasOne("MusicPlayer.Api.Data.MusicPlaylist", "Playlist")
+                        .WithMany("Tracks")
+                        .HasForeignKey("PlaylistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MusicPlayer.Api.Data.MusicTrack", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Playlist");
+
+                    b.Navigation("Track");
+                });
+
             modelBuilder.Entity("MusicPlayer.Api.Data.MusicTrack", b =>
                 {
                     b.HasOne("MusicPlayer.Api.Data.MusicFolder", "Folder")
@@ -429,6 +507,11 @@ namespace MusicPlayer.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.MusicPlaylist", b =>
+                {
+                    b.Navigation("Tracks");
                 });
 
             modelBuilder.Entity("MusicPlayer.Api.Data.MusicSourceRoot", b =>

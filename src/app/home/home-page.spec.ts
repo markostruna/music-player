@@ -6,9 +6,40 @@ import { LibraryStore } from '@shared/services/library-store';
 import { AlbumSummary, LibraryOperationStatus, MusicLibraryApi } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { PlaybackSyncApi } from '@shared/services/playback-sync-api';
+import { PlaylistService } from '@shared/services/playlist.service';
 import { HomePage } from './home-page';
 
 describe('HomePage recently added albums', () => {
+  it('shows all four fixed playlists and at most eight personal playlists', async () => {
+    const playlists = signal(Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1, name: `List ${index + 1}`, tracks: [], unavailableTrackCount: 0,
+    })));
+    TestBed.configureTestingModule({
+      imports: [HomePage],
+      providers: [
+        provideRouter([]),
+        { provide: LibraryStore, useValue: { collectionView: signal('albums') } },
+        { provide: PlayerService, useValue: {} },
+        { provide: PlaylistService, useValue: { playlists, load: async () => {} } },
+        { provide: PlaybackSyncApi, useValue: { statistics: async () => ({ recentlyPlayed: [], continueListening: [] }) } },
+        { provide: LibraryOperationTracker, useValue: { operation: signal(null) } },
+        { provide: MusicLibraryApi, useValue: {
+          listRecentAlbums: async () => [], listAlbumPage: async () => ({ items: [] }),
+          listArtistPage: async () => ({ items: [] }), listTrackPage: async () => ({ items: [] }),
+        } },
+      ],
+    });
+    const fixture = TestBed.createComponent(HomePage);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const section = fixture.nativeElement.querySelector('[aria-labelledby="home-playlists-heading"]') as HTMLElement;
+    expect(section.querySelectorAll('.home-playlist')).toHaveLength(12);
+    expect(section.textContent).toContain('Album radio');
+    expect(section.textContent).toContain('Track radio');
+    expect(section.textContent).toContain('List 8');
+    expect(section.textContent).not.toContain('List 9');
+  });
+
   it('renders the seven returned albums and refreshes after a library operation', async () => {
     const albums: AlbumSummary[] = Array.from({ length: 7 }, (_, index) => ({
       album: `Album ${index}`,
@@ -29,6 +60,7 @@ describe('HomePage recently added albums', () => {
         provideRouter([]),
         { provide: LibraryStore, useValue: { collectionView: signal('albums') } },
         { provide: PlayerService, useValue: {} },
+        { provide: PlaylistService, useValue: { playlists: signal([]), load: async () => {} } },
         { provide: PlaybackSyncApi, useValue: { statistics: async () => ({ recentlyPlayed: [], continueListening: [] }) } },
         { provide: LibraryOperationTracker, useValue: { operation } },
         {
@@ -76,6 +108,7 @@ describe('HomePage recently added albums', () => {
         provideRouter([]),
         { provide: LibraryStore, useValue: { collectionView: signal('albums') } },
         { provide: PlayerService, useValue: { play } },
+        { provide: PlaylistService, useValue: { playlists: signal([]), load: async () => {} } },
         { provide: LibraryOperationTracker, useValue: { operation: signal(null) } },
         { provide: PlaybackSyncApi, useValue: { statistics: async () => ({ recentlyPlayed: [completed], continueListening: [item] }) } },
         { provide: MusicLibraryApi, useValue: {

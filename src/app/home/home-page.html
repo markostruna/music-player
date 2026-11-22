@@ -21,6 +21,26 @@
     </div>
   </section>
 
+  <section class="home-category" aria-labelledby="home-playlists-heading">
+    <div class="home-category-heading">
+      <div><span class="eyebrow">YOUR COLLECTION</span><h2 id="home-playlists-heading">Playlists</h2></div>
+      <a class="see-all" routerLink="/playlists">See all</a>
+    </div>
+    @if (playlistsError()) { <p class="empty-state" role="alert">{{ playlistsError() }}</p> }
+    <div class="home-playlist-grid">
+      @for (playlist of builtInPlaylists; track playlist.id) {
+        <a class="home-playlist" [routerLink]="['/playlists', playlist.id]">
+          <strong>{{ playlist.name }}</strong><small>{{ playlist.description }}</small>
+        </a>
+      }
+      @for (playlist of playlists().slice(0, 8); track playlist.id) {
+        <a class="home-playlist" [routerLink]="['/playlists', playlist.id]">
+          <strong>{{ playlist.name }}</strong><small>{{ playlist.tracks.length }} {{ playlist.tracks.length === 1 ? 'track' : 'tracks' }}</small>
+        </a>
+      }
+    </div>
+  </section>
+
   @if (!demoMode) {
     @if (statisticsError()) {
       <p class="empty-state" role="alert">{{ statisticsError() }}</p>

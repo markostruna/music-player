@@ -14,6 +14,7 @@ import { PlayerService } from '@shared/services/player.service';
 import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 import { PlaybackSyncApi } from '@shared/services/playback-sync-api';
 import { DEMO_MODE } from '@shared/utils/api-path';
+import { BUILT_IN_PLAYLISTS, PlaylistService } from '@shared/services/playlist.service';
 
 const HOME_COLLECTION_SIZE = 6;
 
@@ -35,12 +36,16 @@ export class HomePage implements OnInit {
   private readonly player = inject(PlayerService);
   private readonly operations = inject(LibraryOperationTracker);
   private readonly playback = inject(PlaybackSyncApi);
+  private readonly playlistService = inject(PlaylistService);
   private readonly destroyRef = inject(DestroyRef);
   private statisticsPending = false;
   readonly albumActions = inject(AlbumActions);
   private lastChangeCount = this.albumActions.changeCount();
 
   readonly albums = signal<AlbumSummary[]>([]);
+  readonly builtInPlaylists = BUILT_IN_PLAYLISTS;
+  readonly playlists = this.playlistService.playlists;
+  readonly playlistsError = signal('');
   readonly recentAlbums = signal<AlbumSummary[]>([]);
   readonly artists = signal<ArtistSummary[]>([]);
   readonly tracks = signal<MusicTrack[]>([]);
@@ -76,6 +81,7 @@ export class HomePage implements OnInit {
 
   ngOnInit(): void {
     void this.loadHomeCollections();
+    void this.playlistService.load().catch(() => this.playlistsError.set('Playlists could not be loaded.'));
     if (!DEMO_MODE) {
       void this.loadStatistics();
       const timer = setInterval(() => void this.loadStatistics(), 10000);

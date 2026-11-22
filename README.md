@@ -90,6 +90,12 @@ The home page shows up to seven **Added recently** albums. Album and artist impo
 
 Use the Admin page to create Guest accounts. Guests can play music and choose their own theme; only administrators can change the library or accounts.
 
+## Playlists
+
+Playlists belong to the signed-in account. Create and rename them on **Playlists**, add tracks from the library's Tracks view, and reorder or remove tracks on the playlist page. Home shows the first eight personal playlists and four fixed selections. Unavailable tracks are hidden but retained in their playlists until available again; database cleanup can permanently remove deleted catalog entries.
+
+**Random albums** queues up to ten complete albums; **Random tracks** queues up to 100 tracks. **Album radio** replaces its queue with another album at the end of each album, while **Track radio** selects one track at a time until stopped. Selections use the available library, so a smaller library produces a smaller queue. Radio follows synchronized playback between devices; with synchronization disabled it runs in the current browser. The demo keeps playlist edits in memory until reload.
+
 ## Playback Synchronization
 
 Playback synchronization is enabled by default. The API saves each account's queue, current track, position, shuffle and repeat settings, and a history entry with the last position for every played track. History is retained in the SQLite database and can be retrieved by the signed-in user from `GET /api/playback/history?page=1&pageSize=50`.

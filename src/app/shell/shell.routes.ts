@@ -29,6 +29,11 @@ export const shellRoutes: Routes = [
           ),
       },
       {
+        path: 'playlists/:id',
+        loadComponent: () =>
+          import('./playlists-page/playlist-detail').then((module) => module.PlaylistDetail),
+      },
+      {
         path: 'playlists',
         loadComponent: () =>
           import('./playlists-page/playlists-page').then((module) => module.PlaylistsPage),

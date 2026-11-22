@@ -1,0 +1,30 @@
+<section class="playlists-page">
+  <a routerLink="/playlists">All playlists</a>
+  @if (error()) { <p class="settings-error" role="alert">{{ error() }}</p> }
+  @if (builtIn; as item) {
+    <header class="playlists-intro"><h1>{{ item.name }}</h1><p>{{ item.description }}</p></header>
+    <button class="settings-action" type="button" [disabled]="busy()" (click)="playBuiltIn(item.id)">Play</button>
+  } @else if (playlist(); as item) {
+    <header class="playlists-intro"><h1>{{ item.name }}</h1><p>{{ item.tracks.length }} {{ item.tracks.length === 1 ? 'track' : 'tracks' }}</p></header>
+    @if (item.unavailableTrackCount) {
+      <p role="status">{{ item.unavailableTrackCount }} unavailable tracks are hidden and will be kept in the playlist.</p>
+    }
+    <form class="playlist-create" (ngSubmit)="save()">
+      <label for="rename-playlist">Playlist name</label>
+      <input id="rename-playlist" name="name" [(ngModel)]="name" maxlength="200" required />
+      <button class="settings-action" type="submit" [disabled]="busy() || !name.trim()">Rename</button>
+      <button type="button" [disabled]="busy() || !item.tracks.length" (click)="play()">Play</button>
+      <button type="button" [disabled]="busy()" (click)="delete()">Delete playlist</button>
+    </form>
+    <ol>
+      @for (track of item.tracks; track $index; let index = $index) {
+        <li>
+          <strong>{{ track.title }}</strong> — {{ track.artist }}
+          <button type="button" [disabled]="busy() || index === 0" (click)="move(index, -1)" [attr.aria-label]="'Move ' + track.title + ' up'">↑</button>
+          <button type="button" [disabled]="busy() || index === item.tracks.length - 1" (click)="move(index, 1)" [attr.aria-label]="'Move ' + track.title + ' down'">↓</button>
+          <button type="button" [disabled]="busy()" (click)="remove(index)" [attr.aria-label]="'Remove ' + track.title">Remove</button>
+        </li>
+      } @empty { <li>Add tracks from your library.</li> }
+    </ol>
+  }
+</section>
