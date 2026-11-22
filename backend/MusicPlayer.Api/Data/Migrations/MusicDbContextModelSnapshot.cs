@@ -289,6 +289,75 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("MusicPlayer.Api.Data.PlaybackHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PlayId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("PositionSeconds")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("StartedAtUnixMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrackId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAtUnixMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "PlayId")
+                        .IsUnique();
+
+                    b.ToTable("PlaybackHistory");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.PlaybackState", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CurrentIndex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPlaying")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PlayId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("PositionSeconds")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("QueueJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Repeat")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Shuffle")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("PlaybackStates");
+                });
+
             modelBuilder.Entity("MusicPlayer.Api.Data.ProviderCredential", b =>
                 {
                     b.Property<string>("Key")
@@ -333,6 +402,28 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.Navigation("Folder");
 
                     b.Navigation("SourceRoot");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.PlaybackHistory", b =>
+                {
+                    b.HasOne("MusicPlayer.Api.Data.MusicUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.PlaybackState", b =>
+                {
+                    b.HasOne("MusicPlayer.Api.Data.MusicUser", "User")
+                        .WithOne()
+                        .HasForeignKey("MusicPlayer.Api.Data.PlaybackState", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MusicPlayer.Api.Data.MusicSourceRoot", b =>

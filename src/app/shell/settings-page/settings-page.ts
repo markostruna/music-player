@@ -4,6 +4,8 @@ import { RouterLink } from '@angular/router';
 import { AuthState, ThemeName } from '@shared/services/auth-state';
 import { AlbumIdentifyApi, IdentifyProvider } from '@shared/services/album-identify-api';
 import { ProviderSettingsApi } from '@shared/services/provider-settings-api';
+import { PlayerService } from '@shared/services/player.service';
+import { DEMO_MODE } from '@shared/utils/api-path';
 
 @Component({
   selector: 'app-settings-page',
@@ -15,12 +17,15 @@ export class SettingsPage implements OnInit {
   private readonly auth = inject(AuthState);
   private readonly identifyApi = inject(AlbumIdentifyApi);
   private readonly providerSettingsApi = inject(ProviderSettingsApi);
+  readonly player = inject(PlayerService);
+  readonly demoMode = DEMO_MODE;
   readonly user = this.auth.user;
   readonly isAdmin = this.auth.isAdmin;
   readonly themeOptions: ThemeName[] = ['Light', 'Dark', 'Blue'];
   readonly providers = signal<IdentifyProvider[]>([]);
   readonly defaultProviderId = signal('');
   readonly isSavingDefaultProvider = signal(false);
+  readonly isSavingPlaybackSync = signal(false);
   readonly errorMessage = signal('');
   readonly statusMessage = signal('');
 
@@ -34,6 +39,18 @@ export class SettingsPage implements OnInit {
       this.errorMessage.set('');
     } catch {
       this.errorMessage.set('The theme preference could not be saved.');
+    }
+  }
+
+  async changePlaybackSync(event: Event): Promise<void> {
+    this.isSavingPlaybackSync.set(true);
+    try {
+      await this.player.setSyncEnabled((event.target as HTMLInputElement).checked);
+      this.errorMessage.set('');
+    } catch {
+      this.errorMessage.set('The playback synchronization setting could not be saved.');
+    } finally {
+      this.isSavingPlaybackSync.set(false);
     }
   }
 

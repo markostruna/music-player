@@ -203,9 +203,12 @@ export class MusicShell {
   }
 
   async signOut(): Promise<void> {
-    this.player.stop();
-    this.library.clear();
-    await this.auth.signOut();
-    void this.router.navigateByUrl('/login');
+    try {
+      await this.player.disconnect();
+    } finally {
+      this.library.clear();
+      await this.auth.signOut();
+      void this.router.navigateByUrl('/login');
+    }
   }
 }

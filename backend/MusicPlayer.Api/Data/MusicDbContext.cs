@@ -11,10 +11,18 @@ public sealed class MusicDbContext(DbContextOptions<MusicDbContext> options) : D
     public DbSet<MusicArtistMetadata> ArtistMetadata => Set<MusicArtistMetadata>();
     public DbSet<MusicAlbumMetadata> AlbumMetadata => Set<MusicAlbumMetadata>();
     public DbSet<ProviderCredential> ProviderCredentials => Set<ProviderCredential>();
+    public DbSet<PlaybackState> PlaybackStates => Set<PlaybackState>();
+    public DbSet<PlaybackHistory> PlaybackHistory => Set<PlaybackHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<MusicUser>().HasIndex(user => user.NormalizedEmail).IsUnique();
+        modelBuilder.Entity<PlaybackState>().HasKey(state => state.UserId);
+        modelBuilder.Entity<PlaybackState>().HasOne(state => state.User).WithOne()
+            .HasForeignKey<PlaybackState>(state => state.UserId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<PlaybackHistory>().HasIndex(history => new { history.UserId, history.PlayId }).IsUnique();
+        modelBuilder.Entity<PlaybackHistory>().HasOne(history => history.User).WithMany()
+            .HasForeignKey(history => history.UserId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<ProviderCredential>().HasKey(credential => credential.Key);
         modelBuilder.Entity<MusicUser>().Property(user => user.Role).HasConversion<string>();
         modelBuilder.Entity<MusicUser>().Property(user => user.Theme).HasConversion<string>();

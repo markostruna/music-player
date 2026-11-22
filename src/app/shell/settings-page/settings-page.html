@@ -20,8 +20,32 @@
     </label>
   </section>
 
+  @if (!demoMode) {
+    <section class="settings-card" aria-labelledby="playback-sync-title">
+      <div>
+        <h2 id="playback-sync-title">Playback synchronization</h2>
+        <p>
+          Share the queue and control playback across your signed-in devices. Turn off to play
+          independently in this browser.
+        </p>
+      </div>
+      <label class="settings-theme-picker">
+        <span>Synchronize this browser</span>
+        <input
+          type="checkbox"
+          [checked]="player.syncEnabled()"
+          [disabled]="isSavingPlaybackSync()"
+          (change)="changePlaybackSync($event)"
+        />
+      </label>
+    </section>
+  }
+
   @if (errorMessage()) {
     <p class="settings-error" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (player.errorMessage()) {
+    <p class="settings-error" role="alert">{{ player.errorMessage() }}</p>
   }
   @if (statusMessage()) {
     <p class="settings-status" role="status">{{ statusMessage() }}</p>

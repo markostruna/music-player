@@ -75,6 +75,7 @@ public sealed class DatabaseMigrationTests
             .Options;
         await using var database = new MusicDbContext(options);
         await database.Database.EnsureCreatedAsync();
+        await database.Database.ExecuteSqlRawAsync("DROP TABLE PlaybackHistory; DROP TABLE PlaybackStates;");
         await database.Database.ExecuteSqlRawAsync(
             """ALTER TABLE "Tracks" DROP COLUMN "ImportedAtUnixMilliseconds" """);
         await database.Database.ExecuteSqlRawAsync(

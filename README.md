@@ -88,6 +88,16 @@ The home page shows up to seven **Added recently** albums. Album and artist impo
 
 Use the Admin page to create Guest accounts. Guests can play music and choose their own theme; only administrators can change the library or accounts.
 
+## Playback Synchronization
+
+Playback synchronization is enabled by default. The API saves each account's queue, current track, position, shuffle and repeat settings, and a history entry with the last position for every played track. History is retained in the SQLite database and can be retrieved by the signed-in user from `GET /api/playback/history?page=1&pageSize=50`.
+
+Signed-in browsers share transport controls and the queue. The **Now playing** page shows the current playback device and lets you select another one or choose **Play on this device**. The previous device stops before a requested handoff. If the playback device disconnects, another connected device takes over after its connection lease expires (up to about 15 seconds). Device availability is held in the API process, so synchronization requires a single running API instance.
+
+The **Playback synchronization** setting applies to this account in the current browser, including its tabs. When disabled, the browser plays independently and does not send its playback or history to the server. Re-enabling synchronization replaces its local queue with the saved shared queue. The demo always plays locally.
+
+Playback position is checkpointed approximately every two seconds and when leaving the page; an abrupt termination or connection failure can lose the latest progress. Browsers may block automatic audio after a handoff or reload. If that happens, use **Play** on the selected device to resume.
+
 The development proxy sends `/music-api` requests to the local API at `http://127.0.0.1:5080` and removes the prefix. Do not put a public server address or credentials in the checked-in proxy configuration.
 
 ## Tests And Build

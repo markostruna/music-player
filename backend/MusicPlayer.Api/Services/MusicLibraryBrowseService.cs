@@ -20,6 +20,20 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
     public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(CancellationToken cancellationToken)
         => await GetTracksAsync(null, cancellationToken);
 
+    public async Task<IReadOnlyList<TrackResponse>> GetTracksByIdsAsync(
+        IReadOnlyList<int> ids, CancellationToken cancellationToken)
+    {
+        var tracks = await AvailableTracks().Where(track => ids.Contains(track.Id)).ToListAsync(cancellationToken);
+        var responses = await ToTrackResponsesAsync(tracks, cancellationToken);
+        var byId = responses.ToDictionary(track => track.Id);
+        return ids.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();
+    }
+
+    public async Task<HashSet<int>> GetAvailableTrackIdsAsync(
+        IReadOnlyList<int> ids, CancellationToken cancellationToken) =>
+        (await AvailableTracks().Where(track => ids.Contains(track.Id))
+            .Select(track => track.Id).ToArrayAsync(cancellationToken)).ToHashSet();
+
     public async Task<IReadOnlyList<TrackResponse>> GetTracksAsync(
         string? query,
         CancellationToken cancellationToken,

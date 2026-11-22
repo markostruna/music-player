@@ -29,6 +29,8 @@ builder.Services.AddDataProtection()
 builder.Services.AddScoped<IProviderSettingsService, ProviderSettingsService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<MusicLibraryBrowseService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<PlaybackCoordinator>();
 builder.Services.AddScoped<IUnscannedFolderService, UnscannedFolderService>();
 builder.Services.AddSingleton<ImageWebpService>();
 builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
@@ -147,6 +149,7 @@ app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" }))
     .WithSummary("Checks whether the music API is available.");
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapPlaybackEndpoints();
 app.MapProviderSettingsEndpoints();
 app.MapLibraryEndpoints();
 app.MapIdentifyEndpoints();

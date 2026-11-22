@@ -41,7 +41,7 @@ export interface PagedTracks {
   pageSize: number;
 }
 
-type MusicTrackResponse = Omit<MusicTrack, 'tileCoverUrl' | 'albumCoverUrl'>;
+export type MusicTrackResponse = Omit<MusicTrack, 'tileCoverUrl' | 'albumCoverUrl'>;
 type PagedTrackResponse = Omit<PagedTracks, 'items'> & { items: MusicTrackResponse[] };
 
 export interface AlbumSummary {
@@ -695,7 +695,7 @@ export class MusicLibraryApi {
     return btoa(binary);
   }
 
-  private mapTracks(tracks: MusicTrackResponse[]): MusicTrack[] {
+  mapTracks(tracks: MusicTrackResponse[]): MusicTrack[] {
     return tracks.map((track) => {
       const coverUrl = coverImageUrl(track.coverUrl, 'track');
       return {

@@ -44,6 +44,39 @@
           </div>
         </div>
       </section>
+      @if (player.syncEnabled()) {
+        <section class="now-playing-devices" aria-label="Playback device">
+          <p>
+            Playing on: <strong>{{ player.playingDevice() }}</strong>
+          </p>
+          @if (player.transferPending()) {
+            <p role="status">Transferring playback…</p>
+          }
+          @if (!player.isThisDevice()) {
+            <button
+              type="button"
+              [disabled]="player.transferPending()"
+              (click)="player.playOnThisDevice()"
+            >
+              Play on this device
+            </button>
+          }
+          @if (player.devices().length > 1) {
+            <label>
+              Playback device
+              <select
+                [value]="player.ownerId() ?? ''"
+                [disabled]="player.transferPending()"
+                (change)="player.transferTo($any($event.target).value)"
+              >
+                @for (device of player.devices(); track device.id) {
+                  <option [value]="device.id">{{ device.name }}</option>
+                }
+              </select>
+            </label>
+          }
+        </section>
+      }
       <section class="album-track-section now-playing-queue" aria-labelledby="queue-heading">
         <div
           #queueHeading
@@ -81,6 +114,9 @@
       <p class="now-playing-message">
         Nothing is playing. <a routerLink="/library">Choose something from your library</a>
       </p>
+      @if (player.errorMessage()) {
+        <p class="now-playing-message" role="alert">{{ player.errorMessage() }}</p>
+      }
     }
   </div>
 </div>
