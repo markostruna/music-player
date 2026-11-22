@@ -35,7 +35,7 @@ public sealed class PlaylistService(MusicDbContext database, MusicLibraryBrowseS
     public async Task<PlaylistResponse> CreateAsync(int userId, UpdatePlaylistRequest request, CancellationToken cancellationToken)
     {
         await ValidateAsync(request, cancellationToken);
-        var playlist = new MusicPlaylist { UserId = userId, Name = request.Name.Trim() };
+        var playlist = new MusicPlaylist { UserId = userId, Name = request.Name.Trim(), BackgroundId = request.BackgroundId ?? 1 };
         playlist.Tracks = request.TrackIds.Select((id, index) => new MusicPlaylistTrack { TrackId = id, Position = index }).ToList();
         database.Playlists.Add(playlist);
         await database.SaveChangesAsync(cancellationToken);
@@ -54,6 +54,7 @@ public sealed class PlaylistService(MusicDbContext database, MusicLibraryBrowseS
         foreach (var item in existing.Where(item => !available.Contains(item.TrackId)))
             ids.Insert(Math.Min(item.Position, ids.Count), item.TrackId);
         playlist.Name = request.Name.Trim();
+        if (request.BackgroundId is int backgroundId) playlist.BackgroundId = backgroundId;
         database.PlaylistTracks.RemoveRange(playlist.Tracks);
         playlist.Tracks = ids.Select((trackId, index) => new MusicPlaylistTrack { TrackId = trackId, Position = index }).ToList();
         await database.SaveChangesAsync(cancellationToken);
@@ -72,8 +73,8 @@ public sealed class PlaylistService(MusicDbContext database, MusicLibraryBrowseS
     private async Task ValidateAsync(UpdatePlaylistRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 200 || request.TrackIds is null
-            || request.TrackIds.Any(id => id <= 0))
-            throw new ArgumentException("Invalid playlist name or tracks.");
+            || request.TrackIds.Any(id => id <= 0) || request.BackgroundId is < 1 or > 20)
+            throw new ArgumentException("Invalid playlist name, tracks, or background.");
         var ids = await library.GetAvailableTrackIdsAsync(request.TrackIds, cancellationToken);
         if (request.TrackIds.Any(id => !ids.Contains(id)))
             throw new ArgumentException("The playlist contains unavailable tracks.");
@@ -83,6 +84,6 @@ public sealed class PlaylistService(MusicDbContext database, MusicLibraryBrowseS
     {
         var tracks = await library.GetTracksByIdsAsync(
             playlist.Tracks.OrderBy(item => item.Position).Select(item => item.TrackId).ToArray(), cancellationToken);
-        return new(playlist.Id, playlist.Name, tracks, playlist.Tracks.Count - tracks.Count);
+        return new(playlist.Id, playlist.Name, tracks, playlist.Tracks.Count - tracks.Count, playlist.BackgroundId);
     }
 }

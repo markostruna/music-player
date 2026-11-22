@@ -129,29 +129,64 @@
 }
 
 .playlist-art {
-  display: grid;
   aspect-ratio: 1.7;
-  place-items: center;
-  color: rgb(25 34 30 / 70%);
+  overflow: hidden;
+  background: var(--surface-hover);
 }
 
-.playlist-art span {
-  font-family: 'Manrope', sans-serif;
-  font-size: 54px;
-  font-weight: 800;
-  text-transform: uppercase;
+.playlist-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.playlist-swatch-lime {
-  background: linear-gradient(135deg, #e7f4c2, #c5df75);
+.playlist-detail-art {
+  display: block;
+  width: min(100%, 360px);
+  aspect-ratio: 1.7;
+  margin: 20px 0;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
-.playlist-swatch-peach {
-  background: linear-gradient(135deg, #f2d1c2, #dfa18b);
+.playlist-background-picker {
+  margin: 24px 0;
+  padding: 0;
+  border: 0;
 }
 
-.playlist-swatch-blue {
-  background: linear-gradient(135deg, #d4e6dc, #9ebfb3);
+.playlist-background-picker legend {
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.playlist-background-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 10px;
+}
+
+.playlist-background-option {
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 0;
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.playlist-background-option.selected,
+.playlist-background-option:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.playlist-background-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .playlist-card-copy {

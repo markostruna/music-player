@@ -9,6 +9,7 @@ public sealed class MusicPlaylist
     public MusicUser? User { get; set; }
     [MaxLength(200)]
     public required string Name { get; set; }
+    public int BackgroundId { get; set; } = 1;
     public List<MusicPlaylistTrack> Tracks { get; set; } = [];
 }
 

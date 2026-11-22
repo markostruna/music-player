@@ -26,9 +26,18 @@ public sealed class PlaylistServiceTests
         await database.SaveChangesAsync();
         var service = new PlaylistService(database, new MusicLibraryBrowseService(database));
         var playlist = await service.CreateAsync(1, new UpdatePlaylistRequest { Name = "Original", TrackIds = [1, 2, 1] }, default);
+        Assert.Equal(1, playlist.BackgroundId);
         Assert.Null(await service.GetAsync(2, playlist.Id, default));
+        Assert.Null(await service.UpdateAsync(2, playlist.Id, new UpdatePlaylistRequest { Name = "Other", TrackIds = [], BackgroundId = 20 }, default));
         Assert.False(await service.DeleteAsync(2, playlist.Id, default));
         Assert.Empty(await service.ListAsync(2, default));
+        var artwork = await service.UpdateAsync(1, playlist.Id, new UpdatePlaylistRequest
+        {
+            Name = "Original", TrackIds = [1, 2, 1], BackgroundId = 20,
+        }, default);
+        Assert.Equal(20, artwork!.BackgroundId);
+        await Assert.ThrowsAsync<ArgumentException>(() => service.UpdateAsync(1, playlist.Id,
+            new UpdatePlaylistRequest { Name = "Original", TrackIds = [1], BackgroundId = 21 }, default));
         (await database.Tracks.SingleAsync(track => track.Id == 2)).IsAvailable = false;
         await database.SaveChangesAsync();
         var updated = await service.UpdateAsync(1, playlist.Id, new UpdatePlaylistRequest { Name = "Renamed", TrackIds = [1] }, default);
@@ -37,6 +46,7 @@ public sealed class PlaylistServiceTests
         await database.SaveChangesAsync();
         var restored = await service.GetAsync(1, playlist.Id, default);
         Assert.Equal("Renamed", restored!.Name);
+        Assert.Equal(20, restored.BackgroundId);
         Assert.Equal([1, 2], restored.Tracks.Select(track => track.Id));
         Assert.True(await service.DeleteAsync(1, playlist.Id, default));
     }

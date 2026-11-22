@@ -10,6 +10,7 @@ export interface Playlist {
   name: string;
   tracks: MusicTrack[];
   unavailableTrackCount: number;
+  backgroundId: number;
 }
 
 interface PlaylistResponse {
@@ -17,13 +18,31 @@ interface PlaylistResponse {
   name: string;
   tracks: MusicTrackResponse[];
   unavailableTrackCount: number;
+  backgroundId: number;
+}
+
+const BACKGROUND_NAMES = [
+  'Moonlit coast', 'Mountain sunrise', 'Neon rain', 'Forest light', 'Desert sunset',
+  'Nebula', 'Ocean waves', 'Record player', 'Pink headphones', 'Snowy mountains',
+  'Tropical leaves', 'Golden field', 'Crimson waves', 'Teal prisms', 'Campfire',
+  'Pastel clouds', 'City skyline', 'Misty lake', 'Disco ball', 'Northern lights',
+];
+
+export const PLAYLIST_BACKGROUNDS = BACKGROUND_NAMES.map((name, index) => ({
+  id: index + 1,
+  name,
+  url: playlistBackgroundUrl(index + 1),
+}));
+
+export function playlistBackgroundUrl(id: number): string {
+  return `media/playlists/background-${String(id).padStart(2, '0')}.webp`;
 }
 
 export const BUILT_IN_PLAYLISTS = [
-  { id: 'random-albums', name: 'Random albums', description: 'Queue up to 10 random albums.' },
-  { id: 'album-radio', name: 'Album radio', description: 'Keep playing random albums.' },
-  { id: 'random-tracks', name: 'Random tracks', description: 'Queue up to 100 random tracks.' },
-  { id: 'track-radio', name: 'Track radio', description: 'Keep playing random tracks.' },
+  { id: 'random-albums', name: 'Random albums', description: 'Queue up to 10 random albums.', backgroundUrl: 'media/playlists/random-albums.webp' },
+  { id: 'album-radio', name: 'Album radio', description: 'Keep playing random albums.', backgroundUrl: 'media/playlists/album-radio.webp' },
+  { id: 'random-tracks', name: 'Random tracks', description: 'Queue up to 100 random tracks.', backgroundUrl: 'media/playlists/random-tracks.webp' },
+  { id: 'track-radio', name: 'Track radio', description: 'Keep playing random tracks.', backgroundUrl: 'media/playlists/track-radio.webp' },
 ] as const;
 
 export type BuiltInPlaylistId = (typeof BUILT_IN_PLAYLISTS)[number]['id'];
@@ -71,7 +90,7 @@ export class PlaylistService {
     const token = await this.auth.getCsrfToken();
     const response = await firstValueFrom(this.http.put<PlaylistResponse>(
       `${MUSIC_API_BASE}/playlists/${playlist.id}`,
-      { name: playlist.name, trackIds: playlist.tracks.map((track) => track.id) },
+      { name: playlist.name, trackIds: playlist.tracks.map((track) => track.id), backgroundId: playlist.backgroundId },
       { headers: { 'X-CSRF-TOKEN': token }, withCredentials: true },
     ));
     const updated = this.map(response);

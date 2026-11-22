@@ -29,6 +29,7 @@ interface DemoBody {
   path: string;
   isEnabled: boolean;
   trackIds: number[];
+  backgroundId?: number;
   changes: MetadataPatch;
   image: string;
   artist: string;
@@ -626,7 +627,7 @@ export class DemoBackend {
   private tracks = this.createTracks();
   private operation: LibraryOperationStatus | null = null;
   private defaultProvider = 'demo';
-  private playlists: { id: number; name: string; trackIds: number[] }[] = [];
+  private playlists: { id: number; name: string; trackIds: number[]; backgroundId: number }[] = [];
   private nextPlaylistId = 1;
 
   handle(request: HttpRequest<unknown>): unknown {
@@ -673,14 +674,16 @@ export class DemoBackend {
       }
       throw this.error(404, 'Playlist not found.');
     }
-    const playlistResponse = (item: { id: number; name: string; trackIds: number[] }) => ({
-      id: item.id, name: item.name,
+    const playlistResponse = (item: { id: number; name: string; trackIds: number[]; backgroundId: number }) => ({
+      id: item.id, name: item.name, backgroundId: item.backgroundId,
       tracks: item.trackIds.flatMap((id) => this.tracks.filter((track) => track.id === id)),
       unavailableTrackCount: 0,
     });
     if (path === '/playlists' && method === 'GET') return this.playlists.map(playlistResponse);
     if (path === '/playlists' && method === 'POST') {
-      const playlist = { id: this.nextPlaylistId++, name: body.name, trackIds: [...body.trackIds] };
+      if (body.backgroundId !== undefined && (!Number.isInteger(body.backgroundId) || body.backgroundId < 1 || body.backgroundId > 20))
+        throw this.error(400, 'Invalid playlist background.');
+      const playlist = { id: this.nextPlaylistId++, name: body.name, trackIds: [...body.trackIds], backgroundId: body.backgroundId ?? 1 };
       this.playlists.push(playlist);
       return playlistResponse(playlist);
     }
@@ -690,8 +693,11 @@ export class DemoBackend {
       if (!playlist) throw this.error(404, 'Playlist not found.');
       if (method === 'GET') return playlistResponse(playlist);
       if (method === 'PUT') {
+        if (body.backgroundId !== undefined && (!Number.isInteger(body.backgroundId) || body.backgroundId < 1 || body.backgroundId > 20))
+          throw this.error(400, 'Invalid playlist background.');
         playlist.name = body.name;
         playlist.trackIds = [...body.trackIds];
+        if (body.backgroundId !== undefined) playlist.backgroundId = body.backgroundId;
         return playlistResponse(playlist);
       }
       if (method === 'DELETE') {

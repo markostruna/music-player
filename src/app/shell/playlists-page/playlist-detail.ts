@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { BUILT_IN_PLAYLISTS, BuiltInPlaylistId, Playlist, PlaylistService } from '@shared/services/playlist.service';
+import { BUILT_IN_PLAYLISTS, BuiltInPlaylistId, PLAYLIST_BACKGROUNDS, playlistBackgroundUrl, Playlist, PlaylistService } from '@shared/services/playlist.service';
 import { PlayerService } from '@shared/services/player.service';
 
 @Component({
@@ -17,6 +17,8 @@ export class PlaylistDetail implements OnInit {
   private readonly player = inject(PlayerService);
   readonly playlist = signal<Playlist | null>(null);
   readonly builtIn = BUILT_IN_PLAYLISTS.find((item) => item.id === this.route.snapshot.paramMap.get('id'));
+  readonly backgrounds = PLAYLIST_BACKGROUNDS;
+  readonly playlistBackgroundUrl = playlistBackgroundUrl;
   readonly error = signal('');
   readonly busy = signal(false);
   name = '';
@@ -60,6 +62,20 @@ export class PlaylistDetail implements OnInit {
       this.playlist.set(await this.service.update({ ...playlist, name: this.name.trim(), tracks }));
     } catch {
       this.error.set('Playlist could not be saved.');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async chooseBackground(backgroundId: number): Promise<void> {
+    const playlist = this.playlist();
+    if (!playlist || this.busy() || playlist.backgroundId === backgroundId) return;
+    this.busy.set(true);
+    this.error.set('');
+    try {
+      this.playlist.set(await this.service.update({ ...playlist, backgroundId }));
+    } catch {
+      this.error.set('Playlist background could not be saved.');
     } finally {
       this.busy.set(false);
     }

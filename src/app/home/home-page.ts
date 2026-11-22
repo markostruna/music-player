@@ -14,7 +14,7 @@ import { PlayerService } from '@shared/services/player.service';
 import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
 import { PlaybackSyncApi } from '@shared/services/playback-sync-api';
 import { DEMO_MODE } from '@shared/utils/api-path';
-import { BUILT_IN_PLAYLISTS, PlaylistService } from '@shared/services/playlist.service';
+import { BUILT_IN_PLAYLISTS, playlistBackgroundUrl, PlaylistService } from '@shared/services/playlist.service';
 
 const HOME_COLLECTION_SIZE = 6;
 
@@ -44,6 +44,7 @@ export class HomePage implements OnInit {
 
   readonly albums = signal<AlbumSummary[]>([]);
   readonly builtInPlaylists = BUILT_IN_PLAYLISTS;
+  readonly playlistBackgroundUrl = playlistBackgroundUrl;
   readonly playlists = this.playlistService.playlists;
   readonly playlistsError = signal('');
   readonly recentAlbums = signal<AlbumSummary[]>([]);

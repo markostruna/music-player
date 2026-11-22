@@ -23,7 +23,7 @@ PUT {{baseUrl}}/api/playlists/{{id}}
 Content-Type: application/json
 X-CSRF-TOKEN: {{csrf}}
 
-{ "name": "Favourites", "trackIds": [1, 2] }
+{ "name": "Favourites", "trackIds": [1, 2], "backgroundId": 4 }
 
 ### Delete a playlist
 DELETE {{baseUrl}}/api/playlists/{{id}}

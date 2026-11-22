@@ -2,9 +2,11 @@
   <a routerLink="/playlists">All playlists</a>
   @if (error()) { <p class="settings-error" role="alert">{{ error() }}</p> }
   @if (builtIn; as item) {
+    <img class="playlist-detail-art" [src]="item.backgroundUrl" alt="" />
     <header class="playlists-intro"><h1>{{ item.name }}</h1><p>{{ item.description }}</p></header>
     <button class="settings-action" type="button" [disabled]="busy()" (click)="playBuiltIn(item.id)">Play</button>
   } @else if (playlist(); as item) {
+    <img class="playlist-detail-art" [src]="playlistBackgroundUrl(item.backgroundId)" alt="" />
     <header class="playlists-intro"><h1>{{ item.name }}</h1><p>{{ item.tracks.length }} {{ item.tracks.length === 1 ? 'track' : 'tracks' }}</p></header>
     @if (item.unavailableTrackCount) {
       <p role="status">{{ item.unavailableTrackCount }} unavailable tracks are hidden and will be kept in the playlist.</p>
@@ -16,6 +18,20 @@
       <button type="button" [disabled]="busy() || !item.tracks.length" (click)="play()">Play</button>
       <button type="button" [disabled]="busy()" (click)="delete()">Delete playlist</button>
     </form>
+    <fieldset class="playlist-background-picker" [disabled]="busy()">
+      <legend>Choose a background</legend>
+      <div class="playlist-background-grid">
+        @for (background of backgrounds; track background.id) {
+          <button type="button" class="playlist-background-option"
+            [class.selected]="item.backgroundId === background.id"
+            [attr.aria-label]="background.name"
+            [attr.aria-pressed]="item.backgroundId === background.id"
+            (click)="chooseBackground(background.id)">
+            <img [src]="background.url" alt="" loading="lazy" />
+          </button>
+        }
+      </div>
+    </fieldset>
     <ol>
       @for (track of item.tracks; track $index; let index = $index) {
         <li>

@@ -81,6 +81,15 @@ public sealed class PlaybackEndpointTests
         var playlist = await created.Content.ReadFromJsonAsync<PlaylistResponse>();
         Assert.NotNull(created.Headers.Location);
         Assert.Equal(1, Assert.Single(playlist!.Tracks).Id);
+        Assert.Equal(1, playlist.BackgroundId);
+        var artworkResponse = await first.PutAsJsonAsync($"/api/playlists/{playlist.Id}",
+            new UpdatePlaylistRequest { Name = "Mix", TrackIds = [1], BackgroundId = 12 });
+        Assert.Equal(HttpStatusCode.OK, artworkResponse.StatusCode);
+        var savedPlaylist = await first.GetFromJsonAsync<PlaylistResponse>($"/api/playlists/{playlist.Id}");
+        Assert.Equal(12, savedPlaylist!.BackgroundId);
+        var invalidArtwork = await first.PutAsJsonAsync($"/api/playlists/{playlist.Id}",
+            new UpdatePlaylistRequest { Name = "Mix", TrackIds = [1], BackgroundId = 0 });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidArtwork.StatusCode);
         var initial = await ReadAsync(await first.PostAsJsonAsync("/api/playback/poll", poll));
         var command = new PlaybackCommandRequest(session, initial.Revision, "play", [1], 0, null, null);
         var playing = await ReadAsync(await first.PostAsJsonAsync("/api/playback/command", command));

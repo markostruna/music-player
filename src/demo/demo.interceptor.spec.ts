@@ -36,13 +36,19 @@ describe('demo API', () => {
   });
 
   it('supports personal playlists and bounded random selections in memory', async () => {
-    const playlist = await firstValueFrom(http.post<{ id: number; tracks: MusicTrack[] }>(
+    const playlist = await firstValueFrom(http.post<{ id: number; tracks: MusicTrack[]; backgroundId: number }>(
       `${MUSIC_API_BASE}/playlists`, { name: 'Mix', trackIds: [] },
     ));
-    const updated = await firstValueFrom(http.put<{ tracks: MusicTrack[] }>(
-      `${MUSIC_API_BASE}/playlists/${playlist.id}`, { name: 'Mix', trackIds: [2, 1] },
+    expect(playlist.backgroundId).toBe(1);
+    const updated = await firstValueFrom(http.put<{ tracks: MusicTrack[]; backgroundId: number }>(
+      `${MUSIC_API_BASE}/playlists/${playlist.id}`, { name: 'Mix', trackIds: [2, 1], backgroundId: 20 },
     ));
     expect(updated.tracks.map((track) => track.id)).toEqual([2, 1]);
+    expect(updated.backgroundId).toBe(20);
+    const fetched = await firstValueFrom(http.get<{ backgroundId: number }>(`${MUSIC_API_BASE}/playlists/${playlist.id}`));
+    expect(fetched.backgroundId).toBe(20);
+    await expect(firstValueFrom(http.put(`${MUSIC_API_BASE}/playlists/${playlist.id}`,
+      { name: 'Mix', trackIds: [], backgroundId: 21 }))).rejects.toMatchObject({ status: 400 });
     const tracks = await firstValueFrom(http.get<MusicTrack[]>(`${MUSIC_API_BASE}/playlists/random/random-tracks`));
     const albums = await firstValueFrom(http.get<MusicTrack[]>(`${MUSIC_API_BASE}/playlists/random/random-albums`));
     expect(tracks).toHaveLength(100);

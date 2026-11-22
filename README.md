@@ -94,6 +94,8 @@ Use the Admin page to create Guest accounts. Guests can play music and choose th
 
 Playlists belong to the signed-in account. Create and rename them on **Playlists**, add tracks from the library's Tracks view, and reorder or remove tracks on the playlist page. Home shows the first eight personal playlists and four fixed selections. Unavailable tracks are hidden but retained in their playlists until available again; database cleanup can permanently remove deleted catalog entries.
 
+Choose from 20 built-in background pictures on a personal playlist's page. The four fixed playlists use their own artwork and cannot be changed. Background choices are saved with the playlist.
+
 **Random albums** queues up to ten complete albums; **Random tracks** queues up to 100 tracks. **Album radio** replaces its queue with another album at the end of each album, while **Track radio** selects one track at a time until stopped. Selections use the available library, so a smaller library produces a smaller queue. Radio follows synchronized playback between devices; with synchronization disabled it runs in the current browser. The demo keeps playlist edits in memory until reload.
 
 ## Playback Synchronization

@@ -9,6 +9,24 @@ namespace MusicPlayer.Api.Tests;
 public sealed class DatabaseMigrationTests
 {
     [Fact]
+    public async Task PlaylistBackgroundMigrationPreservesExistingPlaylists()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var database = new MusicDbContext(new DbContextOptionsBuilder<MusicDbContext>().UseSqlite(connection).Options);
+        await database.Database.GetService<IMigrator>().MigrateAsync("20261122150000_AddPlaybackCompletion");
+        await database.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "Users" ("Id", "Email", "NormalizedEmail", "PasswordHash", "Role", "Theme", "IsEnabled", "CreatedAt", "SecurityStamp")
+            VALUES (1, 'one', 'ONE', 'test', 'Guest', 'Dark', 1, '2026-01-01', 'stamp');
+            INSERT INTO "Playlists" ("Id", "UserId", "Name") VALUES (1, 1, 'Existing playlist');
+            """);
+        await database.Database.MigrateAsync();
+        var playlist = await database.Playlists.SingleAsync();
+        Assert.Equal("Existing playlist", playlist.Name);
+        Assert.Equal(1, playlist.BackgroundId);
+    }
+
+    [Fact]
     public async Task PlaylistMigrationsApplyWhenLaterHistoryMigrationWasAlreadyApplied()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -20,7 +38,7 @@ public sealed class DatabaseMigrationTests
             DROP TABLE "Playlists";
             ALTER TABLE "PlaybackStates" DROP COLUMN "RadioMode";
             DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" IN
-              ('20261122142127_AddPlaylists', '20261122142204_AddRadioMode');
+              ('20261122142127_AddPlaylists', '20261122142204_AddRadioMode', '20261122160000_AddPlaylistBackground');
             """);
         await database.Database.MigrateAsync();
         Assert.Empty(await database.Playlists.ToListAsync());

@@ -22,6 +22,7 @@ public sealed class MusicDbContext(DbContextOptions<MusicDbContext> options) : D
         modelBuilder.Entity<PlaybackState>().HasKey(state => state.UserId);
         modelBuilder.Entity<MusicPlaylist>().HasOne(playlist => playlist.User).WithMany()
             .HasForeignKey(playlist => playlist.UserId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<MusicPlaylist>().Property(playlist => playlist.BackgroundId).HasDefaultValue(1);
         modelBuilder.Entity<MusicPlaylistTrack>().HasOne(item => item.Playlist).WithMany(playlist => playlist.Tracks)
             .HasForeignKey(item => item.PlaylistId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<MusicPlaylistTrack>().HasOne(item => item.Track).WithMany()

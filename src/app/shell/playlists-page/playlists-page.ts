@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { BUILT_IN_PLAYLISTS, PlaylistService } from '@shared/services/playlist.service';
+import { BUILT_IN_PLAYLISTS, playlistBackgroundUrl, PlaylistService } from '@shared/services/playlist.service';
 
 @Component({
   selector: 'app-playlists-page',
@@ -13,6 +13,7 @@ export class PlaylistsPage implements OnInit {
   private readonly service = inject(PlaylistService);
   private readonly router = inject(Router);
   readonly builtIns = BUILT_IN_PLAYLISTS;
+  readonly playlistBackgroundUrl = playlistBackgroundUrl;
   readonly playlists = this.service.playlists;
   readonly error = signal('');
   readonly busy = signal(false);

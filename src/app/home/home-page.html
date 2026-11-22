@@ -30,11 +30,13 @@
     <div class="home-playlist-grid">
       @for (playlist of builtInPlaylists; track playlist.id) {
         <a class="home-playlist" [routerLink]="['/playlists', playlist.id]">
+          <img [src]="playlist.backgroundUrl" alt="" loading="lazy" />
           <strong>{{ playlist.name }}</strong><small>{{ playlist.description }}</small>
         </a>
       }
       @for (playlist of playlists().slice(0, 8); track playlist.id) {
         <a class="home-playlist" [routerLink]="['/playlists', playlist.id]">
+          <img [src]="playlistBackgroundUrl(playlist.backgroundId)" alt="" loading="lazy" />
           <strong>{{ playlist.name }}</strong><small>{{ playlist.tracks.length }} {{ playlist.tracks.length === 1 ? 'track' : 'tracks' }}</small>
         </a>
       }

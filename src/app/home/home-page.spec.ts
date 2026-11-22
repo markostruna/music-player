@@ -12,7 +12,7 @@ import { HomePage } from './home-page';
 describe('HomePage recently added albums', () => {
   it('shows all four fixed playlists and at most eight personal playlists', async () => {
     const playlists = signal(Array.from({ length: 10 }, (_, index) => ({
-      id: index + 1, name: `List ${index + 1}`, tracks: [], unavailableTrackCount: 0,
+      id: index + 1, name: `List ${index + 1}`, tracks: [], unavailableTrackCount: 0, backgroundId: index === 0 ? 20 : 1,
     })));
     TestBed.configureTestingModule({
       imports: [HomePage],
@@ -38,6 +38,9 @@ describe('HomePage recently added albums', () => {
     expect(section.textContent).toContain('Track radio');
     expect(section.textContent).toContain('List 8');
     expect(section.textContent).not.toContain('List 9');
+    const artwork = section.querySelectorAll('.home-playlist img');
+    expect(artwork[0].getAttribute('src')).toContain('random-albums.webp');
+    expect(artwork[4].getAttribute('src')).toContain('background-20.webp');
   });
 
   it('renders the seven returned albums and refreshes after a library operation', async () => {
