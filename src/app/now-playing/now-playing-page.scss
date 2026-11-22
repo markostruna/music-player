@@ -26,7 +26,27 @@
 }
 
 .now-playing-queue-row {
-  grid-template-columns: 40px minmax(0, 1fr) 55px 28px;
+  grid-template-columns: 40px 42px minmax(0, 1fr) 55px 28px;
+}
+
+.now-playing-queue-art {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.now-playing-queue-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .now-playing-queue .album-track-list {

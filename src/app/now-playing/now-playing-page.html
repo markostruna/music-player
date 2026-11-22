@@ -100,6 +100,15 @@
                 (click)="player.playFromQueue(index)"
               >
                 <span class="album-track-number">{{ index + 1 }}</span>
+                <span class="now-playing-queue-art" aria-hidden="true">
+                  <span>♫</span>
+                  <img
+                    [src]="queued.coverUrl"
+                    alt=""
+                    (load)="$any($event.target).style.visibility = 'visible'"
+                    (error)="$any($event.target).style.visibility = 'hidden'"
+                  />
+                </span>
                 <span class="album-track-title"
                   ><strong>{{ queued.title }}</strong
                   ><small>{{ queued.artist }}</small></span
