@@ -1,4 +1,4 @@
-import { Component, effect, inject, OnInit, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AlbumTile } from '@shared/components/album-tile/album-tile';
 import { ArtistTile } from '@shared/components/artist-tile/artist-tile';
@@ -12,8 +12,16 @@ import {
 } from '@shared/services/music-library-api';
 import { PlayerService } from '@shared/services/player.service';
 import { LibraryOperationTracker } from '@shared/services/library-operation-tracker';
+import { PlaybackSyncApi } from '@shared/services/playback-sync-api';
+import { DEMO_MODE } from '@shared/utils/api-path';
 
 const HOME_COLLECTION_SIZE = 6;
+
+interface PlayedTrack {
+  track: MusicTrack;
+  playCount: number;
+  positionSeconds: number;
+}
 
 @Component({
   selector: 'app-home-page',
@@ -26,6 +34,9 @@ export class HomePage implements OnInit {
   private readonly store = inject(LibraryStore);
   private readonly player = inject(PlayerService);
   private readonly operations = inject(LibraryOperationTracker);
+  private readonly playback = inject(PlaybackSyncApi);
+  private readonly destroyRef = inject(DestroyRef);
+  private statisticsPending = false;
   readonly albumActions = inject(AlbumActions);
   private lastChangeCount = this.albumActions.changeCount();
 
@@ -33,6 +44,11 @@ export class HomePage implements OnInit {
   readonly recentAlbums = signal<AlbumSummary[]>([]);
   readonly artists = signal<ArtistSummary[]>([]);
   readonly tracks = signal<MusicTrack[]>([]);
+  readonly recentlyPlayed = signal<PlayedTrack[]>([]);
+  readonly continueListening = signal<PlayedTrack[]>([]);
+  readonly statisticsLoading = signal(!DEMO_MODE);
+  readonly statisticsError = signal('');
+  readonly demoMode = DEMO_MODE;
   readonly skeletonItems = Array.from({ length: HOME_COLLECTION_SIZE });
   readonly albumsLoading = signal(true);
   readonly recentAlbumsLoading = signal(true);
@@ -60,6 +76,31 @@ export class HomePage implements OnInit {
 
   ngOnInit(): void {
     void this.loadHomeCollections();
+    if (!DEMO_MODE) {
+      void this.loadStatistics();
+      const timer = setInterval(() => void this.loadStatistics(), 10000);
+      this.destroyRef.onDestroy(() => clearInterval(timer));
+    }
+  }
+
+  private async loadStatistics(): Promise<void> {
+    if (this.statisticsPending) return;
+    this.statisticsPending = true;
+    try {
+      const result = await this.playback.statistics();
+      const map = (items: typeof result.recentlyPlayed): PlayedTrack[] => items.map((item) => ({
+        ...item,
+        track: this.library.mapTracks([item.track])[0],
+      }));
+      this.recentlyPlayed.set(map(result.recentlyPlayed));
+      this.continueListening.set(map(result.continueListening));
+      this.statisticsError.set('');
+    } catch {
+      this.statisticsError.set('Playback history could not be loaded. Check the music server connection.');
+    } finally {
+      this.statisticsLoading.set(false);
+      this.statisticsPending = false;
+    }
   }
 
   async loadHomeCollections(): Promise<void> {
@@ -124,5 +165,13 @@ export class HomePage implements OnInit {
 
   playTrack(track: MusicTrack): void {
     this.player.play([track], 0);
+  }
+
+  resumeTrack(item: PlayedTrack): void {
+    this.player.play([item.track], 0, item.positionSeconds);
+  }
+
+  progress(item: PlayedTrack): number {
+    return Math.max(0, Math.min(100, item.positionSeconds / item.track.durationSeconds * 100));
   }
 }

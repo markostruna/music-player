@@ -36,6 +36,7 @@ public sealed class PlaybackEndpointTests
         builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
         builder.Services.AddScoped<CsrfEndpointFilter>();
         builder.Services.AddScoped<MusicLibraryBrowseService>();
+        builder.Services.AddScoped<IPlaybackStatisticsService, PlaybackStatisticsService>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<PlaybackCoordinator>();
         await using var app = builder.Build();
@@ -63,6 +64,7 @@ public sealed class PlaybackEndpointTests
         var address = new Uri(app.Urls.Single());
         using var anonymous = CreateClient(address);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playback/history")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playback/statistics")).StatusCode);
 
         using var first = CreateClient(address, "1");
         var session = Guid.NewGuid().ToString();
@@ -85,6 +87,11 @@ public sealed class PlaybackEndpointTests
         var secondHistory = await second.GetFromJsonAsync<PlaybackHistoryResponse[]>("/api/playback/history");
         Assert.Equal(23, Assert.Single(firstHistory!).PositionSeconds);
         Assert.Empty(secondHistory!);
+        var statistics = await first.GetFromJsonAsync<PlaybackStatisticsResponse>("/api/playback/statistics");
+        Assert.Empty(statistics!.RecentlyPlayed);
+        Assert.Empty(statistics.ContinueListening);
+        var otherStatistics = await second.GetFromJsonAsync<PlaybackStatisticsResponse>("/api/playback/statistics");
+        Assert.Empty(otherStatistics!.RecentlyPlayed);
         await app.StopAsync();
     }
 

@@ -176,22 +176,23 @@ export class PlayerService {
     }
   }
 
-  play(queue: MusicTrack[], index: number): void {
+  play(queue: MusicTrack[], index: number, startPositionSeconds = 0): void {
     if (index < 0 || index >= queue.length) return;
     if (this.isSynchronized()) {
       const positionSeconds = this.safeAudioTime();
       const wasPlaying = !this.audio.paused;
-      if (this.isThisDevice() && !this.transferTarget) this.preparePlayback(queue[index], 0);
+      if (this.isThisDevice() && !this.transferTarget) this.preparePlayback(queue[index], startPositionSeconds);
       this.sendCommand('play', {
         trackIds: queue.map((track) => track.id),
         index,
         positionSeconds,
         wasPlaying,
+        ...(startPositionSeconds > 0 ? { startPositionSeconds } : {}),
       });
       return;
     }
     this.queue.set([...queue]);
-    this.startIndex(index);
+    this.startIndex(index, startPositionSeconds);
   }
 
   enqueue(tracks: MusicTrack[]): void {
@@ -566,14 +567,15 @@ export class PlayerService {
     return Number.isFinite(this.audio.currentTime) ? Math.max(0, this.audio.currentTime) : 0;
   }
 
-  private startIndex(index: number): void {
+  private startIndex(index: number, startPositionSeconds = 0): void {
     const track = this.queue()[index];
     this.currentIndex.set(index);
-    this.currentTime.set(0);
+    this.currentTime.set(startPositionSeconds);
     this.duration.set(track.durationSeconds);
     this.errorMessage.set('');
     this.audio.pause();
     this.loadedTrackId = track.id;
+    this.pendingPosition = startPositionSeconds;
     this.audio.src = track.streamUrl;
     this.audio.load();
     void this.audio.play().catch(() => {

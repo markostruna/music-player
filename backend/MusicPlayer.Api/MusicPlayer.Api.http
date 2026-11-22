@@ -1,6 +1,10 @@
-@MusicPlayer.Api_HostAddress = http://localhost:5084
+@MusicPlayer.Api_HostAddress = http://localhost:5080
 
 GET {{MusicPlayer.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+### Playback statistics (requires a signed-in session)
+GET {{MusicPlayer.Api_HostAddress}}/api/playback/statistics
+Accept: application/json

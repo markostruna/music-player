@@ -35,12 +35,33 @@ export interface PlaybackCommand {
   wasPlaying?: boolean;
   startPlaying?: boolean;
   expectedPlayId?: string;
+  startPositionSeconds?: number;
+}
+
+export interface PlayedTrackResponse {
+  track: MusicTrackResponse;
+  playCount: number;
+  positionSeconds: number;
+  lastPlayedAt: string;
+}
+
+export interface PlaybackStatisticsResponse {
+  recentlyPlayed: PlayedTrackResponse[];
+  continueListening: PlayedTrackResponse[];
 }
 
 @Injectable({ providedIn: 'root' })
 export class PlaybackSyncApi {
   private readonly http = inject(HttpClient);
   private lastToken: string | null = null;
+
+  async statistics(): Promise<PlaybackStatisticsResponse> {
+    return firstValueFrom(
+      this.http.get<PlaybackStatisticsResponse>(`${MUSIC_API_BASE}/playback/statistics`, {
+        withCredentials: true,
+      }).pipe(timeout(5000)),
+    );
+  }
 
   async poll(request: {
     sessionId: string;

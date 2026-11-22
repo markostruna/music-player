@@ -86,11 +86,14 @@ Use **Clean database** on the Admin page to remove catalog entries for missing t
 
 The home page shows up to seven **Added recently** albums. Album and artist import times are derived from the earliest catalogued track and do not change on rescans. For entries already in the database when this feature is installed, the previous scan time is used as an approximation because their original import time was not recorded.
 
+**Played recently** shows up to ten available tracks whose latest play reached the end, ordered by completion time, along with their number of recorded playback sessions. **Continue listening** shows up to ten tracks whose latest play has not ended and whose saved position is between the beginning and the end; selecting one resumes from that position. The progress bar is based on the saved position and track duration. Older history predating completion tracking is considered complete only when its saved position reaches the catalogued duration; other completed plays cannot be reliably recovered. Both sections refresh while Home is open and use the signed-in account's synchronized history; the demo does not record history.
+
 Use the Admin page to create Guest accounts. Guests can play music and choose their own theme; only administrators can change the library or accounts.
 
 ## Playback Synchronization
 
 Playback synchronization is enabled by default. The API saves each account's queue, current track, position, shuffle and repeat settings, and a history entry with the last position for every played track. History is retained in the SQLite database and can be retrieved by the signed-in user from `GET /api/playback/history?page=1&pageSize=50`.
+The Home summaries are available at `GET /api/playback/statistics`.
 
 Signed-in browsers share transport controls and the queue. The **Now playing** page shows the current playback device and lets you select another one or choose **Play on this device**. The previous device stops before a requested handoff. If the playback device disconnects, another connected device takes over after its connection lease expires (up to about 15 seconds). Device availability is held in the API process, so synchronization requires a single running API instance.
 

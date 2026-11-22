@@ -11,6 +11,13 @@ public static class PlaybackEndpoints
     public static void MapPlaybackEndpoints(this WebApplication app)
     {
         var playback = app.MapGroup("/api/playback").RequireAuthorization().WithTags("Playback");
+        playback.MapGet("/statistics", async (
+            ClaimsPrincipal principal, IPlaybackStatisticsService statistics, CancellationToken cancellationToken) =>
+        {
+            if (!AuthEndpoints.TryGetUserId(principal, out var userId)) return Results.Unauthorized();
+            return Results.Ok(await statistics.GetAsync(userId, cancellationToken));
+        }).WithSummary("Get recently played and partially played tracks")
+          .Produces<PlaybackStatisticsResponse>();
         playback.MapGet("/history", async (
             ClaimsPrincipal principal, MusicDbContext database, CancellationToken cancellationToken,
             int page = 1, int pageSize = 50) =>

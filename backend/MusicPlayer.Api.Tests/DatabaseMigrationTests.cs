@@ -9,6 +9,61 @@ namespace MusicPlayer.Api.Tests;
 public sealed class DatabaseMigrationTests
 {
     [Fact]
+    public async Task CompletionMigrationBackfillsOnlyPositionsAtTheKnownEnd()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<MusicDbContext>().UseSqlite(connection).Options;
+        await using var database = new MusicDbContext(options);
+        await database.Database.GetService<IMigrator>().MigrateAsync("20261122140000_IndexPlaybackStatistics");
+        await database.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "Users" ("Id", "Email", "NormalizedEmail", "PasswordHash", "Role", "Theme", "IsEnabled", "CreatedAt", "SecurityStamp")
+            VALUES (1, 'one', 'ONE', 'test', 'Guest', 'Dark', 1, '2026-01-01', 'stamp');
+            INSERT INTO "SourceRoots" ("Id", "Name", "Path", "IsEnabled", "AddedAt")
+            VALUES (1, 'Music', 'music', 1, '2026-01-01');
+            INSERT INTO "Folders" ("Id", "SourceRootId", "Name", "RelativePath") VALUES (1, 1, 'Music', '');
+            INSERT INTO "Tracks" ("Id", "SourceRootId", "FolderId", "RelativePath", "Title", "Artist", "Album",
+                "AlbumArtist", "Genre", "TrackNumber", "DiscNumber", "Year", "DurationSeconds", "FileSize",
+                "LastWriteTime", "ScannedAt", "IsAvailable")
+            VALUES (1, 1, 1, 'one.mp3', 'One', '', '', '', '', 1, 1, 2020, 100, 1, '2026-01-01', '2026-01-01', 1);
+            INSERT INTO "PlaybackHistory" ("UserId", "TrackId", "PlayId", "PositionSeconds", "StartedAtUnixMilliseconds", "UpdatedAtUnixMilliseconds")
+            VALUES (1, 1, 'complete', 100, 1, 2), (1, 1, 'partial', 99, 3, 4), (1, 99, 'missing', 100, 5, 6);
+            """);
+
+        await database.Database.MigrateAsync();
+        var entries = await database.PlaybackHistory.OrderBy(item => item.Id).ToArrayAsync();
+        Assert.Equal(2, entries[0].CompletedAtUnixMilliseconds);
+        Assert.Null(entries[1].CompletedAtUnixMilliseconds);
+        Assert.Null(entries[2].CompletedAtUnixMilliseconds);
+    }
+
+    [Fact]
+    public async Task PlaybackStatisticsIndexMigrationPreservesHistory()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<MusicDbContext>().UseSqlite(connection).Options;
+        await using var database = new MusicDbContext(options);
+        await database.Database.GetService<IMigrator>().MigrateAsync("20261122100722_AddPlaybackState");
+        database.Users.Add(new MusicUser { Id = 1, Email = "one", NormalizedEmail = "ONE", PasswordHash = "test" });
+        await database.SaveChangesAsync();
+        await database.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "PlaybackHistory" ("UserId", "TrackId", "PlayId", "PositionSeconds", "StartedAtUnixMilliseconds", "UpdatedAtUnixMilliseconds")
+            VALUES (1, 7, 'play', 12, 1, 2)
+            """);
+
+        await database.Database.MigrateAsync();
+
+        Assert.Equal(12, (await database.PlaybackHistory.SingleAsync()).PositionSeconds);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(*) FROM sqlite_master WHERE type = 'index'
+                AND name = 'IX_PlaybackHistory_UserId_TrackId_StartedAtUnixMilliseconds_Id'
+            """;
+        Assert.Equal(1L, (long)(await command.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
     public async Task ImportTimestampMigrationBackfillsPreviousScanTime()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

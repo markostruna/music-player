@@ -211,6 +211,21 @@
   fill: var(--accent);
 }
 
+.home-track-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: rgb(255 255 255 / 25%);
+}
+
+.home-track-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
 @media (max-width: 680px) {
   .home-page {
     padding-top: 0;

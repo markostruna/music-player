@@ -9,6 +9,30 @@ namespace MusicPlayer.Api.Tests;
 public sealed class PlaybackCoordinatorTests
 {
     [Fact]
+    public async Task StartingAtSavedPositionPreservesPreviousTrackHistory()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        (await fixture.Database.Tracks.SingleAsync(track => track.Id == 2)).DurationSeconds = 120;
+        await fixture.Database.SaveChangesAsync();
+        var session = Guid.NewGuid().ToString();
+        var initial = await fixture.Poll(session, -1);
+        var playing = await fixture.Command(session, initial.Revision, "play", [1], 0);
+        await fixture.Poll(session, playing.Revision, 15, true);
+
+        var resumed = await fixture.Coordinator.CommandAsync(1,
+            new PlaybackCommandRequest(session, playing.Revision, "play", [2], 0, 17, null,
+                WasPlaying: true, StartPositionSeconds: 45),
+            fixture.Database, new MusicLibraryBrowseService(fixture.Database), CancellationToken.None);
+
+        Assert.Equal(45, resumed.PositionSeconds);
+        Assert.Equal(17, (await fixture.Database.PlaybackHistory.SingleAsync()).PositionSeconds);
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Coordinator.CommandAsync(1,
+            new PlaybackCommandRequest(session, resumed.Revision, "play", [2], 0, null, null,
+                StartPositionSeconds: 120),
+            fixture.Database, new MusicLibraryBrowseService(fixture.Database), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task RemoteCommandsAndHistorySurviveCoordinatorRestart()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -153,6 +177,9 @@ public sealed class PlaybackCoordinatorTests
         var entry = await fixture.Database.PlaybackHistory.SingleAsync();
         Assert.Equal(1, entry.TrackId);
         Assert.Equal(0.8, entry.PositionSeconds);
+        Assert.NotNull(entry.CompletedAtUnixMilliseconds);
+        await fixture.Poll(a, playing.Revision, 0.6, true, playId: playing.PlayId);
+        Assert.NotNull(entry.CompletedAtUnixMilliseconds);
     }
 
     [Fact]

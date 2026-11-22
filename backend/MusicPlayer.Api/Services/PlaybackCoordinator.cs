@@ -110,6 +110,9 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                 throw new PlaybackConflictException("The playback event belongs to an earlier track.");
             if (request.PositionSeconds is double suppliedPosition && !ValidPosition(suppliedPosition))
                 throw new ArgumentException("Invalid playback position.");
+            if (request.StartPositionSeconds is double startPosition
+                && (request.Action != "play" || !ValidPosition(startPosition)))
+                throw new ArgumentException("Invalid starting position.");
             if (devices.Owner == request.SessionId && request.Action != "seek"
                 && request.PositionSeconds is double position && ValidPosition(position))
             {
@@ -133,6 +136,10 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                     {
                         if (request.Index is null || request.Index < 0 || request.Index >= request.TrackIds.Length)
                             throw new ArgumentException("Invalid track index.");
+                        if (request.StartPositionSeconds is double start
+                            && (tracks[request.Index.Value].DurationSeconds <= 0
+                                || start >= tracks[request.Index.Value].DurationSeconds))
+                            throw new ArgumentException("Invalid starting position.");
                         queue = request.TrackIds;
                         state.CurrentIndex = request.Index.Value;
                         startTrack = true;
@@ -153,6 +160,9 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                 case "ended":
                     if (request.Action == "ended" && devices.Owner != request.SessionId)
                         throw new PlaybackConflictException("Only the playing device can advance a finished track.");
+                    if (request.Action == "ended" && state.IsPlaying)
+                        await UpdateHistoryAsync(state, database, timeProvider.GetUtcNow(), true,
+                            cancellationToken, completed: true);
                     if (request.Action == "ended" && state.Repeat && state.CurrentIndex >= 0)
                         startTrack = true;
                     else if (state.Shuffle && queue.Length > 0)
@@ -231,7 +241,7 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
             }
             if (startTrack)
             {
-                state.PositionSeconds = 0;
+                state.PositionSeconds = request.Action == "play" ? request.StartPositionSeconds ?? 0 : 0;
                 state.IsPlaying = true;
                 state.PlayId = Guid.NewGuid().ToString("N");
                 devices.PositionRevision = state.Revision + 1;
@@ -286,17 +296,17 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
 
     private static async Task UpdateHistoryAsync(
         PlaybackState state, MusicDbContext database, DateTimeOffset now, bool create,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool completed = false)
     {
         var queue = ReadQueue(state);
         if (state.CurrentIndex < 0 || state.CurrentIndex >= queue.Length || state.PlayId.Length == 0) return;
         await UpdateHistoryEntryAsync(state.UserId, queue[state.CurrentIndex], state.PlayId,
-            state.PositionSeconds, database, now, create, cancellationToken);
+            state.PositionSeconds, database, now, create, cancellationToken, completed);
     }
 
     private static async Task UpdateHistoryEntryAsync(
         int userId, int trackId, string playId, double position, MusicDbContext database,
-        DateTimeOffset now, bool create, CancellationToken cancellationToken)
+        DateTimeOffset now, bool create, CancellationToken cancellationToken, bool completed = false)
     {
         var history = database.PlaybackHistory.Local.FirstOrDefault(item => item.UserId == userId && item.PlayId == playId)
             ?? await database.PlaybackHistory.SingleOrDefaultAsync(
@@ -315,6 +325,7 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
         }
         history.PositionSeconds = position;
         history.UpdatedAtUnixMilliseconds = now.ToUnixTimeMilliseconds();
+        if (completed) history.CompletedAtUnixMilliseconds ??= now.ToUnixTimeMilliseconds();
     }
 
     private static void RememberPlay(AccountDevices devices, PlaybackState state)

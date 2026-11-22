@@ -10,4 +10,5 @@ public sealed class PlaybackHistory
     public double PositionSeconds { get; set; }
     public long StartedAtUnixMilliseconds { get; set; }
     public long UpdatedAtUnixMilliseconds { get; set; }
+    public long? CompletedAtUnixMilliseconds { get; set; }
 }

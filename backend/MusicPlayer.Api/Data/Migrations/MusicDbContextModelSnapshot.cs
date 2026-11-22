@@ -295,6 +295,9 @@ namespace MusicPlayer.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("CompletedAtUnixMilliseconds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("PlayId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -318,6 +321,8 @@ namespace MusicPlayer.Api.Data.Migrations
 
                     b.HasIndex("UserId", "PlayId")
                         .IsUnique();
+
+                    b.HasIndex("UserId", "TrackId", "StartedAtUnixMilliseconds", "Id");
 
                     b.ToTable("PlaybackHistory");
                 });

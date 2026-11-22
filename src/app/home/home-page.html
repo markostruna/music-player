@@ -21,6 +21,57 @@
     </div>
   </section>
 
+  @if (!demoMode) {
+    @if (statisticsError()) {
+      <p class="empty-state" role="alert">{{ statisticsError() }}</p>
+    }
+    @for (section of [
+      { title: 'Continue listening', id: 'home-continue-heading', items: continueListening(), resume: true },
+      { title: 'Played recently', id: 'home-played-heading', items: recentlyPlayed(), resume: false }
+    ]; track section.id) {
+      <section class="home-category" [attr.aria-labelledby]="section.id">
+        <div class="home-category-heading">
+          <div>
+            <span class="eyebrow">YOUR LISTENING HISTORY</span>
+            <h2 [id]="section.id">{{ section.title }}</h2>
+          </div>
+        </div>
+        @if (section.items.length) {
+          <div class="home-track-grid">
+            @for (item of section.items; track item.track.id) {
+              <button
+                class="home-track-tile"
+                type="button"
+                [style.--tile-cover]="'url(&quot;' + item.track.coverUrl + '&quot;)'"
+                (click)="section.resume ? resumeTrack(item) : playTrack(item.track)"
+              >
+                <span class="home-track-art">
+                  <img [src]="item.track.coverUrl" [alt]="item.track.album + ' artwork'"
+                    (error)="$any($event.target).style.visibility = 'hidden'" />
+                </span>
+                <span class="home-track-copy">
+                  <strong>{{ item.track.title }}</strong>
+                  <small>{{ item.track.artist }} · {{ item.playCount }} {{ item.playCount === 1 ? 'play' : 'plays' }}</small>
+                </span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7V5Z" /></svg>
+                @if (section.resume && item.track.durationSeconds > 0 && item.positionSeconds > 0 && item.positionSeconds < item.track.durationSeconds) {
+                  <span class="home-track-progress" role="progressbar" aria-label="Track progress"
+                    aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="progress(item)">
+                    <span [style.width.%]="progress(item)"></span>
+                  </span>
+                }
+              </button>
+            }
+          </div>
+        } @else if (statisticsLoading()) {
+          <p class="empty-state" role="status">Loading listening history...</p>
+        } @else if (!statisticsError()) {
+          <p class="empty-state">{{ section.resume ? 'No partially played tracks yet.' : 'No completed tracks yet.' }}</p>
+        }
+      </section>
+    }
+  }
+
   <section class="home-category" aria-labelledby="home-recent-heading">
     <div class="home-category-heading">
       <div>

@@ -21,6 +21,8 @@ public sealed class MusicDbContext(DbContextOptions<MusicDbContext> options) : D
         modelBuilder.Entity<PlaybackState>().HasOne(state => state.User).WithOne()
             .HasForeignKey<PlaybackState>(state => state.UserId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<PlaybackHistory>().HasIndex(history => new { history.UserId, history.PlayId }).IsUnique();
+        modelBuilder.Entity<PlaybackHistory>().HasIndex(history =>
+            new { history.UserId, history.TrackId, history.StartedAtUnixMilliseconds, history.Id });
         modelBuilder.Entity<PlaybackHistory>().HasOne(history => history.User).WithMany()
             .HasForeignKey(history => history.UserId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<ProviderCredential>().HasKey(credential => credential.Key);

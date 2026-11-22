@@ -182,6 +182,26 @@ describe('PlayerService synchronization', () => {
     expect(api.command.mock.calls.length).toBe(calls);
   });
 
+  it('resumes independent playback once metadata is loaded', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const audio = FakeAudio.instances[0];
+    player.play([player.currentTrack()!], 0, 35);
+    audio.emit('loadedmetadata');
+    expect(audio.currentTime).toBe(35);
+    expect(player.currentTime()).toBe(35);
+  });
+
+  it('sends the saved start position with a synchronized play command', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    player.play([player.currentTrack()!], 0, 35);
+    await vi.waitFor(() => expect(api.command).toHaveBeenCalled());
+    expect(api.command.mock.calls[0][0]).toMatchObject({
+      action: 'play',
+      startPositionSeconds: 35,
+    });
+  });
+
   it('pauses at the actual position when a remote device pauses playback', async () => {
     await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
     current = { ...current, revision: 2, ownerSessionId: sessionId };

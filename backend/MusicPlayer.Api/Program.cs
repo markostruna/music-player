@@ -29,6 +29,7 @@ builder.Services.AddDataProtection()
 builder.Services.AddScoped<IProviderSettingsService, ProviderSettingsService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<MusicLibraryBrowseService>();
+builder.Services.AddScoped<IPlaybackStatisticsService, PlaybackStatisticsService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PlaybackCoordinator>();
 builder.Services.AddScoped<IUnscannedFolderService, UnscannedFolderService>();
