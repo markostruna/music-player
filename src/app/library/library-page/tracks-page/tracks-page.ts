@@ -1,18 +1,16 @@
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { LIBRARY_PAGE_SIZE, LibraryStore } from '@shared/services/library-store';
-import { MusicTrack, TrackFolderScope } from '@shared/services/music-library-api';
-import { PlayerService } from '@shared/services/player.service';
-import { PlaylistService } from '@shared/services/playlist.service';
+import { TrackFolderScope } from '@shared/services/music-library-api';
+import { TrackGrid } from '@shared/components/track-grid/track-grid';
 
 @Component({
   selector: 'app-library-tracks-page',
+  imports: [TrackGrid],
   templateUrl: './tracks-page.html',
   styleUrl: './tracks-page.scss',
 })
 export class TracksPage {
   private readonly store = inject(LibraryStore);
-  private readonly player = inject(PlayerService);
-  private readonly playlists = inject(PlaylistService);
 
   readonly active = input(false);
   readonly refreshTrigger = input(0);
@@ -22,35 +20,11 @@ export class TracksPage {
   readonly currentPage = signal(1);
   readonly pageTracks = this.store.pageTracks;
   readonly pageSize = LIBRARY_PAGE_SIZE;
-  readonly isPlaying = this.player.isPlaying;
   readonly isLoading = computed(() => this.store.pageLoading().tracks);
-  readonly currentTrack = this.player.currentTrack;
   readonly totalItems = this.store.totalTrackCount;
   readonly visibleTracks = computed(() => this.pageTracks());
   readonly hasMore = computed(() => this.visibleTracks().length < this.totalItems());
   readonly errorMessage = computed(() => this.store.pageErrors().tracks);
-  readonly playlistItems = this.playlists.playlists;
-  readonly playlistError = signal('');
-  readonly addingTrack = signal(false);
-
-  async addToPlaylist(track: MusicTrack, event: Event): Promise<void> {
-    const select = event.target as HTMLSelectElement;
-    const id = Number(select.value);
-    select.value = '';
-    const playlist = this.playlistItems().find((item) => item.id === id);
-    if (!playlist || this.addingTrack()) return;
-    this.addingTrack.set(true);
-    this.playlistError.set('');
-    try {
-      const current = await this.playlists.get(id);
-      await this.playlists.update({ ...current, tracks: [...current.tracks, track] });
-    } catch {
-      this.playlistError.set('Track could not be added to the playlist.');
-    } finally {
-      this.addingTrack.set(false);
-    }
-  }
-
   private loaded = false;
   private lastRefreshTrigger = 0;
   private lastSearchQuery = '';
@@ -77,7 +51,6 @@ export class TracksPage {
       }
       if (active && !this.loaded) {
         this.loaded = true;
-        void this.playlists.load().catch(() => this.playlistError.set('Playlists could not be loaded.'));
         this.lastSearchQuery = query;
         this.lastFolderSourceRootId = folderSourceRootId;
         this.lastFolderPath = folderPath;
@@ -117,10 +90,6 @@ export class TracksPage {
       true,
     );
     this.currentPage.set(this.store.currentPages().tracks);
-  }
-
-  chooseTrack(track: MusicTrack): void {
-    this.player.play([track], 0);
   }
 
   private folderScope(): TrackFolderScope | null {

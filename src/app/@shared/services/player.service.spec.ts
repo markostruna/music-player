@@ -80,6 +80,7 @@ describe('PlayerService synchronization', () => {
   let api: {
     poll: ReturnType<typeof vi.fn>;
     command: ReturnType<typeof vi.fn>;
+    similar: ReturnType<typeof vi.fn>;
     leaveOnPageHide: ReturnType<typeof vi.fn>;
   };
   let player: PlayerService;
@@ -109,6 +110,7 @@ describe('PlayerService synchronization', () => {
         return current;
       }),
       leaveOnPageHide: vi.fn(),
+      similar: vi.fn(),
     };
     TestBed.configureTestingModule({
       providers: [
@@ -183,6 +185,161 @@ describe('PlayerService synchronization', () => {
     player.toggle();
     expect(audio.play).toHaveBeenCalled();
     expect(api.command.mock.calls.length).toBe(calls);
+  });
+
+  it('inserts a suggestion after three local advances without changing the queue', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const makeTrack = (id: number) => ({
+      ...track, id, streamUrl: `/${id}`, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl,
+    });
+    const queue = [1, 2, 3, 4].map(makeTrack);
+    api.similar.mockResolvedValue({ ...track, id: 5, streamUrl: '/5' });
+    player.play(queue, 0);
+    player.setPlaybackMode('smart');
+    player.next();
+    player.next();
+    player.next();
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(5));
+    expect(api.similar).toHaveBeenCalledWith(3, [1, 2, 3, 4]);
+    expect(player.queue().map((item) => item.id)).toEqual([1, 2, 3, 4]);
+    expect(player.currentIndex()).toBe(2);
+    FakeAudio.instances[0].emit('ended');
+    expect(player.currentTrack()?.id).toBe(4);
+    expect(player.suggestedTrack()).toBeNull();
+  });
+
+  it('continues the local queue and reports a failed similarity request', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queue = [1, 2, 3, 4].map((id) => ({
+      ...track, id, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl,
+    }));
+    api.similar.mockRejectedValue(new Error('unavailable'));
+    player.play(queue, 0);
+    player.setPlaybackMode('smart');
+    player.next();
+    player.next();
+    player.next();
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(4));
+    expect(player.errorMessage()).toContain('could not find a similar track');
+  });
+
+  it('can skip the third track and continue with similar tracks after a smart suggestion', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queue = [1, 2, 3].map((id) => ({
+      ...track, id, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl,
+    }));
+    api.similar.mockResolvedValueOnce({ ...track, id: 5 }).mockResolvedValueOnce({ ...track, id: 3 });
+    player.play(queue, 0);
+    player.setPlaybackMode('smart');
+    player.next();
+    player.next();
+    expect(player.hasNext()).toBe(true);
+    player.next();
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(5));
+    expect(player.hasNext()).toBe(true);
+    player.next();
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(3));
+    expect(api.similar).toHaveBeenLastCalledWith(5, []);
+    expect(player.queue().map((item) => item.id)).toEqual([1, 2, 3]);
+  });
+
+  it('continues selecting similar tracks after a local queue ends', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queued = { ...track, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl };
+    api.similar.mockResolvedValueOnce({ ...track, id: 2 }).mockResolvedValueOnce({ ...track, id: 3 });
+    player.play([queued], 0);
+    FakeAudio.instances[0].emit('ended');
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(2));
+    expect(api.similar).toHaveBeenNthCalledWith(1, 1, []);
+    FakeAudio.instances[0].emit('ended');
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(3));
+    expect(api.similar).toHaveBeenNthCalledWith(2, 2, []);
+    expect(player.queue().map((item) => item.id)).toEqual([1]);
+  });
+
+  it('stops cleanly if no similar track exists and reports selection errors', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queued = { ...track, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl };
+    api.similar.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('offline'));
+    player.play([queued], 0);
+    const audio = FakeAudio.instances[0];
+    audio.emit('ended');
+    await vi.waitFor(() => expect(audio.paused).toBe(true));
+    expect(player.errorMessage()).toBe('');
+    player.next();
+    await vi.waitFor(() => expect(player.errorMessage()).toContain('similar track could not be selected'));
+  });
+
+  it('ignores a stale similarity result after a new local queue starts', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queued = { ...track, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl };
+    let resolveOld!: (value: MusicTrackResponse) => void;
+    api.similar.mockImplementationOnce(() => new Promise<MusicTrackResponse>((resolve) => { resolveOld = resolve; }))
+      .mockResolvedValueOnce({ ...track, id: 4 });
+    player.play([queued], 0);
+    FakeAudio.instances[0].emit('ended');
+    player.play([{ ...queued, id: 3 }], 0);
+    FakeAudio.instances[0].emit('ended');
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(4));
+    resolveOld({ ...track, id: 2 });
+    await Promise.resolve();
+    expect(player.currentTrack()?.id).toBe(4);
+  });
+
+  it.each(['success', 'failure'])('plays tracks enqueued while a local similarity lookup is pending (%s)', async (outcome) => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queued = { ...track, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl };
+    let resolveSimilar!: (value: MusicTrackResponse) => void;
+    let rejectSimilar!: (reason: Error) => void;
+    api.similar.mockImplementationOnce(() => new Promise<MusicTrackResponse>((resolve, reject) => {
+      resolveSimilar = resolve;
+      rejectSimilar = reject;
+    }));
+    player.play([queued], 0);
+    FakeAudio.instances[0].emit('ended');
+    player.enqueue([{ ...queued, id: 3 }]);
+    if (outcome === 'success') resolveSimilar({ ...track, id: 2 });
+    else rejectSimilar(new Error('offline'));
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(3));
+    expect(player.suggestedTrack()).toBeNull();
+    if (outcome === 'failure') expect(player.errorMessage()).toContain('Continuing the queue');
+  });
+
+  it('continues under the new mode when it changes during a similarity lookup', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queued = { ...track, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl };
+    let resolveSimilar!: (value: MusicTrackResponse) => void;
+    api.similar.mockImplementationOnce(() => new Promise<MusicTrackResponse>((resolve) => { resolveSimilar = resolve; }));
+    player.play([queued], 0);
+    FakeAudio.instances[0].emit('ended');
+    player.setPlaybackMode('shuffle');
+    expect(FakeAudio.instances[0].play).toHaveBeenCalledTimes(2);
+    resolveSimilar({ ...track, id: 2 });
+    await Promise.resolve();
+    expect(player.currentTrack()?.id).toBe(1);
+  });
+
+  it('repeats the finished track when repeat is enabled during a similarity lookup', async () => {
+    await vi.waitFor(() => expect(player.currentTrack()?.id).toBe(1));
+    await player.setSyncEnabled(false);
+    const queued = { ...track, tileCoverUrl: track.coverUrl, albumCoverUrl: track.coverUrl };
+    let resolveSimilar!: (value: MusicTrackResponse) => void;
+    api.similar.mockImplementationOnce(() => new Promise<MusicTrackResponse>((resolve) => { resolveSimilar = resolve; }));
+    player.play([queued], 0);
+    FakeAudio.instances[0].emit('ended');
+    player.toggleRepeat();
+    expect(FakeAudio.instances[0].play).toHaveBeenCalledTimes(2);
+    resolveSimilar({ ...track, id: 2 });
+    await Promise.resolve();
+    expect(player.currentTrack()?.id).toBe(1);
   });
 
   it('replaces the local radio queue after each track and stops radio when another queue is played', async () => {

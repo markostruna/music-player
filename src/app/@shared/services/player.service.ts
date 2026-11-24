@@ -37,20 +37,24 @@ export class PlayerService {
   private audioGeneration = 0;
   private localRadio: 'album-radio' | 'track-radio' | null = null;
   private radioGeneration = 0;
+  private readonly smartQueueAdvances = signal(0);
+  private localAdvanceGeneration = 0;
+  private localAdvancePending: number | null = null;
+  private localAdvanceWasEnded = false;
 
   readonly queue = signal<MusicTrack[]>([]);
   readonly currentIndex = signal(-1);
   readonly shuffle = signal(false);
+  readonly smartShuffle = signal(false);
+  readonly suggestedTrack = signal<MusicTrack | null>(null);
+  readonly playbackMode = computed(() => this.smartShuffle() ? 'smart' : this.shuffle() ? 'shuffle' : 'normal');
   readonly repeat = signal(false);
   readonly radioMode = signal<'album-radio' | 'track-radio' | null>(null);
   readonly currentTrack = computed(
-    (): MusicTrack | null => this.queue()[this.currentIndex()] ?? null,
+    (): MusicTrack | null => this.suggestedTrack() ?? this.queue()[this.currentIndex()] ?? null,
   );
-  readonly hasPrevious = computed(() => this.currentIndex() > 0);
-  readonly hasNext = computed(
-    () =>
-      this.currentIndex() >= 0 && (this.shuffle() || this.radioMode() !== null || this.currentIndex() < this.queue().length - 1),
-  );
+  readonly hasPrevious = computed(() => this.suggestedTrack() !== null || this.currentIndex() > 0);
+  readonly hasNext = computed(() => this.currentIndex() >= 0);
   readonly isPlaying = signal(false);
   readonly currentTime = signal(0);
   readonly duration = signal(0);
@@ -101,11 +105,12 @@ export class PlayerService {
     });
     this.audio.addEventListener('ended', () => {
       if (this.isSynchronized()) this.sendCommand('ended', { expectedPlayId: this.loadedPlayId });
-      else if (this.repeat()) this.startIndex(this.currentIndex());
-      else if (this.shuffle()) this.startRandomTrack();
-      else if (this.hasNext()) this.next();
-      else if (this.localRadio) void this.advanceLocalRadio();
-      else this.isPlaying.set(false);
+      else if (this.repeat()) {
+        const suggestion = this.suggestedTrack();
+        if (suggestion) this.startTrack(suggestion, 0);
+        else this.startIndex(this.currentIndex());
+      }
+      else void this.advanceLocal(true);
     });
     const pageHide = (event: PageTransitionEvent) => {
       if (!this.isSynchronized() || this.revision < 0) return;
@@ -156,6 +161,8 @@ export class PlayerService {
 
   async setSyncEnabled(enabled: boolean): Promise<void> {
     if (DEMO_MODE || this.userId === null || enabled === this.syncEnabled()) return;
+    this.localAdvanceGeneration++;
+    this.smartQueueAdvances.set(0);
     localStorage.setItem(this.preferenceKey(this.userId), String(enabled));
     if (!enabled) {
       const wasOwner = this.isThisDevice();
@@ -189,6 +196,8 @@ export class PlayerService {
     this.localRadio = null;
     this.radioMode.set(null);
     this.radioGeneration++;
+    this.localAdvanceGeneration++;
+    this.smartQueueAdvances.set(0);
     if (this.isSynchronized()) {
       const positionSeconds = this.safeAudioTime();
       const wasPlaying = !this.audio.paused;
@@ -232,6 +241,8 @@ export class PlayerService {
 
   playFromQueue(index: number): void {
     if (index < 0 || index >= this.queue().length) return;
+    this.localAdvanceGeneration++;
+    this.smartQueueAdvances.set(0);
     if (this.isSynchronized()) {
       const positionSeconds = this.safeAudioTime();
       const wasPlaying = !this.audio.paused;
@@ -242,9 +253,69 @@ export class PlayerService {
 
   next(): void {
     if (this.isSynchronized()) this.sendCommand('next');
-    else if (this.shuffle()) this.startRandomTrack();
-    else if (this.currentIndex() < this.queue().length - 1) this.startIndex(this.currentIndex() + 1);
-    else if (this.localRadio) void this.advanceLocalRadio();
+    else void this.advanceLocal();
+  }
+
+  private async advanceLocal(ended = false): Promise<void> {
+    if (this.localAdvancePending === this.localAdvanceGeneration) return;
+    const wasSuggestion = this.suggestedTrack() !== null;
+    const current = this.currentTrack();
+    if (!current) return;
+    const generation = ++this.localAdvanceGeneration;
+    this.localAdvancePending = generation;
+    this.localAdvanceWasEnded = ended;
+    let selectingSmartSuggestion = false;
+    try {
+      if (!wasSuggestion && this.smartShuffle()) {
+        this.smartQueueAdvances.update((count) => count + 1);
+        if (this.smartQueueAdvances() >= 3) {
+          this.smartQueueAdvances.set(0);
+          selectingSmartSuggestion = true;
+          const result = await this.syncApi.similar(current.id, this.queue().map((track) => track.id));
+          if (generation !== this.localAdvanceGeneration) return;
+          if (result && !this.queue().some((track) => track.id === result.id)) {
+            const suggestion = this.library.mapTracks([result])[0];
+            this.suggestedTrack.set(suggestion);
+            this.startTrack(suggestion, 0);
+            return;
+          }
+        }
+      }
+      selectingSmartSuggestion = false;
+      if (this.shuffle()) this.startRandomTrack();
+      else if (this.currentIndex() < this.queue().length - 1) this.startIndex(this.currentIndex() + 1);
+      else if (this.localRadio) void this.advanceLocalRadio();
+      else {
+        const result = await this.syncApi.similar(current.id, []);
+        if (generation !== this.localAdvanceGeneration) return;
+        if (this.currentIndex() < this.queue().length - 1) {
+          this.startIndex(this.currentIndex() + 1);
+        } else if (result) {
+          if (result.id === current.id) throw new Error('The similarity result matched the current track.');
+          const suggestion = this.library.mapTracks([result])[0];
+          this.suggestedTrack.set(suggestion);
+          this.startTrack(suggestion, 0);
+        } else {
+          this.audio.pause();
+          this.isPlaying.set(false);
+        }
+      }
+    } catch {
+      if (generation !== this.localAdvanceGeneration) return;
+      if (this.currentIndex() < this.queue().length - 1 || (selectingSmartSuggestion && this.localRadio)) {
+        if (this.currentIndex() < this.queue().length - 1) this.startIndex(this.currentIndex() + 1);
+        else void this.advanceLocalRadio();
+        this.errorMessage.set(selectingSmartSuggestion
+          ? 'Smart shuffle could not find a similar track. Continuing the queue.'
+          : 'A similar track could not be selected. Continuing the queue.');
+        return;
+      }
+      this.audio.pause();
+      this.isPlaying.set(false);
+      this.errorMessage.set('A similar track could not be selected. Check the music server connection.');
+    } finally {
+      if (this.localAdvancePending === generation) this.localAdvancePending = null;
+    }
   }
 
   async playBuiltIn(kind: BuiltInPlaylistId): Promise<void> {
@@ -258,6 +329,7 @@ export class PlayerService {
     if (generation !== this.radioGeneration) return;
     if (!tracks.length) throw new Error('No playable tracks in the library.');
     this.shuffle.set(false);
+    this.smartShuffle.set(false);
     this.repeat.set(false);
     this.play(tracks, 0);
     if (!this.isSynchronized() && (kind === 'album-radio' || kind === 'track-radio')) {
@@ -286,12 +358,22 @@ export class PlayerService {
   }
 
   previous(): void {
+    this.localAdvanceGeneration++;
     if (this.isSynchronized()) {
       this.sendCommand('previous');
-    } else if (this.audio.currentTime > 3 || !this.hasPrevious()) {
+    } else if (this.audio.currentTime > 3) {
       this.audio.currentTime = 0;
       this.currentTime.set(0);
-    } else this.startIndex(this.currentIndex() - 1);
+    } else if (this.suggestedTrack()) {
+      this.smartQueueAdvances.set(0);
+      this.startIndex(this.currentIndex());
+    } else if (!this.hasPrevious()) {
+      this.audio.currentTime = 0;
+      this.currentTime.set(0);
+    } else {
+      this.smartQueueAdvances.set(0);
+      this.startIndex(this.currentIndex() - 1);
+    }
   }
 
   toggle(): void {
@@ -303,9 +385,12 @@ export class PlayerService {
           .catch(() => this.errorMessage.set('Click Play to allow playback on this device.'));
       }
       this.sendCommand('toggle');
-    } else if (this.audio.paused) {
-      void this.audio.play().catch(() => this.errorMessage.set('Playback could not start.'));
-    } else this.audio.pause();
+    } else {
+      this.localAdvanceGeneration++;
+      if (this.audio.paused) {
+        void this.audio.play().catch(() => this.errorMessage.set('Playback could not start.'));
+      } else this.audio.pause();
+    }
   }
 
   seek(seconds: number): void {
@@ -324,12 +409,41 @@ export class PlayerService {
 
   toggleShuffle(): void {
     if (this.isSynchronized()) this.sendCommand('shuffle');
-    else this.shuffle.update((enabled) => !enabled);
+    else {
+      const advancing = this.localAdvancePending === this.localAdvanceGeneration;
+      const ended = this.localAdvanceWasEnded;
+      this.localAdvanceGeneration++;
+      this.smartQueueAdvances.set(0);
+      this.smartShuffle.set(false);
+      this.shuffle.update((enabled) => !enabled);
+      if (advancing) void this.advanceLocal(ended);
+    }
+  }
+
+  setPlaybackMode(mode: 'normal' | 'shuffle' | 'smart'): void {
+    if (this.isSynchronized()) {
+      this.sendCommand(`mode-${mode}`);
+    } else {
+      const advancing = this.localAdvancePending === this.localAdvanceGeneration;
+      const ended = this.localAdvanceWasEnded;
+      this.localAdvanceGeneration++;
+      this.smartQueueAdvances.set(0);
+      this.shuffle.set(mode === 'shuffle');
+      this.smartShuffle.set(mode === 'smart');
+      if (advancing) void this.advanceLocal(ended);
+    }
   }
 
   toggleRepeat(): void {
     if (this.isSynchronized()) this.sendCommand('repeat');
-    else this.repeat.update((enabled) => !enabled);
+    else {
+      this.repeat.update((enabled) => !enabled);
+      if (this.repeat() && this.localAdvancePending === this.localAdvanceGeneration && this.localAdvanceWasEnded) {
+        this.localAdvanceGeneration++;
+        const track = this.currentTrack();
+        if (track) this.startTrack(track, 0);
+      }
+    }
   }
 
   playOnThisDevice(): void {
@@ -358,6 +472,9 @@ export class PlayerService {
   }
 
   stop(): void {
+    this.localAdvanceGeneration++;
+    this.smartQueueAdvances.set(0);
+    this.suggestedTrack.set(null);
     this.localRadio = null;
     this.radioMode.set(null);
     this.radioGeneration++;
@@ -546,10 +663,13 @@ export class PlayerService {
     this.ownerId.set(this.owner);
     this.transferPending.set(this.transferTarget !== null);
     this.devices.set(snapshot.devices);
+    this.suggestedTrack.set(snapshot.suggestedTrack ? this.library.mapTracks([snapshot.suggestedTrack])[0] : null);
     if (snapshot.revision !== previousRevision) {
       if (snapshot.queue !== null) this.queue.set(this.library.mapTracks(snapshot.queue));
       this.currentIndex.set(snapshot.currentIndex);
       this.shuffle.set(snapshot.shuffle);
+      this.smartShuffle.set(snapshot.smartShuffle ?? false);
+      this.smartQueueAdvances.set(snapshot.smartQueueAdvances ?? 0);
       this.repeat.set(snapshot.repeat);
       this.radioMode.set(snapshot.radioMode === 'radio-album' ? 'album-radio'
         : snapshot.radioMode === 'radio-track' ? 'track-radio' : null);
@@ -627,7 +747,12 @@ export class PlayerService {
 
   private startIndex(index: number, startPositionSeconds = 0): void {
     const track = this.queue()[index];
+    this.suggestedTrack.set(null);
     this.currentIndex.set(index);
+    this.startTrack(track, startPositionSeconds);
+  }
+
+  private startTrack(track: MusicTrack, startPositionSeconds: number): void {
     this.currentTime.set(startPositionSeconds);
     this.duration.set(track.durationSeconds);
     this.errorMessage.set('');

@@ -44,6 +44,23 @@
           </div>
         </div>
       </section>
+      <section class="now-playing-devices" aria-label="Playback mode">
+        <label>
+          Playback mode
+          <select [value]="player.playbackMode()" (change)="changePlaybackMode($any($event.target).value)">
+            <option value="normal">Normal</option>
+            <option value="shuffle">Shuffle</option>
+            <option value="smart">Smart shuffle</option>
+          </select>
+        </label>
+        @if (player.suggestedTrack()) {
+          @if (player.currentIndex() < player.queue().length - 1 || player.radioMode()) {
+            <p>Playing a smart-shuffle suggestion. The queue resumes afterward.</p>
+          } @else {
+            <p>Playing similar tracks after the queue.</p>
+          }
+        }
+      </section>
       @if (player.syncEnabled()) {
         <section class="now-playing-devices" aria-label="Playback device">
           <p>
@@ -95,8 +112,8 @@
               <button
                 class="album-track-row now-playing-queue-row"
                 type="button"
-                [class.album-track-playing]="index === player.currentIndex()"
-                [attr.aria-current]="index === player.currentIndex() ? 'true' : null"
+                [class.album-track-playing]="!player.suggestedTrack() && index === player.currentIndex()"
+                [attr.aria-current]="!player.suggestedTrack() && index === player.currentIndex() ? 'true' : null"
                 (click)="player.playFromQueue(index)"
               >
                 <span class="album-track-number">{{ index + 1 }}</span>
@@ -115,7 +132,7 @@
                 >
                 <span class="album-track-duration">{{ formatTime(queued.durationSeconds) }}</span>
                 <span class="album-track-play" aria-hidden="true">{{
-                  index === player.currentIndex() && player.isPlaying() ? '♫' : '▶'
+                  !player.suggestedTrack() && index === player.currentIndex() && player.isPlaying() ? '♫' : '▶'
                 }}</span>
               </button>
             </li>

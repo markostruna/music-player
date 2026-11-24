@@ -1,0 +1,37 @@
+@if (playlistError()) { <p class="empty-state" role="alert">{{ playlistError() }}</p> }
+<div class="track-grid">
+  @for (track of tracks(); track track.id) {
+    <article
+      class="track-tile"
+      [style.--tile-cover]="'url(&quot;' + track.coverUrl + '&quot;)'"
+      [class.now-playing]="currentTrack()?.id === track.id && isPlaying()"
+    >
+      <button class="track-tile-button" type="button" (click)="chooseTrack(track)">
+        <span class="track-tile-art">
+          <img
+            [src]="track.coverUrl"
+            [alt]="track.album + ' artwork'"
+            (error)="$any($event.target).style.visibility = 'hidden'"
+          />
+        </span>
+        <span class="track-tile-copy">
+          <strong>{{ track.title }}</strong>
+          <small>{{ track.artist }} · {{ track.album }}</small>
+        </span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m8 5 12 7-12 7V5Z" />
+        </svg>
+      </button>
+      @if (playlistItems().length) {
+        <select [attr.aria-label]="'Add ' + track.title + ' to playlist'" [disabled]="addingTrack()" (change)="addToPlaylist(track, $event)">
+          <option value="">Add to playlist</option>
+          @for (playlist of playlistItems(); track playlist.id) {
+            <option [value]="playlist.id">{{ playlist.name }}</option>
+          }
+        </select>
+      }
+    </article>
+  } @empty {
+    <ng-content />
+  }
+</div>

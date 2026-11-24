@@ -24,6 +24,11 @@ describe('HomePage recently added albums', () => {
         { provide: PlaybackSyncApi, useValue: { statistics: async () => ({ recentlyPlayed: [], continueListening: [] }) } },
         { provide: LibraryOperationTracker, useValue: { operation: signal(null) } },
         { provide: MusicLibraryApi, useValue: {
+          listGenreSources: async () => [
+            { name: 'Rock', fromTags: true, fromAnalysis: true },
+            { name: 'Jazz', fromTags: true, fromAnalysis: false },
+            { name: 'Pop', fromTags: false, fromAnalysis: true },
+          ],
           listRecentAlbums: async () => [], listAlbumPage: async () => ({ items: [] }),
           listArtistPage: async () => ({ items: [] }), listTrackPage: async () => ({ items: [] }),
         } },
@@ -32,6 +37,7 @@ describe('HomePage recently added albums', () => {
     const fixture = TestBed.createComponent(HomePage);
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
     const section = fixture.nativeElement.querySelector('[aria-labelledby="home-playlists-heading"]') as HTMLElement;
     expect(section.querySelectorAll('.home-playlist')).toHaveLength(12);
     expect(section.textContent).toContain('Album radio');
@@ -41,6 +47,13 @@ describe('HomePage recently added albums', () => {
     const artwork = section.querySelectorAll('.home-playlist img');
     expect(artwork[0].getAttribute('src')).toContain('random-albums.webp');
     expect(artwork[4].getAttribute('src')).toContain('background-20.webp');
+    const genres = fixture.nativeElement.querySelector('[aria-labelledby="home-genres-heading"]') as HTMLElement;
+    expect(genres.querySelectorAll('a')).toHaveLength(4);
+    expect(genres.textContent).toContain('Rock');
+    expect(genres.querySelector('.genre-source--both')?.textContent).toContain('ID3 / tags + analyzed');
+    expect(genres.querySelector('.genre-source--tags')?.textContent).toContain('ID3 / tags');
+    expect(genres.querySelector('.genre-source--analysis')?.textContent).toContain('Analyzed');
+    expect(genres.querySelector('.genre-source--both')?.getAttribute('href')).toContain('genre=Rock');
   });
 
   it('renders the seven returned albums and refreshes after a library operation', async () => {
@@ -69,6 +82,7 @@ describe('HomePage recently added albums', () => {
         {
           provide: MusicLibraryApi,
           useValue: {
+            listGenreSources: async () => [],
             listRecentAlbums: async () => { recentCalls++; return albums; },
             listAlbumPage: async () => ({ items: [] }),
             listArtistPage: async () => ({ items: [] }),
@@ -115,6 +129,7 @@ describe('HomePage recently added albums', () => {
         { provide: LibraryOperationTracker, useValue: { operation: signal(null) } },
         { provide: PlaybackSyncApi, useValue: { statistics: async () => ({ recentlyPlayed: [completed], continueListening: [item] }) } },
         { provide: MusicLibraryApi, useValue: {
+          listGenreSources: async () => [],
           listRecentAlbums: async () => [],
           listAlbumPage: async () => ({ items: [] }),
           listArtistPage: async () => ({ items: [] }),

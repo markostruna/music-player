@@ -23,6 +23,9 @@ export interface PlaybackSnapshot {
   transferTargetSessionId: string | null;
   devices: PlaybackDevice[];
   radioMode?: 'radio-album' | 'radio-track' | null;
+  smartShuffle?: boolean;
+  suggestedTrack?: MusicTrackResponse | null;
+  smartQueueAdvances?: number;
 }
 
 export interface PlaybackCommand {
@@ -55,6 +58,17 @@ export interface PlaybackStatisticsResponse {
 export class PlaybackSyncApi {
   private readonly http = inject(HttpClient);
   private lastToken: string | null = null;
+
+  async similar(trackId: number, excludedTrackIds: number[]): Promise<MusicTrackResponse | null> {
+    const token = await this.getToken();
+    return firstValueFrom(
+      this.http.post<MusicTrackResponse | null>(
+        `${MUSIC_API_BASE}/playback/similar`,
+        { trackId, excludedTrackIds },
+        { headers: { 'X-CSRF-TOKEN': token }, withCredentials: true },
+      ).pipe(timeout(15000)),
+    );
+  }
 
   async statistics(): Promise<PlaybackStatisticsResponse> {
     return firstValueFrom(

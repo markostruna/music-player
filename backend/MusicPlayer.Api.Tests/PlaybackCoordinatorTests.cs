@@ -8,6 +8,265 @@ namespace MusicPlayer.Api.Tests;
 
 public sealed class PlaybackCoordinatorTests
 {
+    [Fact]
+    public async Task SimilarityBalancesArtistsEvenWhenOneArtistHasManyMoreTracks()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var source = await fixture.Database.Tracks.SingleAsync(track => track.Id == 1);
+        source.Artist = " Artist A ";
+        source.Genre = "Rock";
+        for (var id = 3; id <= 10; id++)
+            fixture.Database.Tracks.Add(new MusicTrack
+            {
+                Id = id, SourceRootId = 1, FolderId = 1, RelativePath = $"{id}.mp3",
+                Title = $"Same artist {id}", Artist = "artist a", Genre = "rock",
+            });
+        fixture.Database.Tracks.AddRange(
+            new MusicTrack { Id = 11, SourceRootId = 1, FolderId = 1, RelativePath = "11.mp3", Title = "Other artist", Artist = "Artist B", Genre = "Rock" },
+            new MusicTrack { Id = 12, SourceRootId = 1, FolderId = 1, RelativePath = "12.mp3", Title = "Unrelated", Artist = "Artist C", Genre = "Jazz" });
+        await fixture.Database.SaveChangesAsync();
+        var library = new MusicLibraryBrowseService(fixture.Database);
+
+        var same = await library.FindSimilarTrackAsync(1, [1, 2], new FixedRandom(0), CancellationToken.None);
+        var other = await library.FindSimilarTrackAsync(1, [1, 2], new FixedRandom(1), CancellationToken.None);
+        Assert.InRange(same!.Id, 3, 10);
+        Assert.Equal(11, other!.Id);
+
+        var onlySame = await library.FindSimilarTrackAsync(1, [1, 2, 11], new FixedRandom(1), CancellationToken.None);
+        Assert.InRange(onlySame!.Id, 3, 10);
+        var onlyOther = await library.FindSimilarTrackAsync(1, Enumerable.Range(1, 10).ToArray(), new FixedRandom(0), CancellationToken.None);
+        Assert.Equal(11, onlyOther!.Id);
+    }
+
+    private sealed class FixedRandom(int value) : Random
+    {
+        public override int Next(int maxValue) => value % maxValue;
+    }
+
+    [Theory]
+    [InlineData("Jazz", "rock", "Blues", "ROCK")]
+    [InlineData("Rock", "pop", "Blues", "rock")]
+    [InlineData("Jazz", "rock", "ROCK", "pop")]
+    public async Task SimilarityMatchesTaggedAndPredictedGenres(string sourceTag, string sourcePrediction,
+        string candidateTag, string candidatePrediction)
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var source = await fixture.Database.Tracks.SingleAsync(track => track.Id == 1);
+        source.Genre = sourceTag;
+        source.PredictedGenre = sourcePrediction;
+        fixture.Database.Tracks.Add(new MusicTrack
+        {
+            Id = 3, SourceRootId = 1, FolderId = 1, RelativePath = "3.mp3", Title = "Similar",
+            Genre = candidateTag, PredictedGenre = candidatePrediction,
+        });
+        await fixture.Database.SaveChangesAsync();
+        var library = new MusicLibraryBrowseService(fixture.Database);
+
+        Assert.Equal(3, (await library.FindSimilarTrackAsync(1, [1, 2], CancellationToken.None))?.Id);
+        Assert.Null(await library.FindSimilarTrackAsync(1, [1, 2, 3], CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SimilarityUsesCurrentAudioEmbeddingsAndExcludesQueue()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        fixture.Database.Tracks.AddRange(
+            new MusicTrack { Id = 3, SourceRootId = 1, FolderId = 1, RelativePath = "3.mp3", Title = "Similar" },
+            new MusicTrack { Id = 4, SourceRootId = 1, FolderId = 1, RelativePath = "4.mp3", Title = "Different" });
+        static string Vector(int index) =>
+            System.Text.Json.JsonSerializer.Serialize(Enumerable.Range(0, 512).Select(i => i == index ? 1f : 0f));
+        fixture.Database.TrackAudioAnalyses.AddRange(
+            new TrackAudioAnalysis { TrackId = 1, Version = AudioAnalysisWorker.AnalysisVersion, Genre = "rock", EmbeddingJson = Vector(0) },
+            new TrackAudioAnalysis { TrackId = 3, Version = AudioAnalysisWorker.AnalysisVersion, Genre = "rock", EmbeddingJson = Vector(0) },
+            new TrackAudioAnalysis { TrackId = 4, Version = AudioAnalysisWorker.AnalysisVersion, Genre = "jazz", EmbeddingJson = Vector(1) });
+        await fixture.Database.SaveChangesAsync();
+        var library = new MusicLibraryBrowseService(fixture.Database);
+        Assert.Equal(3, (await library.FindSimilarTrackAsync(1, [1, 2], CancellationToken.None))?.Id);
+        Assert.Null(await library.FindSimilarTrackAsync(1, [1, 2, 3], CancellationToken.None));
+        (await fixture.Database.Tracks.SingleAsync(track => track.Id == 3)).FileSize = 1;
+        await fixture.Database.SaveChangesAsync();
+        Assert.Null(await library.FindSimilarTrackAsync(1, [1, 2], CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SmartShuffleInsertsOutsideQueueAfterThreeAdvancesAndResumesAfterRestart()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        fixture.Database.Tracks.AddRange(
+            new MusicTrack { Id = 3, SourceRootId = 1, FolderId = 1, RelativePath = "3.mp3", Title = "Three", Genre = "Rock" },
+            new MusicTrack { Id = 4, SourceRootId = 1, FolderId = 1, RelativePath = "4.mp3", Title = "Suggestion", Genre = "rock" },
+            new MusicTrack { Id = 5, SourceRootId = 1, FolderId = 1, RelativePath = "5.mp3", Title = "Five" });
+        await fixture.Database.SaveChangesAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1, 2, 3, 5], 0);
+        state = await fixture.Command(session, state.Revision, "mode-smart");
+        state = await fixture.Command(session, state.Revision, "next");
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        state = await fixture.Command(session, state.Revision, "next");
+
+        Assert.True(state.SmartShuffle);
+        Assert.Equal(4, state.SuggestedTrack?.Id);
+        Assert.Equal(2, state.CurrentIndex);
+        Assert.Equal([1, 2, 3, 5], state.Queue!.Select(track => track.Id));
+
+        fixture.Coordinator = new PlaybackCoordinator(fixture.Clock);
+        state = await fixture.Poll(session, -1, 4, true);
+        Assert.Equal(4, state.SuggestedTrack?.Id);
+        await fixture.Poll(session, state.Revision, 4, true, playId: state.PlayId);
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.Null(state.SuggestedTrack);
+        Assert.Equal(3, state.CurrentIndex);
+        Assert.True(state.IsPlaying);
+        Assert.NotNull(await fixture.Database.PlaybackHistory.SingleAsync(item => item.TrackId == 4));
+    }
+
+    [Fact]
+    public async Task SmartShuffleContinuesQueueWhenNoSimilarTrackExists()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        fixture.Database.Tracks.AddRange(
+            new MusicTrack { Id = 3, SourceRootId = 1, FolderId = 1, RelativePath = "3.mp3", Title = "Three" },
+            new MusicTrack { Id = 4, SourceRootId = 1, FolderId = 1, RelativePath = "4.mp3", Title = "Four" });
+        await fixture.Database.SaveChangesAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1, 2, 3, 4], 0);
+        state = await fixture.Command(session, state.Revision, "mode-smart");
+        for (var index = 0; index < 3; index++)
+            state = await fixture.Command(session, state.Revision, "next");
+        Assert.Null(state.SuggestedTrack);
+        Assert.Equal(3, state.CurrentIndex);
+        Assert.True(state.IsPlaying);
+    }
+
+    [Fact]
+    public async Task SmartShuffleContinuesWithSimilarTracksAfterLastSuggestion()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        fixture.Database.Tracks.AddRange(
+            new MusicTrack { Id = 3, SourceRootId = 1, FolderId = 1, RelativePath = "3.mp3", Title = "Three", Genre = "Rock" },
+            new MusicTrack { Id = 4, SourceRootId = 1, FolderId = 1, RelativePath = "4.mp3", Title = "Suggestion", Genre = "Rock" });
+        await fixture.Database.SaveChangesAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1, 2, 3], 0);
+        state = await fixture.Command(session, state.Revision, "mode-smart");
+        state = await fixture.Command(session, state.Revision, "next");
+        state = await fixture.Command(session, state.Revision, "next");
+        Assert.Equal(2, state.SmartQueueAdvances);
+        state = await fixture.Command(session, state.Revision, "next");
+        Assert.Equal(4, state.SuggestedTrack?.Id);
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.Equal(3, state.SuggestedTrack?.Id);
+        Assert.True(state.IsPlaying);
+        Assert.Equal(2, state.CurrentIndex);
+    }
+
+    [Theory]
+    [InlineData("mode-normal")]
+    [InlineData("mode-smart")]
+    public async Task FinishedQueueContinuouslyPlaysSimilarTracksAndSurvivesRestart(string mode)
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        foreach (var track in await fixture.Database.Tracks.ToListAsync()) track.Genre = "Rock";
+        await fixture.Database.SaveChangesAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1], 0);
+        state = await fixture.Command(session, state.Revision, mode);
+        var originalPlay = state.PlayId;
+
+        state = await fixture.Command(session, state.Revision, "ended", position: 100, playId: state.PlayId);
+        Assert.True(state.IsPlaying);
+        Assert.Equal(2, state.SuggestedTrack?.Id);
+        Assert.Equal([1], state.Queue!.Select(track => track.Id));
+        Assert.NotEqual(originalPlay, state.PlayId);
+        Assert.NotNull((await fixture.Database.PlaybackHistory.SingleAsync(item => item.TrackId == 1)).CompletedAtUnixMilliseconds);
+
+        fixture.Coordinator = new PlaybackCoordinator(fixture.Clock);
+        state = await fixture.Poll(session, -1);
+        Assert.Equal(2, state.SuggestedTrack?.Id);
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.Equal(1, state.SuggestedTrack?.Id);
+        Assert.True(state.IsPlaying);
+        state = await fixture.Command(session, state.Revision, "next");
+        Assert.Equal(2, state.SuggestedTrack?.Id);
+    }
+
+    [Fact]
+    public async Task AutoplayStopsOnTheLastSuggestionWhenNoFurtherMatchExists()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        foreach (var track in await fixture.Database.Tracks.ToListAsync()) track.Genre = "Rock";
+        await fixture.Database.SaveChangesAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1], 0);
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.Equal(2, state.SuggestedTrack?.Id);
+        (await fixture.Database.Tracks.SingleAsync(track => track.Id == 2)).Genre = "Jazz";
+        await fixture.Database.SaveChangesAsync();
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.False(state.IsPlaying);
+        Assert.Equal(2, state.SuggestedTrack?.Id);
+        Assert.NotNull((await fixture.Database.PlaybackHistory.SingleAsync(item => item.TrackId == 2)).CompletedAtUnixMilliseconds);
+    }
+
+    [Fact]
+    public async Task FinishedQueueStopsWhenThereIsNoSimilarTrack()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1], 0);
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.False(state.IsPlaying);
+        Assert.Null(state.SuggestedTrack);
+        Assert.Equal([1], state.Queue!.Select(track => track.Id));
+    }
+
+    [Fact]
+    public async Task EnqueuedTrackResumesAfterAnAutoplaySuggestion()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        (await fixture.Database.Tracks.SingleAsync(track => track.Id == 1)).Genre = "Rock";
+        (await fixture.Database.Tracks.SingleAsync(track => track.Id == 2)).Genre = "Rock";
+        fixture.Database.Tracks.Add(new MusicTrack
+        {
+            Id = 3, SourceRootId = 1, FolderId = 1, RelativePath = "3.mp3", Title = "Queued",
+        });
+        await fixture.Database.SaveChangesAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1], 0);
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.Equal(2, state.SuggestedTrack?.Id);
+        state = await fixture.Command(session, state.Revision, "enqueue", [3]);
+        state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.Null(state.SuggestedTrack);
+        Assert.Equal(1, state.CurrentIndex);
+        Assert.Equal([1, 3], state.Queue!.Select(track => track.Id));
+        Assert.True(state.IsPlaying);
+    }
+
+    [Fact]
+    public async Task RepeatingATrackDoesNotCountAsQueueAdvancement()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var session = Guid.NewGuid().ToString();
+        var state = await fixture.Poll(session, -1);
+        state = await fixture.Command(session, state.Revision, "play", [1, 2], 0);
+        state = await fixture.Command(session, state.Revision, "mode-smart");
+        state = await fixture.Command(session, state.Revision, "repeat");
+        for (var index = 0; index < 3; index++)
+            state = await fixture.Command(session, state.Revision, "ended", playId: state.PlayId);
+        Assert.Equal(0, state.SmartQueueAdvances);
+        state = await fixture.Command(session, state.Revision, "next");
+        Assert.Equal(1, state.SmartQueueAdvances);
+        Assert.Equal(1, state.CurrentIndex);
+    }
+
     [Theory]
     [InlineData("radio-track", 1)]
     [InlineData("radio-album", 2)]

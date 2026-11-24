@@ -15,6 +15,7 @@ yarn-error.log
 /backend/**/bin/
 /backend/**/obj/
 /backend/**/TestResults/
+/backend/MusicPlayer.Api/AudioAnalysis/.venv/
 
 # IDEs and editors
 .idea/

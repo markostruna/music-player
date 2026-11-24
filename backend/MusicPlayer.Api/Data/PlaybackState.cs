@@ -9,6 +9,9 @@ public sealed class PlaybackState
     public double PositionSeconds { get; set; }
     public bool IsPlaying { get; set; }
     public bool Shuffle { get; set; }
+    public bool SmartShuffle { get; set; }
+    public int SmartQueueAdvances { get; set; }
+    public int? SuggestedTrackId { get; set; }
     public bool Repeat { get; set; }
     public long Revision { get; set; }
     public string PlayId { get; set; } = "";

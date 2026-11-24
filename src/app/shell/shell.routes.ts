@@ -17,6 +17,10 @@ export const shellRoutes: Routes = [
         path: 'home',
         component: HomePage,
       },
+      {
+        path: 'search',
+        loadComponent: () => import('../search/search-page').then((module) => module.SearchPage),
+      },
       ...libraryRoutes,
       ...nowPlayingRoutes,
       ...adminRoutes,

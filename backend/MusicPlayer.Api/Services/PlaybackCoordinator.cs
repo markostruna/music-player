@@ -138,6 +138,9 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                     state.CurrentIndex = 0;
                     state.RadioMode = request.Action is "radio-album" or "radio-track" ? request.Action : null;
                     state.Shuffle = false;
+                    state.SmartShuffle = false;
+                    state.SmartQueueAdvances = 0;
+                    state.SuggestedTrackId = null;
                     state.Repeat = false;
                     startTrack = true;
                     break;
@@ -159,6 +162,8 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                             throw new ArgumentException("Invalid starting position.");
                         queue = request.TrackIds;
                         state.CurrentIndex = request.Index.Value;
+                        state.SuggestedTrackId = null;
+                        state.SmartQueueAdvances = 0;
                         startTrack = true;
                     }
                     else
@@ -172,6 +177,8 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                     if (request.Index is null || request.Index < 0 || request.Index >= queue.Length)
                         throw new ArgumentException("Invalid track index.");
                     state.CurrentIndex = request.Index.Value;
+                    state.SuggestedTrackId = null;
+                    state.SmartQueueAdvances = 0;
                     startTrack = true;
                     break;
                 case "next":
@@ -182,8 +189,35 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                         await UpdateHistoryAsync(state, database, timeProvider.GetUtcNow(), true,
                             cancellationToken, completed: true);
                     if (request.Action == "ended" && state.Repeat && state.CurrentIndex >= 0)
+                    {
                         startTrack = true;
-                    else if (state.Shuffle && queue.Length > 0)
+                        break;
+                    }
+                    var wasSuggestion = state.SuggestedTrackId is not null;
+                    var previousTrackId = state.SuggestedTrackId
+                        ?? (state.CurrentIndex >= 0 && state.CurrentIndex < queue.Length
+                            ? queue[state.CurrentIndex] : (int?)null);
+                    if (wasSuggestion)
+                    {
+                        state.SuggestedTrackId = null;
+                    }
+                    else if (state.SmartShuffle && state.CurrentIndex >= 0 && state.CurrentIndex < queue.Length)
+                    {
+                        state.SmartQueueAdvances++;
+                        if (state.SmartQueueAdvances >= 3)
+                        {
+                            state.SmartQueueAdvances = 0;
+                            var suggestion = await library.FindSimilarTrackAsync(
+                                queue[state.CurrentIndex], queue, cancellationToken);
+                            if (suggestion is not null)
+                            {
+                                state.SuggestedTrackId = suggestion.Id;
+                                startTrack = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (state.Shuffle && queue.Length > 0)
                     {
                         var next = queue.Length == 1 ? 0 : Random.Shared.Next(queue.Length - 1);
                         state.CurrentIndex = next >= state.CurrentIndex && queue.Length > 1 ? next + 1 : next;
@@ -210,13 +244,35 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                             startTrack = true;
                         }
                     }
-                    else if (request.Action == "ended")
+                    else if (previousTrackId is int finishedTrackId)
                     {
-                        state.IsPlaying = false;
+                        var suggestion = await library.FindSimilarTrackAsync(
+                            finishedTrackId, [], cancellationToken);
+                        if (suggestion is not null)
+                        {
+                            state.SuggestedTrackId = suggestion.Id;
+                            startTrack = true;
+                        }
+                        else
+                        {
+                            state.SuggestedTrackId = wasSuggestion ? finishedTrackId : null;
+                            state.IsPlaying = false;
+                        }
                     }
                     break;
                 case "previous":
-                    if (state.PositionSeconds > 3 || state.CurrentIndex <= 0)
+                    if (state.PositionSeconds > 3)
+                    {
+                        state.PositionSeconds = 0;
+                        devices.PositionRevision = state.Revision + 1;
+                    }
+                    else if (state.SuggestedTrackId is not null)
+                    {
+                        state.SuggestedTrackId = null;
+                        state.SmartQueueAdvances = 0;
+                        startTrack = true;
+                    }
+                    else if (state.CurrentIndex <= 0)
                     {
                         state.PositionSeconds = 0;
                         devices.PositionRevision = state.Revision + 1;
@@ -224,6 +280,7 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                     else
                     {
                         state.CurrentIndex--;
+                        state.SmartQueueAdvances = 0;
                         startTrack = true;
                     }
                     break;
@@ -241,7 +298,18 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
                     devices.PositionRevision = state.Revision + 1;
                     await UpdateHistoryAsync(state, database, timeProvider.GetUtcNow(), false, cancellationToken);
                     break;
-                case "shuffle": state.Shuffle = !state.Shuffle; break;
+                case "shuffle":
+                    state.Shuffle = !state.Shuffle;
+                    state.SmartShuffle = false;
+                    state.SmartQueueAdvances = 0;
+                    break;
+                case "mode-normal":
+                case "mode-shuffle":
+                case "mode-smart":
+                    state.Shuffle = request.Action == "mode-shuffle";
+                    state.SmartShuffle = request.Action == "mode-smart";
+                    state.SmartQueueAdvances = 0;
+                    break;
                 case "repeat": state.Repeat = !state.Repeat; break;
                 case "transfer":
                     if (request.TargetSessionId is null || !devices.Devices.ContainsKey(request.TargetSessionId))
@@ -334,7 +402,7 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
     {
         var queue = ReadQueue(state);
         if (state.CurrentIndex < 0 || state.CurrentIndex >= queue.Length || state.PlayId.Length == 0) return;
-        await UpdateHistoryEntryAsync(state.UserId, queue[state.CurrentIndex], state.PlayId,
+        await UpdateHistoryEntryAsync(state.UserId, state.SuggestedTrackId ?? queue[state.CurrentIndex], state.PlayId,
             state.PositionSeconds, database, now, create, cancellationToken, completed);
     }
 
@@ -366,7 +434,7 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
     {
         var queue = ReadQueue(state);
         if (state.PlayId.Length == 0 || state.CurrentIndex < 0 || state.CurrentIndex >= queue.Length) return;
-        devices.IssuedPlays.TryAdd(state.PlayId, queue[state.CurrentIndex]);
+        devices.IssuedPlays.TryAdd(state.PlayId, state.SuggestedTrackId ?? queue[state.CurrentIndex]);
         if (devices.IssuedPlays.Count > 100)
             devices.IssuedPlays.Remove(devices.IssuedPlays.Keys.First());
     }
@@ -376,7 +444,16 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
     {
         var ids = ReadQueue(state);
         if (ids.Length == 0) return;
-        var available = await library.GetAvailableTrackIdsAsync(ids, cancellationToken);
+        var available = await library.GetAvailableTrackIdsAsync(
+            state.SuggestedTrackId is int suggested ? ids.Append(suggested).ToArray() : ids, cancellationToken);
+        if (state.SuggestedTrackId is int suggestion && !available.Contains(suggestion))
+        {
+            state.SuggestedTrackId = null;
+            state.IsPlaying = false;
+            state.PositionSeconds = 0;
+            state.PlayId = "";
+            state.Revision++;
+        }
         if (ids.All(available.Contains)) return;
         var currentAvailable = state.CurrentIndex >= 0 && state.CurrentIndex < ids.Length
             && available.Contains(ids[state.CurrentIndex]);
@@ -388,6 +465,7 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
             : remaining.Length == 0 ? -1 : Math.Clamp(index, 0, remaining.Length - 1);
         if (!currentAvailable)
         {
+            state.SuggestedTrackId = null;
             state.IsPlaying = false;
             state.PositionSeconds = 0;
             state.PlayId = "";
@@ -402,11 +480,14 @@ public sealed class PlaybackCoordinator(TimeProvider timeProvider)
         var queue = state.Revision == knownRevision
             ? null
             : await library.GetTracksByIdsAsync(ReadQueue(state), cancellationToken);
+        var suggestion = state.SuggestedTrackId is int suggestionId
+            ? (await library.GetTracksByIdsAsync([suggestionId], cancellationToken)).SingleOrDefault()
+            : null;
         return new PlaybackResponse(state.Revision, devices.PositionRevision, state.PlayId,
             queue, state.CurrentIndex, state.PositionSeconds,
             state.IsPlaying, state.Shuffle, state.Repeat, devices.Owner, devices.Target,
             devices.Devices.Select(item => new PlaybackDeviceResponse(item.Key, item.Value.Name)).ToArray(),
-            state.RadioMode);
+            state.RadioMode, state.SmartShuffle, suggestion, state.SmartQueueAdvances);
     }
 
     private static bool ValidSession(string? value) => Guid.TryParse(value, out _);

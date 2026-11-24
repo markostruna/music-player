@@ -1,0 +1,55 @@
+@use '../@shared/components/genre-source';
+
+.search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.search-filters label {
+  display: grid;
+  gap: 4px;
+  width: 200px;
+  max-width: 100%;
+}
+
+.search-filters input,
+.search-filters select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--genre-background, var(--surface));
+  color: var(--genre-text, var(--ink));
+  font: inherit;
+}
+
+.search-filters option {
+  background: var(--genre-background, var(--surface));
+  color: var(--genre-text, var(--ink));
+}
+
+.search-filters option:not([class]) {
+  --genre-background: var(--surface);
+  --genre-text: var(--ink);
+}
+
+.search-filters button {
+  height: 40px;
+}
+
+@media (max-width: 460px) {
+  .search-filters label {
+    width: 100%;
+  }
+}
+
+.search-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}

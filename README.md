@@ -57,7 +57,8 @@ Afterhours is a self-hosted music library. The Angular client plays audio from a
 - Windows with .NET 10 SDK and Node.js/npm
 - XAMPP/Apache for public HTTPS hosting
 - Music folders readable by the Windows account running the API
-- FFmpeg on the API server's `PATH` when splitting single-FLAC CUE albums
+- FFmpeg on the API server's `PATH` for audio analysis and splitting single-FLAC CUE albums
+- Python 3.10 or later for local audio analysis
 
 ## First Run
 
@@ -88,6 +89,8 @@ The home page shows up to seven **Added recently** albums. Album and artist impo
 
 **Played recently** shows up to ten available tracks whose latest play reached the end, ordered by completion time, along with their number of recorded playback sessions. **Continue listening** shows up to ten tracks whose latest play has not ended and whose saved position is between the beginning and the end; selecting one resumes from that position. The progress bar is based on the saved position and track duration. Older history predating completion tracking is considered complete only when its saved position reaches the catalogued duration; other completed plays cannot be reliably recovered. Both sections refresh while Home is open and use the signed-in account's synchronized history; the demo does not record history.
 
+Home and the search genre dropdown list both tagged genres and audio-based estimates from available tracks. Colors and labels distinguish tags, analysis, and genres found in both sources across the library. Selecting a genre opens or filters the track search page, where a track matches either its existing tag or its estimated genre, even when they differ. Existing tags remain unchanged and continue to be shown as the track's genre. Search can combine a genre, text, and the signed-in account's listening status; the Home history sections link to the complete filtered results, and **Browse unplayed tracks** finds tracks without a recorded play. History filters are unavailable in the demo, which does not record playback history. Genre matching is case-insensitive and uses the complete genre value.
+
 Use the Admin page to create Guest accounts. Guests can play music and choose their own theme; only administrators can change the library or accounts.
 
 ## Playlists
@@ -102,6 +105,32 @@ Choose from 20 built-in background pictures on a personal playlist's page. The f
 
 Playback synchronization is enabled by default. The API saves each account's queue, current track, position, shuffle and repeat settings, and a history entry with the last position for every played track. History is retained in the SQLite database and can be retrieved by the signed-in user from `GET /api/playback/history?page=1&pageSize=50`.
 The Home summaries are available at `GET /api/playback/statistics`.
+
+## Audio Analysis And Smart Shuffle
+
+Install the CPU analysis runtime once from the repository root:
+
+```powershell
+python -m venv backend\MusicPlayer.Api\AudioAnalysis\.venv
+backend\MusicPlayer.Api\AudioAnalysis\.venv\Scripts\python.exe -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+backend\MusicPlayer.Api\AudioAnalysis\.venv\Scripts\python.exe -m pip install -r backend\MusicPlayer.Api\AudioAnalysis\requirements.txt
+```
+
+The API uses the Apache-2.0 [LAION CLAP model](https://huggingface.co/laion/larger_clap_music_and_speech) locally. Its model files (about 1.5 GB) download on the first analysis; audio stays on the server. The background worker analyzes available existing tracks and newly scanned tracks, one at a time, using a ten-second sample near the middle of each song. It stores a genre estimate and a 512-dimensional similarity embedding in the database, without changing audio tags. Estimates are approximate and limited to the model's configured genre labels. Changed files are reanalyzed after a library rescan. Failures are logged and retried; a missing Python runtime or FFmpeg does not stop regular playback.
+
+On **Now playing**, choose **Normal**, **Shuffle**, or **Smart shuffle**. Smart shuffle follows the queue in order and, after every three queue tracks (including skipped tracks), plays a similar available track not in the queue, then resumes the queue. Similarity uses audio embeddings and matching artist or genre. When suitable tracks by both the same artist and other artists exist, each group has an equal chance of being selected, regardless of its size. If no suitable track is available, the queue continues normally. Repeat takes precedence until it is turned off or the track is skipped. Smart shuffle also works with synchronization disabled; the demo uses its fictional artist and genre metadata instead of audio analysis.
+
+After the final queued track, playback continues with similar tracks, each chosen using the track that just played. The original queue stays intact, and previously queued tracks can be selected again. Playback stops when no similar track is available. Repeat and the built-in radio modes keep their existing behavior; Shuffle continues selecting from its queue.
+
+For a deployed API, the repository's virtual environment is not used automatically. Create a separate environment in the deployed `AudioAnalysis\.venv` directory, substituting your API installation path:
+
+```powershell
+py -3.10 -m venv C:\server\music-player\AudioAnalysis\.venv
+C:\server\music-player\AudioAnalysis\.venv\Scripts\python.exe -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+C:\server\music-player\AudioAnalysis\.venv\Scripts\python.exe -m pip install -r C:\server\music-player\AudioAnalysis\requirements.txt
+```
+
+Ensure the service account can execute Python and FFmpeg and write to the model cache. Deployment preserves `.venv` across updates. Alternatively configure `AudioAnalysis:PythonPath` and `AudioAnalysis:ModelCachePath` for the service; the default cache is `AudioAnalysis\.venv\model-cache` under the API working directory. Analysis failures appear in API logs.
 
 Signed-in browsers share transport controls and the queue. The **Now playing** page shows the current playback device and lets you select another one or choose **Play on this device**. The previous device stops before a requested handoff. If the playback device disconnects, another connected device takes over after its connection lease expires (up to about 15 seconds). Device availability is held in the API process, so synchronization requires a single running API instance.
 

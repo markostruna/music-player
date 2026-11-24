@@ -58,6 +58,31 @@ describe('demo API', () => {
     expect(await firstValueFrom(http.get<unknown[]>(`${MUSIC_API_BASE}/playlists`))).toHaveLength(0);
   });
 
+  it('browses tagged genres and unplayed demo tracks without recording history', async () => {
+    const api = TestBed.inject(MusicLibraryApi);
+    expect(await api.listGenres()).toContain('Indie electronic');
+    expect(await api.listGenreSources()).toContainEqual({
+      name: 'Indie electronic', fromTags: true, fromAnalysis: false,
+    });
+    const result = await api.browseListeningTracks('', 'indie electronic', 'unplayed', 1, 50);
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.every((track) => track.genre === 'Indie electronic')).toBe(true);
+    expect((await api.browseListeningTracks('', '', 'recent', 1, 50)).totalCount).toBe(0);
+  });
+
+  it('can select a similar demo track by another artist despite many same-artist tracks', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    try {
+      const selected = await firstValueFrom(http.post<MusicTrack>(`${MUSIC_API_BASE}/playback/similar`, {
+        trackId: 1, excludedTrackIds: [1],
+      }));
+      expect(selected.artist).not.toBe('Aurora Drive');
+      expect(selected.genre).toBe('Indie electronic');
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it('serves a populated library with local artwork and generated audio', async () => {
     const tracks = await firstValueFrom(
       http.get<(MusicTrack & { artistImageUrl: string })[]>(`${MUSIC_API_BASE}/library/tracks`),

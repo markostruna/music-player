@@ -41,6 +41,14 @@ export interface PagedTracks {
   pageSize: number;
 }
 
+export type ListeningStatus = 'all' | 'recent' | 'progress' | 'unplayed';
+
+export interface GenreSource {
+  name: string;
+  fromTags: boolean;
+  fromAnalysis: boolean;
+}
+
 export type MusicTrackResponse = Omit<MusicTrack, 'tileCoverUrl' | 'albumCoverUrl'>;
 type PagedTrackResponse = Omit<PagedTracks, 'items'> & { items: MusicTrackResponse[] };
 
@@ -206,6 +214,27 @@ export interface MetadataPatch {
 export class MusicLibraryApi {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthState);
+
+  listGenres(): Promise<string[]> {
+    return firstValueFrom(
+      this.http.get<string[]>(`${MUSIC_API_BASE}/playback/genres`, { withCredentials: true }),
+    );
+  }
+
+  listGenreSources(): Promise<GenreSource[]> {
+    return firstValueFrom(
+      this.http.get<GenreSource[]>(`${MUSIC_API_BASE}/playback/genres/sources`, { withCredentials: true }),
+    );
+  }
+
+  browseListeningTracks(
+    query: string, genre: string, status: ListeningStatus, page: number, pageSize: number,
+  ): Promise<PagedTracks> {
+    const params = new URLSearchParams({ query, genre, status, page: String(page), pageSize: String(pageSize) });
+    return firstValueFrom(
+      this.http.get<PagedTrackResponse>(`${MUSIC_API_BASE}/playback/browse?${params}`, { withCredentials: true }),
+    ).then((result) => ({ ...result, items: this.mapTracks(result.items) }));
+  }
 
   listTracks(): Promise<MusicTrack[]> {
     return firstValueFrom(

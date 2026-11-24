@@ -29,6 +29,8 @@ interface DemoBody {
   path: string;
   isEnabled: boolean;
   trackIds: number[];
+  trackId: number;
+  excludedTrackIds: number[];
   backgroundId?: number;
   changes: MetadataPatch;
   image: string;
@@ -704,6 +706,33 @@ export class DemoBackend {
         this.playlists = this.playlists.filter((item) => item.id !== playlist.id);
         return null;
       }
+    }
+    if (path === '/playback/similar' && method === 'POST') {
+      const source = this.tracks.find((track) => track.id === body.trackId);
+      if (!source) return null;
+      const matches = this.tracks.filter((track) => track.id !== source.id
+        && !body.excludedTrackIds.includes(track.id)
+        && (track.artist === source.artist || (!!source.genre && track.genre === source.genre)));
+      const sameArtist = matches.filter((track) => track.artist === source.artist);
+      const otherArtists = matches.filter((track) => track.artist !== source.artist);
+      const pool = sameArtist.length && otherArtists.length
+        ? (Math.random() < 0.5 ? sameArtist : otherArtists)
+        : sameArtist.length ? sameArtist : otherArtists;
+      return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    }
+    if (path === '/playback/genres' && method === 'GET')
+      return [...new Set(this.tracks.map((track) => track.genre).filter(Boolean))].sort();
+    if (path === '/playback/genres/sources' && method === 'GET')
+      return [...new Map(this.tracks.map((track) => track.genre.trim())
+        .filter(Boolean).map((genre) => [genre.toLowerCase(), genre])).values()]
+        .sort((left, right) => left.toLowerCase().localeCompare(right.toLowerCase()))
+        .map((name) => ({ name, fromTags: true, fromAnalysis: false }));
+    if (path === '/playback/browse' && method === 'GET') {
+      const genre = (url.searchParams.get('genre') ?? '').trim().toLowerCase();
+      const status = url.searchParams.get('status') ?? 'all';
+      const tracks = status === 'recent' || status === 'progress' ? [] : this.filteredTracks(url)
+        .filter((track) => !genre || track.genre.trim().toLowerCase() === genre);
+      return this.paginate(tracks, url);
     }
     if (path === '/library/tracks' && method === 'GET') return this.tracks;
     if (path === '/library/tracks/search' && method === 'GET') return this.filteredTracks(url);

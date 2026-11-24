@@ -1,3 +1,5 @@
+@use '../@shared/components/genre-source';
+
 :host {
   display: block;
 }
@@ -41,6 +43,25 @@
 
 .home-category {
   margin-top: 30px;
+}
+
+.home-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-genres a {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--genre-background);
+  color: var(--genre-text);
+  text-decoration: none;
+}
+
+.home-genres small {
+  font-size: 0.75em;
+  margin-left: 4px;
 }
 
 .home-category-heading {

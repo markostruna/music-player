@@ -26,6 +26,104 @@ public sealed class MusicLibraryScanTests : IAsyncLifetime
     private string testDirectory = null!;
     private string sourceDirectory = null!;
 
+    [Fact]
+    public async Task AudioAnalysisBackfillsAndReanalyzesChangedAndNewTracks()
+    {
+        var firstPath = Path.Combine(sourceDirectory, "first.wav");
+        await CreateWaveFileAsync(firstPath);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest { Name = "Music", Path = sourceDirectory }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+
+        var options = new DbContextOptionsBuilder<MusicDbContext>().UseSqlite(connection).Options;
+        await using var services = new ServiceCollection()
+            .AddScoped(_ => new MusicDbContext(options))
+            .AddSingleton<IMusicLibraryService>(library)
+            .BuildServiceProvider();
+        var analyzer = new StubAudioAnalyzer();
+        var worker = new AudioAnalysisWorker(services.GetRequiredService<IServiceScopeFactory>(),
+            analyzer, NullLogger<AudioAnalysisWorker>.Instance);
+        Assert.True(await worker.AnalyzeNextAsync(CancellationToken.None));
+        database.ChangeTracker.Clear();
+        var first = await database.Tracks.SingleAsync();
+        Assert.Equal("rock", first.PredictedGenre);
+        Assert.Equal(512, System.Text.Json.JsonSerializer.Deserialize<float[]>(
+            (await database.TrackAudioAnalyses.SingleAsync()).EmbeddingJson)!.Length);
+        Assert.False(await worker.AnalyzeNextAsync(CancellationToken.None));
+
+        File.SetLastWriteTimeUtc(firstPath, File.GetLastWriteTimeUtc(firstPath).AddSeconds(10));
+        var secondPath = Path.Combine(sourceDirectory, "second.wav");
+        await CreateWaveFileAsync(secondPath);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        database.ChangeTracker.Clear();
+        Assert.Equal("", (await database.Tracks.SingleAsync(track => track.Id == first.Id)).PredictedGenre);
+        foreach (var track in await database.Tracks.ToListAsync())
+            track.ImportedAtUnixMilliseconds = track.Id == first.Id ? 1 : 2;
+        await database.SaveChangesAsync();
+        Assert.True(await worker.AnalyzeNextAsync(CancellationToken.None));
+        Assert.Equal(secondPath, analyzer.Paths.Last());
+        Assert.True(await worker.AnalyzeNextAsync(CancellationToken.None));
+        Assert.False(await worker.AnalyzeNextAsync(CancellationToken.None));
+        Assert.Equal(3, analyzer.Calls);
+        database.ChangeTracker.Clear();
+        Assert.Equal(2, await database.TrackAudioAnalyses.CountAsync());
+        Assert.All(await database.Tracks.ToListAsync(), track => Assert.Equal("rock", track.PredictedGenre));
+        var browse = new MusicLibraryBrowseService(database);
+        Assert.Equal(["rock"], await browse.GetGenresAsync(CancellationToken.None));
+        var found = await browse.SearchListeningTracksAsync(1, null, "ROCK", "all", 1, 50, CancellationToken.None);
+        Assert.Equal(2, found.TotalCount);
+        first = await database.Tracks.SingleAsync(track => track.Id == first.Id);
+        first.Genre = "Jazz";
+        (await database.Tracks.SingleAsync(track => track.Id != first.Id)).Genre = "ROCK";
+        await database.SaveChangesAsync();
+        Assert.Equal("Jazz", (await browse.GetTracksByIdsAsync([first.Id], CancellationToken.None)).Single().Genre);
+        var genres = await browse.GetGenresAsync(CancellationToken.None);
+        Assert.Equal(2, genres.Count);
+        Assert.Contains(genres, genre => genre.Equals("jazz", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(genres, genre => genre.Equals("rock", StringComparison.OrdinalIgnoreCase));
+        found = await browse.SearchListeningTracksAsync(1, null, " rOcK ", "all", 1, 50, CancellationToken.None);
+        Assert.Equal(2, found.TotalCount);
+        Assert.Equal("Jazz", found.Items.Single(track => track.Id == first.Id).Genre);
+        var jazz = await browse.SearchListeningTracksAsync(1, null, "JAZZ", "all", 1, 50, CancellationToken.None);
+        Assert.Equal(first.Id, Assert.Single(jazz.Items).Id);
+    }
+
+    private sealed class StubAudioAnalyzer : IAudioAnalyzer
+    {
+        public int Calls { get; private set; }
+        public List<string> Paths { get; } = [];
+        public Action<string>? OnAnalyze { get; init; }
+        public Task<AudioAnalysisResult> AnalyzeAsync(string path, double duration, CancellationToken cancellationToken)
+        {
+            Calls++;
+            Paths.Add(path);
+            OnAnalyze?.Invoke(path);
+            return Task.FromResult(new AudioAnalysisResult(Enumerable.Repeat(0.1f, 512).ToArray(), "rock", null));
+        }
+        public void Reset() { }
+    }
+
+    [Fact]
+    public async Task AudioAnalysisDoesNotSaveResultsForAFileChangedDuringAnalysis()
+    {
+        var path = Path.Combine(sourceDirectory, "changing.wav");
+        await CreateWaveFileAsync(path);
+        var root = await library.AddRootAsync(new CreateSourceRootRequest { Name = "Music", Path = sourceDirectory }, CancellationToken.None);
+        await library.ScanAsync(root.Id, CancellationToken.None);
+        var options = new DbContextOptionsBuilder<MusicDbContext>().UseSqlite(connection).Options;
+        await using var services = new ServiceCollection()
+            .AddScoped(_ => new MusicDbContext(options))
+            .AddSingleton<IMusicLibraryService>(library).BuildServiceProvider();
+        var analyzer = new StubAudioAnalyzer
+        {
+            OnAnalyze = file => File.SetLastWriteTimeUtc(file, File.GetLastWriteTimeUtc(file).AddSeconds(10)),
+        };
+        var worker = new AudioAnalysisWorker(services.GetRequiredService<IServiceScopeFactory>(),
+            analyzer, NullLogger<AudioAnalysisWorker>.Instance);
+        Assert.True(await worker.AnalyzeNextAsync(CancellationToken.None));
+        Assert.Empty(await database.TrackAudioAnalyses.ToListAsync());
+        Assert.False(await worker.AnalyzeNextAsync(CancellationToken.None));
+    }
+
     public async Task InitializeAsync()
     {
         connection = new SqliteConnection("Data Source=:memory:");

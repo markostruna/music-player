@@ -41,7 +41,7 @@ function Stop-Api {
 
 function Copy-Binaries($from) {
     # Mirror binaries but keep runtime state (database, logs, backups).
-    robocopy $from $InstallPath /MIR /NFL /NDL /NJH /NJS /NP /XD data logs backups | Out-Null
+    robocopy $from $InstallPath /MIR /NFL /NDL /NJH /NJS /NP /XD data logs backups .venv | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
 }
 
@@ -85,7 +85,7 @@ try {
         $dest = Join-Path $backupRoot $stamp
         $binBackup = Join-Path $dest 'bin'
         New-Item -ItemType Directory -Force -Path $binBackup | Out-Null
-        robocopy $InstallPath $binBackup /E /NFL /NDL /NJH /NJS /NP /XD data logs backups | Out-Null
+        robocopy $InstallPath $binBackup /E /NFL /NDL /NJH /NJS /NP /XD data logs backups .venv | Out-Null
         if (Test-Path $dataDir) {
             $dbBackup = Join-Path $dest 'data'
             Copy-Item $dataDir $dbBackup -Recurse

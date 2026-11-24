@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MusicPlayer.Api.Contracts;
@@ -33,6 +34,148 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         IReadOnlyList<int> ids, CancellationToken cancellationToken) =>
         (await AvailableTracks().Where(track => ids.Contains(track.Id))
             .Select(track => track.Id).ToArrayAsync(cancellationToken)).ToHashSet();
+
+    public Task<TrackResponse?> FindSimilarTrackAsync(
+        int trackId, IReadOnlyList<int> excludedIds, CancellationToken cancellationToken) =>
+        FindSimilarTrackAsync(trackId, excludedIds, Random.Shared, cancellationToken);
+
+    internal async Task<TrackResponse?> FindSimilarTrackAsync(
+        int trackId, IReadOnlyList<int> excludedIds, Random random, CancellationToken cancellationToken)
+    {
+        var source = await AvailableTracks().Include(track => track.AudioAnalysis)
+            .SingleOrDefaultAsync(track => track.Id == trackId, cancellationToken);
+        if (source is null) return null;
+        var sourceVector = GetCurrentEmbedding(source);
+        var artist = source.Artist.Trim();
+        var knownArtist = artist.Length > 0 && !artist.Equals("Unknown artist", StringComparison.OrdinalIgnoreCase);
+        var sameArtist = new List<(int Id, double Score)>();
+        var otherArtists = new List<(int Id, double Score)>();
+        var candidates = AvailableTracks().Include(track => track.AudioAnalysis)
+            .Where(track => track.Id != trackId && !excludedIds.Contains(track.Id));
+        await foreach (var candidate in candidates.AsAsyncEnumerable().WithCancellation(cancellationToken))
+        {
+            var artistMatch = knownArtist && artist.Equals(candidate.Artist.Trim(), StringComparison.OrdinalIgnoreCase);
+            var genreMatch = GenresMatch(source.Genre, candidate.Genre)
+                || GenresMatch(source.Genre, candidate.PredictedGenre)
+                || GenresMatch(source.PredictedGenre, candidate.Genre)
+                || GenresMatch(source.PredictedGenre, candidate.PredictedGenre);
+            var similarity = sourceVector is null ? -1 : CosineSimilarity(sourceVector, GetCurrentEmbedding(candidate));
+            if (!artistMatch && !genreMatch && similarity < 0.6) continue;
+            var scored = artistMatch ? sameArtist : otherArtists;
+            scored.Add((candidate.Id, (genreMatch ? 1 : 0) + Math.Max(0, similarity)));
+            if (scored.Count > 5)
+                scored.Remove(scored.MinBy(item => item.Score));
+        }
+        if (sameArtist.Count == 0 && otherArtists.Count == 0) return null;
+        var best = sameArtist.Count == 0 ? otherArtists
+            : otherArtists.Count == 0 ? sameArtist
+            : random.Next(2) == 0 ? sameArtist : otherArtists;
+        var id = best[random.Next(best.Count)].Id;
+        return (await GetTracksByIdsAsync([id], cancellationToken)).SingleOrDefault();
+    }
+
+    private static bool GenresMatch(string left, string right) =>
+        !string.IsNullOrWhiteSpace(left)
+        && left.Trim().Equals(right.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static float[]? GetCurrentEmbedding(MusicTrack track)
+    {
+        var analysis = track.AudioAnalysis;
+        if (analysis is null || analysis.Version != AudioAnalysisWorker.AnalysisVersion
+            || analysis.FileSize != track.FileSize || analysis.LastWriteTime != track.LastWriteTime)
+            return null;
+        var vector = JsonSerializer.Deserialize<float[]>(analysis.EmbeddingJson)
+            ?? throw new InvalidDataException("A saved audio embedding is invalid.");
+        if (vector.Length != 512 || vector.Any(value => !float.IsFinite(value)))
+            throw new InvalidDataException("A saved audio embedding is invalid.");
+        return vector;
+    }
+
+    private static double CosineSimilarity(float[]? left, float[]? right)
+    {
+        if (left is null || right is null) return -1;
+        double dot = 0, leftNorm = 0, rightNorm = 0;
+        for (var index = 0; index < left.Length; index++)
+        {
+            dot += (double)left[index] * right[index];
+            leftNorm += (double)left[index] * left[index];
+            rightNorm += (double)right[index] * right[index];
+        }
+        return leftNorm == 0 || rightNorm == 0 ? -1 : dot / Math.Sqrt(leftNorm * rightNorm);
+    }
+
+    public async Task<IReadOnlyList<string>> GetGenresAsync(CancellationToken cancellationToken)
+    {
+        var tagged = AvailableTracks()
+            .Select(track => EF.Functions.Collate(track.Genre.Trim(), "NOCASE"))
+            .Where(genre => genre != "");
+        var predicted = AvailableTracks()
+            .Select(track => EF.Functions.Collate(track.PredictedGenre.Trim(), "NOCASE"))
+            .Where(genre => genre != "");
+        return await tagged.Union(predicted).OrderBy(genre => genre).ToArrayAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<GenreSourceResponse>> GetGenreSourcesAsync(CancellationToken cancellationToken)
+    {
+        var tagged = AvailableTracks()
+            .Select(track => new { Name = EF.Functions.Collate(track.Genre.Trim(), "NOCASE"), Tagged = 1, Analyzed = 0 })
+            .Where(item => item.Name != "");
+        var predicted = AvailableTracks()
+            .Select(track => new { Name = EF.Functions.Collate(track.PredictedGenre.Trim(), "NOCASE"), Tagged = 0, Analyzed = 1 })
+            .Where(item => item.Name != "");
+        var genres = await tagged.Concat(predicted)
+            .GroupBy(item => item.Name)
+            .Select(group => new { Name = group.Key, Tagged = group.Max(item => item.Tagged), Analyzed = group.Max(item => item.Analyzed) })
+            .OrderBy(item => item.Name)
+            .ToArrayAsync(cancellationToken);
+        return genres.Select(item => new GenreSourceResponse(item.Name, item.Tagged == 1, item.Analyzed == 1)).ToArray();
+    }
+
+    public async Task<PagedResponse<TrackResponse>> SearchListeningTracksAsync(
+        int userId, string? query, string? genre, string status, int page, int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var tracks = ApplySearch(AvailableTracks(), query);
+        if (!string.IsNullOrWhiteSpace(genre))
+        {
+            var value = genre.Trim();
+            tracks = tracks.Where(track =>
+                EF.Functions.Collate(track.Genre.Trim(), "NOCASE") == value
+                || EF.Functions.Collate(track.PredictedGenre.Trim(), "NOCASE") == value);
+        }
+
+        var history = database.PlaybackHistory.AsNoTracking().Where(item => item.UserId == userId);
+        var latest = history.Where(item => !history.Any(other => other.TrackId == item.TrackId
+            && (other.StartedAtUnixMilliseconds > item.StartedAtUnixMilliseconds
+                || (other.StartedAtUnixMilliseconds == item.StartedAtUnixMilliseconds && other.Id > item.Id))));
+        tracks = status switch
+        {
+            "recent" => tracks.Where(track => latest.Any(item =>
+                item.TrackId == track.Id && item.CompletedAtUnixMilliseconds != null)),
+            "progress" => tracks.Where(track => latest.Any(item =>
+                item.TrackId == track.Id && item.CompletedAtUnixMilliseconds == null
+                && item.PositionSeconds > 0 && track.DurationSeconds > 0
+                && item.PositionSeconds < track.DurationSeconds)),
+            "unplayed" => tracks.Where(track => !history.Any(item => item.TrackId == track.Id)),
+            "all" => tracks,
+            _ => throw new ArgumentException("Invalid listening status.", nameof(status)),
+        };
+
+        var total = await tracks.CountAsync(cancellationToken);
+        var pageCount = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var actualPage = Math.Min(page, pageCount);
+        var ordered = status == "recent"
+            ? tracks.OrderByDescending(track => latest.Where(item => item.TrackId == track.Id)
+                .Select(item => item.CompletedAtUnixMilliseconds).FirstOrDefault()).ThenBy(track => track.Id)
+            : status == "progress"
+                ? tracks.OrderByDescending(track => latest.Where(item => item.TrackId == track.Id)
+                    .Select(item => (long?)item.StartedAtUnixMilliseconds).FirstOrDefault()).ThenBy(track => track.Id)
+                : tracks.OrderBy(track => track.Artist).ThenBy(track => track.Album)
+                    .ThenBy(track => track.DiscNumber).ThenBy(track => track.TrackNumber)
+                    .ThenBy(track => track.Id);
+        var items = await ordered.Skip((actualPage - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return new PagedResponse<TrackResponse>(await ToTrackResponsesAsync(items, cancellationToken), total, actualPage, pageSize);
+    }
 
     public async Task<IReadOnlyList<TrackResponse>> GetRandomTracksAsync(
         bool albums, int count, CancellationToken cancellationToken)
@@ -536,7 +679,7 @@ public sealed class MusicLibraryBrowseService(MusicDbContext database)
         track.Artist,
         track.Album,
         track.AlbumArtist,
-        track.Genre,
+        string.IsNullOrWhiteSpace(track.Genre) ? track.PredictedGenre : track.Genre,
         track.TrackNumber,
         track.DiscNumber,
         track.Year,

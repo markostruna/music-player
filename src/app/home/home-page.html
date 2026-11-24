@@ -43,6 +43,21 @@
     </div>
   </section>
 
+  <section class="home-category" aria-labelledby="home-genres-heading">
+    <div class="home-category-heading">
+      <div><span class="eyebrow">EXPLORE YOUR MUSIC</span><h2 id="home-genres-heading">Genres</h2></div>
+      <a class="see-all" routerLink="/search">Search tracks</a>
+    </div>
+    @if (genresError()) { <p class="empty-state" role="alert">{{ genresError() }}</p> }
+    <div class="home-genres">
+      @for (genre of genres(); track genre.name) {
+        <a routerLink="/search" [queryParams]="{ genre: genre.name }" [class]="genreSourceClass(genre)">
+          {{ genre.name }} <small>{{ genreSourceLabel(genre) }}</small>
+        </a>
+      }
+    </div>
+  </section>
+
   @if (!demoMode) {
     @if (statisticsError()) {
       <p class="empty-state" role="alert">{{ statisticsError() }}</p>
@@ -57,6 +72,8 @@
             <span class="eyebrow">YOUR LISTENING HISTORY</span>
             <h2 [id]="section.id">{{ section.title }}</h2>
           </div>
+          <a class="see-all" routerLink="/search"
+            [queryParams]="{ status: section.resume ? 'progress' : 'recent' }">See all</a>
         </div>
         @if (section.items.length) {
           <div class="home-track-grid">
@@ -92,6 +109,9 @@
         }
       </section>
     }
+    <section class="home-category">
+      <a class="see-all" routerLink="/search" [queryParams]="{ status: 'unplayed' }">Browse unplayed tracks</a>
+    </section>
   }
 
   <section class="home-category" aria-labelledby="home-recent-heading">

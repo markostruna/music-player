@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="MusicPlayer.Api.Tests" />
+    <Content Include="AudioAnalysis\analyze.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="AudioAnalysis\requirements.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

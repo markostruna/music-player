@@ -39,6 +39,8 @@ builder.Services.AddScoped<IMusicLibraryService, MusicLibraryService>();
 builder.Services.AddSingleton<LibraryOperationManager>();
 builder.Services.AddHostedService<LibraryOperationManager>(provider =>
     provider.GetRequiredService<LibraryOperationManager>());
+builder.Services.AddSingleton<IAudioAnalyzer, ClapAudioAnalyzer>();
+builder.Services.AddHostedService<AudioAnalysisWorker>();
 builder.Services.AddHttpClient<IMusicBrainzClient, MusicBrainzClient>("MetadataProviders", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);

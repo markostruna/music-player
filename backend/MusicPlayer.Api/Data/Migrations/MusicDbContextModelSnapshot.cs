@@ -260,6 +260,11 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.Property<DateTimeOffset>("LastWriteTime")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PredictedGenre")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RelativePath")
                         .IsRequired()
                         .HasMaxLength(2048)
@@ -411,6 +416,15 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.Property<bool>("Shuffle")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("SmartQueueAdvances")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SmartShuffle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SuggestedTrackId")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("UserId");
 
                     b.ToTable("PlaybackStates");
@@ -430,6 +444,33 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.HasKey("Key");
 
                     b.ToTable("ProviderCredentials");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.TrackAudioAnalysis", b =>
+                {
+                    b.Property<int>("TrackId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EmbeddingJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Genre")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastWriteTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("TrackId");
+
+                    b.ToTable("TrackAudioAnalyses");
                 });
 
             modelBuilder.Entity("MusicPlayer.Api.Data.MusicFolder", b =>
@@ -514,6 +555,17 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("MusicPlayer.Api.Data.TrackAudioAnalysis", b =>
+                {
+                    b.HasOne("MusicPlayer.Api.Data.MusicTrack", "Track")
+                        .WithOne("AudioAnalysis")
+                        .HasForeignKey("MusicPlayer.Api.Data.TrackAudioAnalysis", "TrackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Track");
+                });
+
             modelBuilder.Entity("MusicPlayer.Api.Data.MusicPlaylist", b =>
                 {
                     b.Navigation("Tracks");
@@ -524,6 +576,11 @@ namespace MusicPlayer.Api.Data.Migrations
                     b.Navigation("Folders");
 
                     b.Navigation("Tracks");
+                });
+
+            modelBuilder.Entity("MusicPlayer.Api.Data.MusicTrack", b =>
+                {
+                    b.Navigation("AudioAnalysis");
                 });
 #pragma warning restore 612, 618
         }

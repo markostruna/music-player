@@ -7,6 +7,7 @@ import { LibraryStore, LibraryView } from '@shared/services/library-store';
 import {
   AlbumSummary,
   ArtistSummary,
+  GenreSource,
   MusicLibraryApi,
   MusicTrack,
 } from '@shared/services/music-library-api';
@@ -15,6 +16,7 @@ import { LibraryOperationTracker } from '@shared/services/library-operation-trac
 import { PlaybackSyncApi } from '@shared/services/playback-sync-api';
 import { DEMO_MODE } from '@shared/utils/api-path';
 import { BUILT_IN_PLAYLISTS, playlistBackgroundUrl, PlaylistService } from '@shared/services/playlist.service';
+import { genreSourceClass, genreSourceLabel } from '@shared/utils/genre-source';
 
 const HOME_COLLECTION_SIZE = 6;
 
@@ -50,6 +52,10 @@ export class HomePage implements OnInit {
   readonly recentAlbums = signal<AlbumSummary[]>([]);
   readonly artists = signal<ArtistSummary[]>([]);
   readonly tracks = signal<MusicTrack[]>([]);
+  readonly genres = signal<GenreSource[]>([]);
+  readonly genreSourceClass = genreSourceClass;
+  readonly genreSourceLabel = genreSourceLabel;
+  readonly genresError = signal('');
   readonly recentlyPlayed = signal<PlayedTrack[]>([]);
   readonly continueListening = signal<PlayedTrack[]>([]);
   readonly statisticsLoading = signal(!DEMO_MODE);
@@ -76,6 +82,7 @@ export class HomePage implements OnInit {
       const operation = this.operations.operation();
       if (operation?.state === 'completed') {
         untracked(() => void this.loadRecentAlbums());
+        untracked(() => void this.loadGenres());
       }
     });
   }
@@ -85,7 +92,10 @@ export class HomePage implements OnInit {
     void this.playlistService.load().catch(() => this.playlistsError.set('Playlists could not be loaded.'));
     if (!DEMO_MODE) {
       void this.loadStatistics();
-      const timer = setInterval(() => void this.loadStatistics(), 10000);
+      const timer = setInterval(() => {
+        void this.loadStatistics();
+        void this.loadGenres();
+      }, 10000);
       this.destroyRef.onDestroy(() => clearInterval(timer));
     }
   }
@@ -111,8 +121,18 @@ export class HomePage implements OnInit {
   }
 
   async loadHomeCollections(): Promise<void> {
+    void this.loadGenres();
     await Promise.all([this.loadAlbums(), this.loadRecentAlbums()]);
     await Promise.all([this.loadArtists(), this.loadTracks()]);
+  }
+
+  private async loadGenres(): Promise<void> {
+    try {
+      this.genres.set(await this.library.listGenreSources());
+      this.genresError.set('');
+    } catch {
+      this.genresError.set('Genres could not be loaded. Check the music server connection.');
+    }
   }
 
   private async loadRecentAlbums(): Promise<void> {

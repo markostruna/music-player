@@ -83,4 +83,9 @@ export class NowPlayingPage {
     const stickyTop = containerScrolls ? container.getBoundingClientRect().top : 0;
     this.queueHeadingStuck.set(heading.getBoundingClientRect().top <= stickyTop + 1);
   }
+
+  protected changePlaybackMode(value: string): void {
+    if (value === 'normal' || value === 'shuffle' || value === 'smart')
+      this.player.setPlaybackMode(value);
+  }
 }

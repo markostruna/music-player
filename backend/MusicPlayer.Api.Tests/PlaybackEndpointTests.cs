@@ -59,6 +59,7 @@ public sealed class PlaybackEndpointTests
             database.Tracks.Add(new MusicTrack
             {
                 Id = 1, SourceRootId = 1, FolderId = 1, RelativePath = "1.mp3", Title = "One",
+                Genre = "Jazz", PredictedGenre = "rock",
             });
             await database.SaveChangesAsync();
         }
@@ -67,9 +68,14 @@ public sealed class PlaybackEndpointTests
         using var anonymous = CreateClient(address);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playback/history")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playback/statistics")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playback/genres/sources")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/playlists")).StatusCode);
 
         using var first = CreateClient(address, "1");
+        var genres = await first.GetFromJsonAsync<GenreSourceResponse[]>("/api/playback/genres/sources");
+        Assert.Equal(new GenreSourceResponse("Jazz", true, false), genres![0]);
+        Assert.Equal(new GenreSourceResponse("rock", false, true), genres[1]);
+        Assert.Equal(["Jazz", "rock"], (await first.GetFromJsonAsync<string[]>("/api/playback/genres"))!);
         var session = Guid.NewGuid().ToString();
         var poll = new PlaybackPollRequest(session, "Browser", -1, 0, false, false);
         Assert.Equal(HttpStatusCode.BadRequest, (await first.PostAsJsonAsync("/api/playback/poll", poll)).StatusCode);

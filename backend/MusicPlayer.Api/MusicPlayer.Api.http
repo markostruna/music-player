@@ -8,3 +8,25 @@ Accept: application/json
 ### Playback statistics (requires a signed-in session)
 GET {{MusicPlayer.Api_HostAddress}}/api/playback/statistics
 Accept: application/json
+
+### Genres from available track tags and audio analysis (requires a signed-in session)
+GET {{MusicPlayer.Api_HostAddress}}/api/playback/genres
+
+### Genres with tag and audio-analysis sources (requires a signed-in session)
+GET {{MusicPlayer.Api_HostAddress}}/api/playback/genres/sources
+Accept: application/json
+
+### Filter available tracks by genre, text, and listening state
+GET {{MusicPlayer.Api_HostAddress}}/api/playback/browse?genre=Rock&query=&status=unplayed&page=1&pageSize=50
+Accept: application/json
+
+### Invalid search filter
+GET {{MusicPlayer.Api_HostAddress}}/api/playback/browse?status=unknown
+Accept: application/json
+
+### Find a similar track outside a queue (requires a signed-in session and CSRF token)
+POST {{MusicPlayer.Api_HostAddress}}/api/playback/similar
+Content-Type: application/json
+X-CSRF-TOKEN: {{csrfToken}}
+
+{"trackId": 1, "excludedTrackIds": [1, 2, 3]}

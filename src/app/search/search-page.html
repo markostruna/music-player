@@ -1,0 +1,40 @@
+<div class="content-scroll search-page">
+  <h1>Search tracks</h1>
+  <form class="search-filters" (ngSubmit)="search()">
+    <label>Search <input name="query" [(ngModel)]="query" maxlength="256" /></label>
+    <label>Genre
+      <select name="genre" [(ngModel)]="genre" [class]="selectedGenre() ? genreSourceClass(selectedGenre()!) : ''">
+        <option value="">All genres</option>
+        @if (genre && !selectedGenre()) {
+          <option [value]="genre">{{ genre }} (current filter)</option>
+        }
+        @for (item of genres(); track item.name) {
+          <option [value]="item.name" [class]="genreSourceClass(item)">{{ item.name }} ({{ genreSourceLabel(item) }})</option>
+        }
+      </select>
+    </label>
+    <label>Listening status
+      <select name="status" [(ngModel)]="status">
+        <option value="all">All tracks</option>
+        <option value="recent">Played recently</option>
+        <option value="progress">In progress</option>
+        <option value="unplayed">Not played</option>
+      </select>
+    </label>
+    <button type="submit">Search</button>
+  </form>
+  @if (genresError()) { <p role="alert">{{ genresError() }}</p> }
+  @if (loading()) { <p role="status">Loading tracks...</p> }
+  @if (error()) { <p role="alert">{{ error() }}</p> }
+  @if (!loading() && !error()) {
+    <p>{{ total() }} tracks</p>
+    <app-track-grid [tracks]="tracks()">
+      <p>No tracks match these filters.</p>
+    </app-track-grid>
+    <div class="search-pagination">
+      <button type="button" [disabled]="page() <= 1" (click)="load(page() - 1)">Previous</button>
+      <span>Page {{ page() }}</span>
+      <button type="button" [disabled]="page() * pageSize >= total()" (click)="load(page() + 1)">Next</button>
+    </div>
+  }
+</div>

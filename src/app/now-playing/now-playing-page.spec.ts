@@ -13,14 +13,18 @@ describe('NowPlayingPage queue artwork', () => {
     };
     const second = { ...first, title: 'Second', coverUrl: '/second-cover' };
     const queue = signal([first, second]);
+    const currentIndex = signal(-1);
+    const suggestedTrack = signal<typeof first | null>(null);
     const playFromQueue = vi.fn();
+    const setPlaybackMode = vi.fn();
     TestBed.configureTestingModule({
       imports: [NowPlayingPage],
       providers: [
         provideRouter([]),
         { provide: PlayerService, useValue: {
-          currentTrack: signal(first), queue, currentIndex: signal(-1), isPlaying: signal(false),
-          syncEnabled: signal(false), radioMode: signal('off'), playFromQueue,
+          currentTrack: signal(first), queue, currentIndex, isPlaying: signal(false),
+          syncEnabled: signal(false), radioMode: signal(null), playFromQueue,
+          playbackMode: signal('normal'), suggestedTrack, setPlaybackMode,
         } },
         { provide: MusicLibraryApi, useValue: {
           getArtistMetadata: async () => ({ imageUrl: null }),
@@ -46,5 +50,16 @@ describe('NowPlayingPage queue artwork', () => {
     expect(firstImage.style.visibility).toBe('visible');
     rows[1].click();
     expect(playFromQueue).toHaveBeenCalledWith(1);
+    const mode = fixture.nativeElement.querySelector('[aria-label="Playback mode"] select') as HTMLSelectElement;
+    mode.value = 'smart';
+    mode.dispatchEvent(new Event('change'));
+    expect(setPlaybackMode).toHaveBeenCalledWith('smart');
+    suggestedTrack.set(first);
+    currentIndex.set(0);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('The queue resumes afterward.');
+    currentIndex.set(1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Playing similar tracks after the queue.');
   });
 });

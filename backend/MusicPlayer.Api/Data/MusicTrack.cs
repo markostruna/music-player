@@ -28,6 +28,9 @@ public sealed class MusicTrack
     [MaxLength(256)]
     public string Genre { get; set; } = "";
 
+    [MaxLength(256)]
+    public string PredictedGenre { get; set; } = "";
+
     public uint TrackNumber { get; set; }
     public uint DiscNumber { get; set; }
     public uint Year { get; set; }
@@ -37,4 +40,5 @@ public sealed class MusicTrack
     public DateTimeOffset ScannedAt { get; set; }
     public long? ImportedAtUnixMilliseconds { get; set; }
     public bool IsAvailable { get; set; } = true;
+    public TrackAudioAnalysis? AudioAnalysis { get; set; }
 }

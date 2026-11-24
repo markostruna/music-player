@@ -24,6 +24,12 @@ public sealed record PlaybackCommandRequest(
 
 public sealed record PlaybackDeviceResponse(string Id, string Name);
 
+/// <summary>A genre found in tags, audio analysis, or both across the available library.</summary>
+public sealed record GenreSourceResponse(string Name, bool FromTags, bool FromAnalysis);
+
+/// <summary>Track and queue to use when selecting a similar track outside the queue.</summary>
+public sealed record SimilarTrackRequest(int TrackId, int[] ExcludedTrackIds);
+
 public sealed record PlaybackHistoryResponse(
     int TrackId, double PositionSeconds, long StartedAtUnixMilliseconds, long UpdatedAtUnixMilliseconds);
 
@@ -49,4 +55,7 @@ public sealed record PlaybackResponse(
     string? OwnerSessionId,
     string? TransferTargetSessionId,
     IReadOnlyList<PlaybackDeviceResponse> Devices,
-    string? RadioMode = null);
+    string? RadioMode = null,
+    bool SmartShuffle = false,
+    TrackResponse? SuggestedTrack = null,
+    int SmartQueueAdvances = 0);

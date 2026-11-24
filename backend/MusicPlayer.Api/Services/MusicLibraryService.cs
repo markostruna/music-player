@@ -399,6 +399,9 @@ public sealed class MusicLibraryService(
                 track.Album = string.IsNullOrWhiteSpace(tag.Album) ? folder.Name : tag.Album.Trim();
                 track.AlbumArtist = JoinArtistTags(tag.AlbumArtists, string.Empty);
                 track.Genre = FirstTag(tag.Genres, string.Empty);
+                if (track.FileSize != fileInfo.Length ||
+                    track.LastWriteTime != new DateTimeOffset(fileInfo.LastWriteTimeUtc, TimeSpan.Zero))
+                    track.PredictedGenre = "";
                 track.TrackNumber = tag.Track;
                 track.DiscNumber = tag.Disc;
                 track.Year = tag.Year;
@@ -1359,7 +1362,7 @@ public sealed class MusicLibraryService(
         }
     }
 
-    private static bool IsSafePathWithoutLinks(string rootPath, string fullPath)
+    internal static bool IsSafePathWithoutLinks(string rootPath, string fullPath)
     {
         if (!Directory.Exists(rootPath)
             || (System.IO.File.GetAttributes(rootPath) & FileAttributes.ReparsePoint) != 0)
